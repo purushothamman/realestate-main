@@ -14,3 +14,6 @@ roles:
 user,
 admin (company)(this role is not visible), 
 builder
+
+workflow : 
+https://www.notion.so/Real-state-flow-chart-2dc4929a99e5808db5d0de6c12de7678
