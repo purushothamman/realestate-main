@@ -8,9 +8,10 @@ import {
   StyleSheet,
   Alert,
   Dimensions,
+  Platform,
 } from 'react-native';
 import {
-  Building2,
+  House,
   User,
   Mail,
   Phone,
@@ -29,9 +30,15 @@ import {
   Home,
   Heart,
   Trash2,
+  ArrowLeft,
 } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
+
+// Responsive breakpoints
+const isSmallDevice = width < 375;
+const isMediumDevice = width >= 375 && width < 768;
+const isLargeDevice = width >= 768;
 
 const ProfileScreen = ({
   onEditProfile = () => {},
@@ -40,6 +47,7 @@ const ProfileScreen = ({
   onHelpSupport = () => {},
   onLogout = () => {},
   onChangePassword = () => {},
+  onBack = () => {},
 }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -91,7 +99,7 @@ const ProfileScreen = ({
     {
       title: 'Business Information',
       items: [
-        { icon: Building2, label: 'Company Name', value: userData.companyName },
+        { icon: House, label: 'Company Name', value: userData.companyName },
         { icon: MapPin, label: 'Business Address', value: userData.businessAddress },
         { icon: Shield, label: 'RERA ID', value: userData.reraId },
       ],
@@ -132,13 +140,16 @@ const ProfileScreen = ({
         {/* Top Bar */}
         <View style={styles.topBar}>
           <View style={styles.logoContainer}>
+            <TouchableOpacity onPress={onBack} style={styles.backButton}>
+              <ArrowLeft size={20} color="#FFF" />
+            </TouchableOpacity>
             <View style={styles.logoBox}>
-              <Building2 size={16} color="#2D6A4F" />
+              <House size={isSmallDevice ? 14 : 16} color="#2D6A4F" />
             </View>
             <Text style={styles.logoText}>EstateHub</Text>
           </View>
           <TouchableOpacity style={styles.editButton} onPress={onEditProfile}>
-            <Edit3 size={16} color="#FFF" />
+            <Edit3 size={isSmallDevice ? 14 : 16} color="#FFF" />
             <Text style={styles.editButtonText}>Edit</Text>
           </TouchableOpacity>
         </View>
@@ -151,11 +162,10 @@ const ProfileScreen = ({
               <Image
                 source={{ uri: userData.profileImage }}
                 style={styles.profileImage}
-                // defaultSource={require('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400')}
               />
             </View>
             <TouchableOpacity style={styles.cameraButton}>
-              <Camera size={16} color="#2D6A4F" />
+              <Camera size={isSmallDevice ? 14 : 16} color="#2D6A4F" />
             </TouchableOpacity>
           </View>
 
@@ -165,29 +175,35 @@ const ProfileScreen = ({
               <Text style={styles.name} numberOfLines={1}>
                 {userData.name}
               </Text>
-              {userData.verified && <CheckCircle size={20} color="#60A5FA" />}
+              {userData.verified && <CheckCircle size={isSmallDevice ? 16 : 20} color="#60A5FA" />}
             </View>
             <View style={styles.contactRow}>
-              <Mail size={12} color="rgba(255,255,255,0.9)" />
+              <Mail size={isSmallDevice ? 10 : 12} color="rgba(255,255,255,0.9)" />
               <Text style={styles.contactText} numberOfLines={1}>
                 {userData.email}
               </Text>
             </View>
             <View style={styles.contactRow}>
-              <Phone size={12} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.contactText}>{userData.phone}</Text>
+              <Phone size={isSmallDevice ? 10 : 12} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.contactText} numberOfLines={1}>
+                {userData.phone}
+              </Text>
             </View>
           </View>
         </View>
       </View>
 
       {/* Scrollable Content */}
-      <ScrollView style={styles.scrollContent} contentContainerStyle={styles.scrollContentContainer}>
+      <ScrollView 
+        style={styles.scrollContent} 
+        contentContainerStyle={styles.scrollContentContainer}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Stats Summary */}
         <View style={styles.statsContainer}>
           <View style={styles.statBox}>
             <Text style={styles.statNumber}>{userData.stats.totalProperties}</Text>
-            <Text style={styles.statLabel}>Total Properties</Text>
+            <Text style={styles.statLabel}>Total{isSmallDevice ? '' : ' Properties'}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={[styles.statNumber, { color: '#10B981' }]}>
@@ -221,7 +237,7 @@ const ProfileScreen = ({
                       { backgroundColor: `${action.color}15` },
                     ]}
                   >
-                    <action.icon size={20} color={action.color} />
+                    <action.icon size={isSmallDevice ? 18 : 20} color={action.color} />
                   </View>
                   <Text style={styles.actionLabel}>{action.label}</Text>
                 </View>
@@ -253,7 +269,7 @@ const ProfileScreen = ({
                     <item.icon size={16} color="#9CA3AF" />
                     <View style={styles.detailTextContainer}>
                       <Text style={styles.detailLabel}>{item.label}</Text>
-                      <Text style={styles.detailValue} numberOfLines={1}>
+                      <Text style={styles.detailValue} numberOfLines={isSmallDevice ? 2 : 1}>
                         {item.value}
                       </Text>
                     </View>
@@ -311,35 +327,39 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
-    maxWidth: 440,
+    maxWidth: isLargeDevice ? 768 : '100%',
     alignSelf: 'center',
     width: '100%',
   },
   header: {
     backgroundColor: '#2D6A4F',
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    paddingHorizontal: isSmallDevice ? 16 : 24,
+    paddingTop: Platform.OS === 'ios' ? 60 : 24,
+    paddingBottom: isSmallDevice ? 20 : 24,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
   },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: isSmallDevice ? 16 : 24,
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: isSmallDevice ? 6 : 8,
   },
-  logoBox: {
+  backButton: {
     width: 32,
     height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoBox: {
+    width: isSmallDevice ? 28 : 32,
+    height: isSmallDevice ? 28 : 32,
     borderRadius: 8,
     backgroundColor: '#FFF',
     alignItems: 'center',
@@ -347,36 +367,36 @@ const styles = StyleSheet.create({
   },
   logoText: {
     color: '#FFF',
-    fontSize: 18,
+    fontSize: isSmallDevice ? 16 : 18,
     fontWeight: '600',
   },
   editButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: isSmallDevice ? 6 : 8,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: isSmallDevice ? 12 : 16,
+    paddingVertical: isSmallDevice ? 6 : 8,
     borderRadius: 12,
   },
   editButtonText: {
     color: '#FFF',
-    fontSize: 14,
+    fontSize: isSmallDevice ? 12 : 14,
   },
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: isSmallDevice ? 12 : 16,
   },
   profileImageContainer: {
     position: 'relative',
   },
   profileImageWrapper: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: isSmallDevice ? 70 : 80,
+    height: isSmallDevice ? 70 : 80,
+    borderRadius: isSmallDevice ? 35 : 40,
     overflow: 'hidden',
-    borderWidth: 4,
+    borderWidth: isSmallDevice ? 3 : 4,
     borderColor: 'rgba(255,255,255,0.3)',
   },
   profileImage: {
@@ -387,17 +407,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 28,
-    height: 28,
+    width: isSmallDevice ? 24 : 28,
+    height: isSmallDevice ? 24 : 28,
     backgroundColor: '#FFF',
-    borderRadius: 14,
+    borderRadius: isSmallDevice ? 12 : 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)',
   },
   profileInfo: {
     flex: 1,
@@ -406,12 +422,12 @@ const styles = StyleSheet.create({
   nameContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: isSmallDevice ? 6 : 8,
     marginBottom: 4,
   },
   name: {
     color: '#FFF',
-    fontSize: 20,
+    fontSize: isSmallDevice ? 18 : 20,
     fontWeight: '600',
     flex: 1,
   },
@@ -419,91 +435,86 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 4,
+    marginBottom: isSmallDevice ? 2 : 4,
   },
   contactText: {
     color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
+    fontSize: isSmallDevice ? 12 : 14,
     flex: 1,
   },
   scrollContent: {
     flex: 1,
   },
   scrollContentContainer: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 96,
+    paddingHorizontal: isSmallDevice ? 16 : 24,
+    paddingTop: isSmallDevice ? 16 : 24,
+    paddingBottom: isSmallDevice ? 80 : 96,
   },
   statsContainer: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
+    gap: isSmallDevice ? 8 : 12,
+    marginBottom: isSmallDevice ? 16 : 24,
   },
   statBox: {
     flex: 1,
     backgroundColor: '#FFF',
     borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    padding: isSmallDevice ? 12 : 16,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.05)',
     alignItems: 'center',
   },
   statNumber: {
-    fontSize: 24,
+    fontSize: isSmallDevice ? 20 : 24,
     fontWeight: '700',
     color: '#111827',
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: isSmallDevice ? 10 : 12,
     color: '#6B7280',
+    textAlign: 'center',
   },
   card: {
     backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-    marginBottom: 16,
+    borderRadius: isSmallDevice ? 12 : 16,
+    padding: isSmallDevice ? 12 : 16,
+    boxShadow: '0px 1px 2px rgba(0, 0, 0, 0.05)',
+    marginBottom: isSmallDevice ? 12 : 16,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: isSmallDevice ? 14 : 16,
     fontWeight: '600',
     color: '#111827',
-    marginBottom: 16,
+    marginBottom: isSmallDevice ? 12 : 16,
   },
   cardContent: {
-    gap: 8,
+    gap: isSmallDevice ? 4 : 8,
   },
   actionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
+    padding: isSmallDevice ? 10 : 12,
     borderRadius: 12,
     backgroundColor: 'transparent',
   },
   actionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: isSmallDevice ? 10 : 12,
+    flex: 1,
   },
   actionIconBox: {
-    width: 40,
-    height: 40,
+    width: isSmallDevice ? 36 : 40,
+    height: isSmallDevice ? 36 : 40,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionLabel: {
-    fontSize: 14,
+    fontSize: isSmallDevice ? 13 : 14,
     color: '#111827',
+    flex: 1,
   },
   actionRight: {
     flexDirection: 'row',
@@ -511,20 +522,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionValue: {
-    fontSize: 14,
+    fontSize: isSmallDevice ? 13 : 14,
     color: '#6B7280',
   },
   detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
+    padding: isSmallDevice ? 10 : 12,
     borderRadius: 12,
   },
   detailLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: isSmallDevice ? 10 : 12,
     flex: 1,
     minWidth: 0,
   },
@@ -533,47 +544,47 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   detailLabel: {
-    fontSize: 12,
+    fontSize: isSmallDevice ? 11 : 12,
     color: '#6B7280',
     marginBottom: 2,
   },
   detailValue: {
-    fontSize: 14,
+    fontSize: isSmallDevice ? 13 : 14,
     color: '#111827',
   },
   legalItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
+    padding: isSmallDevice ? 10 : 12,
     borderRadius: 12,
   },
   legalLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: isSmallDevice ? 10 : 12,
   },
   legalLabel: {
-    fontSize: 14,
+    fontSize: isSmallDevice ? 13 : 14,
     color: '#111827',
   },
   actionsContainer: {
     gap: 12,
-    marginBottom: 24,
+    marginBottom: isSmallDevice ? 20 : 24,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    height: 48,
+    height: isSmallDevice ? 44 : 48,
     backgroundColor: '#FFF',
     borderWidth: 2,
     borderColor: '#E5E7EB',
     borderRadius: 12,
   },
   logoutButtonText: {
-    fontSize: 16,
+    fontSize: isSmallDevice ? 14 : 16,
     color: '#374151',
     fontWeight: '500',
   },
@@ -582,16 +593,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   deleteButtonText: {
-    fontSize: 14,
+    fontSize: isSmallDevice ? 13 : 14,
     color: '#EF4444',
   },
   versionInfo: {
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: isSmallDevice ? 20 : 24,
     marginBottom: 16,
   },
   versionText: {
-    fontSize: 12,
+    fontSize: isSmallDevice ? 11 : 12,
     color: '#9CA3AF',
     marginTop: 4,
   },

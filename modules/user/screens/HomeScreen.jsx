@@ -25,18 +25,66 @@ import {
   Bath,
   Maximize,
 } from 'lucide-react-native';
-
+import ProfileScreen from './ProfileScreen';
+import ChatListScreen from '../../chat/screens/ChatListScreen';
+import SearchResultsScreen from '../../property/screens/SearchResultsScreen';
+import FavoritesScreen from './FavoritesScreen';
 const { width, height } = Dimensions.get('window');
 
 export default function HomeScreen({
   navigation,
   userName = 'Sarah',
-  onSearch,
+  onHomeScreen,
+  onSearchPress,
   onPropertyClick,
   onProfilePress,
+  onMessagePress,
+  onFavoritesPress,
 }) {
   const [activeTab, setActiveTab] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
+  const [screen, setScreen] = useState('home'); // ✅ FIX 1: Added missing screen state
+
+  // ✅ FIX 2: Profile screen rendering with correct state management
+  if (screen === 'home') {
+    return (
+      <HomeScreen
+        onBack={() => setScreen('home')} // Go back to home screen
+      />
+    );
+  }
+
+  if (screen === 'profile') {
+    return (
+      <ProfileScreen
+        onBack={() => setScreen('home')} // Go back to home screen
+      />
+    );
+  }
+
+  if (screen === 'message') {
+    return (
+      <ChatListScreen
+        onBack={() => setScreen('home')} // Go back to home screen
+      />
+    )
+  }
+
+  if (screen === 'search') {
+    return (
+      <SearchResultsScreen
+      onBack={() => setScreen('home')}
+      />
+    )
+  }
+
+  if (screen === 'favorites') {
+    return (
+      <FavoritesScreen
+        onBack={() => setScreen('home')}
+      />
+    )
+  }
 
   // Featured properties data
   const featuredProperties = [
@@ -140,13 +188,48 @@ export default function HomeScreen({
     { id: 'agents', label: 'Agents', icon: Users, color: '#9B59B6' },
   ];
 
+  // ✅ FIX 3: Updated handleTabPress to handle profile navigation
   const handleTabPress = (tab) => {
     setActiveTab(tab);
     
-    if (tab === 'profile' && onProfilePress) {
-      onProfilePress();
+    if (tab === 'home') {
+      setScreen('home');
+      if (onHomeScreen) {
+        onHomeScreen(); // Call the callback if provided
+      }
     }
+
+    if (tab === 'profile') {
+      setScreen('profile'); // Switch to profile screen
+      if (onProfilePress) {
+        onProfilePress(); // Also call the callback if provided
+      }
+    }
+
+    if (tab === 'messages') {
+      setScreen('message'); // Switch to message screen
+      if (onMessagePress) {
+        onMessagePress();
+      }
+    }
+
+    if (tab === 'search') {
+      setScreen('search');
+      if (onSearchPress) {
+        onSearchPress();
+      }
+    }
+    
+    if (tab === 'favorites') {
+      setScreen('favorites');
+      if (onFavoritesPress) {
+        onFavoritesPress();
+      }
+    }
+
   };
+
+  
 
   // Handle property click - navigate to PropertyDetail screen
   const handlePropertyClick = (property) => {
@@ -510,6 +593,7 @@ export default function HomeScreen({
           </Text>
         </TouchableOpacity>
 
+        {/* ✅ FIX 4: Corrected Profile tab with proper onPress handler */}
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => handleTabPress('profile')}
@@ -578,7 +662,7 @@ const styles = StyleSheet.create({
     right: -4,
     width: 16,
     height: 16,
-    backgroundColor: '#EF4444',
+    backgroundColor: '#2D6A4F',
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -899,72 +983,72 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     },
-    ctaTitle: {
+  ctaTitle: {
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 8,
-    },
-ctaSubtitle: {
-color: 'rgba(255, 255, 255, 0.9)',
-fontSize: 14,
-marginBottom: 16,
-},
-ctaButton: {
-backgroundColor: '#FFFFFF',
-paddingHorizontal: 24,
-paddingVertical: 8,
-borderRadius: 12,
-alignSelf: 'flex-start',
-},
-ctaButtonText: {
-color: '#2D6A4F',
-fontSize: 14,
-fontWeight: '600',
-},
-bottomNav: {
-position: 'absolute',
-bottom: 0,
-left: 0,
-right: 0,
-backgroundColor: '#FFFFFF',
-borderTopWidth: 1,
-borderTopColor: '#E5E7EB',
-flexDirection: 'row',
-justifyContent: 'space-between',
-paddingHorizontal: 24,
-paddingVertical: 12,
-shadowColor: '#000',
-shadowOffset: { width: 0, height: -2 },
-shadowOpacity: 0.1,
-shadowRadius: 8,
-elevation: 8,
-},
-navItem: {
-alignItems: 'center',
-gap: 4,
-},
-navLabel: {
-fontSize: 12,
-color: '#9CA3AF',
-},
-navLabelActive: {
-color: '#2D6A4F',
-},
-messageBadge: {
-position: 'absolute',
-top: -4,
-right: -4,
-width: 16,
-height: 16,
-backgroundColor: '#EF4444',
-borderRadius: 8,
-justifyContent: 'center',
-alignItems: 'center',
-},
-messageBadgeText: {
-color: '#FFFFFF',
-fontSize: 10,
-fontWeight: '600',
-},
+  },
+  ctaSubtitle: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  ctaButton: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  ctaButtonText: {
+    color: '#2D6A4F',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  bottomNav: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  navItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  navLabel: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  navLabelActive: {
+    color: '#2D6A4F',
+  },
+  messageBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 16,
+    height: 16,
+    backgroundColor: '#2D6A4F',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  messageBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
 });

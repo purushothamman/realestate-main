@@ -1,114 +1,86 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
+
 import { SplashScreen } from './modules/user/screens/SplashScreen';
 import { WelcomeScreen } from './modules/user/screens/WelcomeScreen';
 import LoginScreen from './modules/auth/screens/LoginScreen';
 import RegisterScreen from './modules/auth/screens/RegisterScreen';
 import OTPVerificationScreen from './modules/auth/screens/OTPVerificationScreen';
-import HomeScreen from './modules/user/screens/HomeScreen';
 import ForgotPassword from './modules/auth/screens/ForgotPassword';
+
+import HomeScreen from './modules/user/screens/HomeScreen';
 import ProfileScreen from './modules/user/screens/ProfileScreen';
+
 import PropertyDetailScreen from './modules/property/screens/PropertyDetailScreen';
+import SearchResultsScreen from './modules/property/screens/SearchResultsScreen';
+
 import ExploreProperties from './modules/builder/screens/ExploreProperties';
 import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
-import SearchResultsScreen from './modules/property/screens/SearchResultsScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
-  const [previousScreen, setPreviousScreen] = useState(null);
-  const [userRole, setUserRole] = useState(null);
+  const [screenStack, setScreenStack] = useState([]);
+
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+
   const [userData, setUserData] = useState({
     name: 'Sarah',
     email: 'sarah@example.com',
     phone: '+1 234 567 8900',
   });
 
-  // Navigation handler with history tracking
+  // 🔹 Navigation handler (Stack based)
   const navigateTo = (screen, params = {}) => {
-    // Store previous screen for back navigation
-    setPreviousScreen(currentScreen);
+    setScreenStack(prev => [...prev, currentScreen]);
     setCurrentScreen(screen);
-    
-    // Handle role selection
-    if (params.role) {
-      setUserRole(params.role);
-    }
-    
-    // Handle property selection
-    if (params.property) {
-      setSelectedProperty(params.property);
-    }
 
-    // Handle search query
-    if (params.query !== undefined) {
-      setSearchQuery(params.query);
-    }
+    if (params.property) setSelectedProperty(params.property);
+    if (params.query !== undefined) setSearchQuery(params.query);
   };
 
-  // Create a navigation object to pass to components
-  const navigation = {
-    navigate: (screen, params = {}) => navigateTo(screen, params),
-    goBack: () => {
-      // Improved back navigation logic
-      const navigationMap = {
-        'propertyDetail': previousScreen || 'home',
-        'profile': 'home',
-        'home': 'welcome',
-        'home': 'exploreProperties',
-        'login': 'welcome',
-        'register': 'login',
-        'otp': 'register',
-        'forgotPassword': 'login',
-        'builderDashboard': 'home',
-        'searchResults': 'home',
-      };
-      
-      const targetScreen = navigationMap[currentScreen] || 'welcome';
-      navigateTo(targetScreen);
-    },
-  };
-
-  // Reset user data helper
-  const resetUserData = () => {
-    setUserData({
-      name: 'Sarah',
-      email: 'sarah@example.com',
-      phone: '+1 234 567 8900',
+  const goBack = () => {
+    setScreenStack(prev => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      setCurrentScreen(last);
+      return prev.slice(0, -1);
     });
-    setUserRole(null);
+  };
+
+  const resetApp = () => {
+    setScreenStack([]);
+    setCurrentScreen('welcome');
     setSelectedProperty(null);
   };
 
-  // Render current screen
+  const navigation = {
+    navigate: navigateTo,
+    goBack,
+  };
+
+  // 🔹 Render Screens
   const renderScreen = () => {
     switch (currentScreen) {
+
       case 'splash':
-        return (
-          <SplashScreen 
-            onComplete={() => navigateTo('welcome')} 
-            duration={3500} 
-          />
-        );
+        return <SplashScreen onComplete={() => setCurrentScreen('welcome')} />;
 
       case 'welcome':
         return (
-          <WelcomeScreen 
-            onGetStarted={() => navigateTo('login')}
+          <WelcomeScreen
+            onGetStarted={() => navigateTo('register')}
             onExploreAsBuilder={() => navigateTo('exploreProperties')}
-            onLogin={() => navigateTo('login')}
+            onNavigateToLogin={() => navigateTo('login')}
           />
         );
 
       case 'login':
         return (
-          <LoginScreen 
-            onBack={() => navigateTo('welcome')}
-            onLoginSuccess={(user) => {
-              if (user) {
-                setUserData(user);
-              }
+          <LoginScreen
+            onBack={goBack}
+            onNavigateToLoginSuccess={(user) => {
+              if (user) setUserData(user);
               navigateTo('home');
             }}
             onForgotPassword={() => navigateTo('forgotPassword')}
@@ -118,163 +90,113 @@ export default function App() {
 
       case 'register':
         return (
-          <RegisterScreen 
-            onBack={() => navigateTo('login')}
+          <RegisterScreen
+            onBack={goBack}
             onRegisterSuccess={(user) => {
-              if (user) {
-                setUserData(user);
-              }
+              if (user) setUserData(user);
               navigateTo('otp');
             }}
-            onLogin={() => navigateTo('login')}
+            onNavigateToLogin={() => navigateTo('login')}
           />
         );
 
       case 'otp':
         return (
-          <OTPVerificationScreen 
-            onBack={() => navigateTo('register')}
+          <OTPVerificationScreen
+            onBack={goBack}
             onVerifySuccess={() => navigateTo('home')}
           />
         );
 
       case 'forgotPassword':
         return (
-          <ForgotPassword 
-            onBack={() => navigateTo('login')}
+          <ForgotPassword
+            onBack={goBack}
             onResetSuccess={() => navigateTo('login')}
           />
         );
 
       case 'home':
         return (
-          <HomeScreen 
+          <HomeScreen
             navigation={navigation}
             userName={userData.name}
             onProfilePress={() => navigateTo('profile')}
-            onProfile={() => navigateTo('profile')}
-            onLogout={() => {
-              resetUserData();
-              navigateTo('welcome');
-            }}
-            onSearch={(query) => {
-              navigateTo('searchResults', { query });
-            }}
-            onPropertyClick={(property) => {
-              navigateTo('propertyDetail', { property });
-            }}
-          />
-        );
-
-      case 'propertyDetail':
-        return (
-          <PropertyDetailScreen 
-            navigation={navigation}
-            property={selectedProperty}
-            onBack={() => {
-              // Go back to the previous screen
-              const backScreen = previousScreen === 'propertyDetail' ? 'home' : (previousScreen || 'home');
-              navigateTo(backScreen);
-            }}
-            onScheduleViewing={() => console.log('Schedule Viewing')}
-            onMakeOffer={() => console.log('Make Offer')}
-            onVirtualTour={() => console.log('Virtual Tour')}
-            onContactAgent={() => console.log('Contact Agent')}
+            onLogout={resetApp}
+            onSearch={(query) => navigateTo('searchResults', { query })}
+            onPropertyClick={(property) =>
+              navigateTo('propertyDetail', { property })
+            }
           />
         );
 
       case 'profile':
         return (
-          <ProfileScreen 
+          <ProfileScreen
             navigation={navigation}
             userName={userData.name}
             userEmail={userData.email}
             userPhone={userData.phone}
-            onBack={() => navigateTo('home')}
-            onLogout={() => {
-              resetUserData();
-              navigateTo('welcome');
-            }}
-            onEditProfile={() => console.log('Edit Profile')}
-            onMyProperties={() => console.log('My Properties')}
-            onFavorites={() => console.log('Favorites')}
-            onNotifications={() => console.log('Notifications')}
-            onHelpSupport={() => console.log('Help & Support')}
-            onChangePassword={() => console.log('Change Password')}
-            onSettings={() => console.log('Settings')}
+            onBack={goBack}
+            onLogout={resetApp}
           />
         );
 
-      case 'exploreProperties':
+      case 'propertyDetail':
         return (
-          <ExploreProperties 
+          <PropertyDetailScreen
             navigation={navigation}
-            onBack={() => navigateTo('welcome')}
-            onPropertyClick={(property) => {
-              navigateTo('propertyDetail', { property });
-            }}
-          />
-        );
-
-      case 'builderDashboard':
-        return (
-          <BuilderDashboard 
-            navigation={navigation}
-            builderName={userData.name}
-            onBack={() => navigateTo('home')}
-            onPropertyClick={(property) => {
-              navigateTo('propertyDetail', { property });
-            }}
-            onAddProperty={() => console.log('Add Property')}
-            onMyProperties={() => console.log('My Properties')}
+            property={selectedProperty}
+            onBack={goBack}
           />
         );
 
       case 'searchResults':
         return (
-          <SearchResultsScreen 
+          <SearchResultsScreen
             navigation={navigation}
             searchQuery={searchQuery}
-            onBack={() => navigateTo('home')}
-            onPropertyClick={(property) => {
-              navigateTo('propertyDetail', { property });
-            }}
+            onBack={goBack}
+            onPropertyClick={(property) =>
+              navigateTo('propertyDetail', { property })
+            }
+          />
+        );
+
+      case 'exploreProperties':
+        return (
+          <ExploreProperties
+            navigation={navigation}
+            onBack={goBack}
+            onPropertyClick={(property) =>
+              navigateTo('propertyDetail', { property })
+            }
+          />
+        );
+
+      case 'builderDashboard':
+        return (
+          <BuilderDashboard
+            navigation={navigation}
+            builderName={userData.name}
+            onBack={goBack}
+            onPropertyClick={(property) =>
+              navigateTo('propertyDetail', { property })
+            }
           />
         );
 
       default:
-        // Fallback to home screen
-        return (
-          <HomeScreen 
-            navigation={navigation}
-            userName={userData.name}
-            onProfilePress={() => navigateTo('profile')}
-            onProfile={() => navigateTo('profile')}
-            onLogout={() => {
-              resetUserData();
-              navigateTo('welcome');
-            }}
-            onSearch={(query) => {
-              navigateTo('searchResults', { query });
-            }}
-            onPropertyClick={(property) => {
-              navigateTo('propertyDetail', { property });
-            }}
-          />
-        );
+        return null;
     }
   };
 
-  return (
-    <View style={styles.container}>
-      {renderScreen()}
-    </View>
-  );
+  return <View style={styles.container}>{renderScreen()}</View>;
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
   },
 });

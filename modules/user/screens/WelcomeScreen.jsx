@@ -8,11 +8,85 @@ import {
   Image,
   Dimensions,
 } from 'react-native';
-import { Home, MapPin, Search, TrendingUp } from 'lucide-react-native';
-import LoginScreen from '../../auth/screens/LoginScreen';
-import { ExploreProperties } from '../../builder/screens/ExploreProperties';
+import { Home, MapPin, Search, TrendingUp, ArrowLeft, Check } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
+
+// Placeholder LoginScreen component
+const LoginScreen = ({ onBack }) => {
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <ArrowLeft color="#1a1a1a" size={24} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Login</Text>
+      </View>
+      <ScrollView contentContainerStyle={styles.loginContent}>
+        <Text style={styles.loginTitle}>Welcome Back!</Text>
+        <Text style={styles.loginSubtitle}>Sign in to continue</Text>
+        
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Email</Text>
+          <View style={styles.input}>
+            <Text style={styles.inputPlaceholder}>Enter your email</Text>
+          </View>
+        </View>
+        
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Password</Text>
+          <View style={styles.input}>
+            <Text style={styles.inputPlaceholder}>Enter your password</Text>
+          </View>
+        </View>
+        
+        <TouchableOpacity style={styles.primaryButton}>
+          <Text style={styles.primaryButtonText}>Login</Text>
+        </TouchableOpacity>
+        
+        <Text style={styles.forgotPassword}>Forgot Password?</Text>
+      </ScrollView>
+    </View>
+  );
+};
+
+// Placeholder ExploreProperties component
+const ExploreProperties = ({ onBack }) => {
+  const properties = [
+    { id: 1, title: 'Modern Villa', price: '$850,000', location: 'Beverly Hills, CA' },
+    { id: 2, title: 'Downtown Apartment', price: '$450,000', location: 'New York, NY' },
+    { id: 3, title: 'Beach House', price: '$1,200,000', location: 'Malibu, CA' },
+    { id: 4, title: 'Suburban Home', price: '$380,000', location: 'Austin, TX' },
+  ];
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <ArrowLeft color="#1a1a1a" size={24} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Explore Properties</Text>
+      </View>
+      <ScrollView contentContainerStyle={styles.exploreContent}>
+        {properties.map((property) => (
+          <View key={property.id} style={styles.propertyCard}>
+            <View style={styles.propertyImagePlaceholder}>
+              <Home color="#2D6A4F" size={64} />
+            </View>
+            <View style={styles.propertyInfo}>
+              <Text style={styles.propertyTitle}>{property.title}</Text>
+              <View style={styles.propertyLocationRow}>
+                <MapPin color="#666666" size={16} />
+                <Text style={styles.propertyLocation}>{property.location}</Text>
+              </View>
+              <Text style={styles.propertyPrice}>{property.price}</Text>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+};
 
 export function WelcomeScreen({ onGetStarted, onSignUp }) {
   const [showLogin, setShowLogin] = useState(false);
@@ -23,7 +97,7 @@ export function WelcomeScreen({ onGetStarted, onSignUp }) {
   }
 
   if (showExplore) {
-    return <ExploreProperties onBack={() => setShowExplore(true)} />;
+    return <ExploreProperties onBack={() => setShowExplore(false)} />;
   }
 
   return (
@@ -49,7 +123,7 @@ export function WelcomeScreen({ onGetStarted, onSignUp }) {
           {/* Logo at Top */}
           <View style={styles.logoContainer}>
             <View style={styles.logoBox}>
-              <Home color="#2D6A4F" size={24} strokeWidth={2.5} />
+              <Home color="#2D6A4F" size={24} />
             </View>
             <Text style={styles.logoText}>EstateHub</Text>
           </View>
@@ -154,7 +228,7 @@ export function WelcomeScreen({ onGetStarted, onSignUp }) {
           {/* Trust Badge */}
           <View style={styles.trustBadge}>
             <View style={styles.trustBadgeIcon}>
-              <Text style={styles.checkmark}>✓</Text>
+              <Check color="#ffffff" size={12} strokeWidth={3} />
             </View>
             <Text style={styles.trustBadgeText}>
               Trusted by thousands of property seekers
@@ -210,11 +284,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
   },
   logoText: {
     fontSize: 24,
@@ -238,11 +308,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
   },
   featureIconContainer: {
     width: 32,
@@ -340,11 +406,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#2D6A4F',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
+    boxShadow: '0px 4px 8px rgba(45, 106, 79, 0.3)',
   },
   primaryButtonText: {
     fontSize: 16,
@@ -396,13 +458,107 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  checkmark: {
-    fontSize: 10,
-    color: '#ffffff',
-    fontWeight: 'bold',
-  },
   trustBadgeText: {
     fontSize: 12,
     color: '#666666',
+  },
+  // Login Screen Styles
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e5e5',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 16,
+  },
+  loginContent: {
+    padding: 24,
+  },
+  loginTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  loginSubtitle: {
+    fontSize: 16,
+    color: '#666666',
+    marginBottom: 32,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  input: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  inputPlaceholder: {
+    color: '#999999',
+  },
+  forgotPassword: {
+    textAlign: 'center',
+    color: '#2D6A4F',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  // Explore Properties Styles
+  exploreContent: {
+    padding: 16,
+  },
+  propertyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e5e5',
+    overflow: 'hidden',
+  },
+  propertyImagePlaceholder: {
+    height: 200,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  propertyInfo: {
+    padding: 16,
+  },
+  propertyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 8,
+  },
+  propertyLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 8,
+  },
+  propertyLocation: {
+    fontSize: 14,
+    color: '#666666',
+  },
+  propertyPrice: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#2D6A4F',
   },
 });
