@@ -14,8 +14,10 @@ import ProfileScreen from './modules/user/screens/ProfileScreen';
 import PropertyDetailScreen from './modules/property/screens/PropertyDetailScreen';
 import SearchResultsScreen from './modules/property/screens/SearchResultsScreen';
 
-import ExploreProperties from './modules/builder/screens/ExploreProperties';
+import ExploreProperties from './modules/property/screens/ExploreProperties';
 import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
+import ReportPropertyScreen from './modules/property/screens/ReportPropertyScreen';
+import PaymentScreen from './store/PaymentScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
@@ -23,6 +25,7 @@ export default function App() {
 
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [reportPropertyData, setReportPropertyData] = useState(null);
 
   const [userData, setUserData] = useState({
     name: 'Sarah',
@@ -37,6 +40,12 @@ export default function App() {
 
     if (params.property) setSelectedProperty(params.property);
     if (params.query !== undefined) setSearchQuery(params.query);
+    if (params.propertyId || params.propertyName) {
+      setReportPropertyData({
+        propertyId: params.propertyId,
+        propertyName: params.propertyName,
+      });
+    }
   };
 
   const goBack = () => {
@@ -148,6 +157,7 @@ export default function App() {
             navigation={navigation}
             property={selectedProperty}
             onBack={goBack}
+            route={{ params: { propertyId: selectedProperty?.id || 'property-001' } }}
           />
         );
 
@@ -183,6 +193,28 @@ export default function App() {
             onPropertyClick={(property) =>
               navigateTo('propertyDetail', { property })
             }
+          />
+        );
+
+      case 'ReportPropertyScreen':
+        return (
+          <ReportPropertyScreen
+            navigation={navigation}
+            onBack={goBack}
+            route={{
+              params: {
+                propertyId: reportPropertyData?.propertyId || 'property-001',
+                propertyName: reportPropertyData?.propertyName || 'Modern Luxury Villa',
+              },
+            }}
+          />
+        );
+
+      case 'PaymentScreen':
+        return (
+          <PaymentScreen
+            navigation={navigation}
+            onBack={goBack}
           />
         );
 

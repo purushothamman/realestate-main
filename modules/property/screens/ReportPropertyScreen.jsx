@@ -42,7 +42,7 @@ const PropertyTypeButton = ({ label, Icon, selected, onPress }) => (
   >
     <Icon
       size={20}
-      color={selected ? '#FFFFFF' : '#2563EB'}
+      color={selected ? '#FFFFFF' : '#2D6A4F'}
       strokeWidth={2}
     />
     <Text style={[styles.propertyTypeLabel, selected && styles.propertyTypeLabelSelected]}>
@@ -75,7 +75,7 @@ const RecentReportCard = ({ propertyName, location, status, date }) => {
   const statusConfig = {
     pending: { Icon: Clock, color: '#D97706', bg: '#FEF3C7', label: 'Pending' },
     approved: { Icon: Check, color: '#059669', bg: '#D1FAE5', label: 'Approved' },
-    review: { Icon: AlertCircle, color: '#2563EB', bg: '#DBEAFE', label: 'In Review' },
+    review: { Icon: AlertCircle, color: '#2D6A4F', bg: '#DBEAFE', label: 'In Review' },
   };
 
   const config = statusConfig[status];
@@ -148,7 +148,7 @@ const ReportPropertyScreen = () => {
           </TouchableOpacity>
           <View style={styles.logoContainer}>
             <View style={styles.logoIcon}>
-              <Home size={20} color="#2563EB" strokeWidth={2} />
+              <Home size={20} color="#2D6A4F" strokeWidth={2} />
             </View>
             <Text style={styles.logoText}>DreamHome</Text>
           </View>
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   propertyTypeButtonSelected: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#2D6A4F',
   },
   propertyTypeButtonUnselected: {
     backgroundColor: '#FFFFFF',
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
   },
   imageCounterText: {
     fontSize: 12,
-    color: '#2563EB',
+    color: '#2D6A4F',
     fontWeight: '600',
   },
   imagesGrid: {
@@ -744,7 +744,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   submitButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#2D6A4F',
     paddingVertical: 16,
     borderRadius: 12,
     flexDirection: 'row',

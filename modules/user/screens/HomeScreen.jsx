@@ -29,6 +29,9 @@ import ProfileScreen from './ProfileScreen';
 import ChatListScreen from '../../chat/screens/ChatListScreen';
 import SearchResultsScreen from '../../property/screens/SearchResultsScreen';
 import FavoritesScreen from './FavoritesScreen';
+import PropertyDetailScreen from '../../property/screens/PropertyDetailScreen';
+import NotificationsScreen from './NotificationsScreen';
+
 const { width, height } = Dimensions.get('window');
 
 export default function HomeScreen({
@@ -40,24 +43,17 @@ export default function HomeScreen({
   onProfilePress,
   onMessagePress,
   onFavoritesPress,
+  onNotificationsPress
 }) {
   const [activeTab, setActiveTab] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
-  const [screen, setScreen] = useState('home'); // ✅ FIX 1: Added missing screen state
-
-  // ✅ FIX 2: Profile screen rendering with correct state management
-  if (screen === 'home') {
-    return (
-      <HomeScreen
-        onBack={() => setScreen('home')} // Go back to home screen
-      />
-    );
-  }
+  const [screen, setScreen] = useState('home');
+  const [selectedProperty, setSelectedProperty] = useState(null);
 
   if (screen === 'profile') {
     return (
       <ProfileScreen
-        onBack={() => setScreen('home')} // Go back to home screen
+        onBack={() => setScreen('home')}
       />
     );
   }
@@ -65,17 +61,17 @@ export default function HomeScreen({
   if (screen === 'message') {
     return (
       <ChatListScreen
-        onBack={() => setScreen('home')} // Go back to home screen
+        onBack={() => setScreen('home')}
       />
-    )
+    );
   }
 
   if (screen === 'search') {
     return (
       <SearchResultsScreen
-      onBack={() => setScreen('home')}
+        onBack={() => setScreen('home')}
       />
-    )
+    );
   }
 
   if (screen === 'favorites') {
@@ -83,7 +79,27 @@ export default function HomeScreen({
       <FavoritesScreen
         onBack={() => setScreen('home')}
       />
-    )
+    );
+  }
+
+  if (screen === 'notifications') {
+    return (
+      <NotificationsScreen
+        onBack={() => setScreen('home')}
+      />
+    );
+  }
+
+  if (screen === 'propertyDetail' && selectedProperty) {
+    return (
+      <PropertyDetailScreen
+        property={selectedProperty}
+        onBack={() => {
+          setScreen('home');
+          setSelectedProperty(null);
+        }}
+      />
+    );
   }
 
   // Featured properties data
@@ -188,26 +204,25 @@ export default function HomeScreen({
     { id: 'agents', label: 'Agents', icon: Users, color: '#9B59B6' },
   ];
 
-  // ✅ FIX 3: Updated handleTabPress to handle profile navigation
   const handleTabPress = (tab) => {
     setActiveTab(tab);
-    
+
     if (tab === 'home') {
       setScreen('home');
       if (onHomeScreen) {
-        onHomeScreen(); // Call the callback if provided
+        onHomeScreen();
       }
     }
 
     if (tab === 'profile') {
-      setScreen('profile'); // Switch to profile screen
+      setScreen('profile');
       if (onProfilePress) {
-        onProfilePress(); // Also call the callback if provided
+        onProfilePress();
       }
     }
 
     if (tab === 'messages') {
-      setScreen('message'); // Switch to message screen
+      setScreen('message');
       if (onMessagePress) {
         onMessagePress();
       }
@@ -219,7 +234,7 @@ export default function HomeScreen({
         onSearchPress();
       }
     }
-    
+
     if (tab === 'favorites') {
       setScreen('favorites');
       if (onFavoritesPress) {
@@ -227,22 +242,24 @@ export default function HomeScreen({
       }
     }
 
+    if (tab === 'notifications') {
+      setScreen('notifications');
+      if (onNotificationsPress) {
+        onNotificationsPress();
+      }
+    }
   };
-
-  
 
   // Handle property click - navigate to PropertyDetail screen
   const handlePropertyClick = (property) => {
     console.log('Property clicked in HomeScreen:', property.title);
     
-    // Check if navigation object exists and has navigate method
-    if (navigation && navigation.navigate) {
-      navigation.navigate('PropertyDetail', { property });
-    } else if (onPropertyClick) {
-      // Fallback to callback if navigation is not available
+    setSelectedProperty(property);
+    setScreen('propertyDetail');
+    
+    // Also call callback if provided
+    if (onPropertyClick) {
       onPropertyClick(property);
-    } else {
-      console.warn('Navigation not configured properly');
     }
   };
 
@@ -256,7 +273,10 @@ export default function HomeScreen({
           </View>
           <Text style={styles.appName}>EstateHub</Text>
         </View>
-        <TouchableOpacity style={styles.notificationButton}>
+        <TouchableOpacity 
+          style={styles.notificationButton}
+          onPress={() => handleTabPress('notifications')}
+        >
           <Bell color="#374151" size={24} strokeWidth={2} />
           <View style={styles.notificationBadge}>
             <Text style={styles.notificationBadgeText}>3</Text>
@@ -384,7 +404,7 @@ export default function HomeScreen({
                     <Text style={styles.typeBadgeText}>{property.type}</Text>
                   </View>
                   {/* Favorite Button */}
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.favoriteButton}
                     onPress={(e) => {
                       e.stopPropagation();
@@ -593,7 +613,6 @@ export default function HomeScreen({
           </Text>
         </TouchableOpacity>
 
-        {/* ✅ FIX 4: Corrected Profile tab with proper onPress handler */}
         <TouchableOpacity
           style={styles.navItem}
           onPress={() => handleTabPress('profile')}
@@ -982,7 +1001,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 8,
-    },
+  },
   ctaTitle: {
     color: '#FFFFFF',
     fontSize: 20,

@@ -18,17 +18,68 @@ import HomeScreen from '../../user/screens/HomeScreen';
 
 const { width, height } = Dimensions.get('window');
 
-export default function LoginScreen({ onBack }) {
+export default function LoginScreen({ onBack, navigation }) {
   const [screen, setScreen] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  // Handle Login Function with proper validation
+  const handleLogin = () => {
+    // Validation
+    if (!email || !password) {
+      Alert.alert('Missing Information', 'Please enter both email and password');
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email) && !/^\d{10}$/.test(email)) {
+      Alert.alert('Invalid Input', 'Please enter a valid email or 10-digit phone number');
+      return;
+    }
+
+    // Password validation
+    if (password.length < 6) {
+      Alert.alert('Invalid Password', 'Password must be at least 6 characters long');
+      return;
+    }
+
+    console.log('Login with:', { email, password });
+    
+    // Method 1: Using navigation prop (if using React Navigation)
+    if (navigation) {
+      navigation.navigate('home');
+    } else {
+      // Method 2: Using state (fallback)
+      setScreen('home');
+    }
+  };
+
+  const handleSocialLogin = (provider) => {
+    console.log(`Login with ${provider}`);
+    Alert.alert('Social Login', `Logging in with ${provider}...`);
+    
+    // After successful social login
+    if (navigation) {
+      navigation.navigate('home');
+    } else {
+      setScreen('home');
+    }
+  };
+
+  const handleForgotPassword = () => {
+    console.log('Navigate to Forgot Password');
+    setScreen('forgotPassword');
+  };
+
+  // Screen Navigation Logic
   if (screen === 'register') {
     return (
       <RegisterScreen
         onNavigateToLogin={() => setScreen('login')}
         onBack={() => setScreen('login')}
+        navigation={navigation}
       />
     );
   }
@@ -40,8 +91,10 @@ export default function LoginScreen({ onBack }) {
         onBack={() => setScreen('login')}
         onVerify={(otpCode) => {
           console.log('OTP Verified:', otpCode);
+          Alert.alert('Success', 'OTP Verified Successfully!');
           setScreen('login');
         }}
+        navigation={navigation}
       />
     );
   }
@@ -50,34 +103,14 @@ export default function LoginScreen({ onBack }) {
     return (
       <ForgotPassword
         onBack={() => setScreen('login')}
+        navigation={navigation}
       />
     );
   }
 
   if (screen === 'home') {
-    return <HomeScreen />;
+    return <HomeScreen navigation={navigation} />;
   }
-
-  const handleLogin = () => {
-    if (!email || !password) {
-      Alert.alert('Missing Information', 'Please enter both email and password');
-      return;
-    }
-    console.log('Login with:', { email, password });
-    // Navigate to home screen after successful login
-    setScreen('home');
-  };
-
-  const handleSocialLogin = (provider) => {
-    console.log(`Login with ${provider}`);
-    // After successful social login, navigate to home
-    setScreen('home');
-  };
-
-  const handleForgotPassword = () => {
-    console.log('Navigate to Forgot Password');
-    setScreen('forgotPassword');
-  };
 
   return (
     <View style={styles.container}>
@@ -85,6 +118,7 @@ export default function LoginScreen({ onBack }) {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Header Image Section */}
         <View style={styles.headerImageContainer}>
@@ -142,6 +176,7 @@ export default function LoginScreen({ onBack }) {
                   onChangeText={setEmail}
                   keyboardType="email-address"
                   autoCapitalize="none"
+                  autoCorrect={false}
                 />
               </View>
             </View>
@@ -164,10 +199,12 @@ export default function LoginScreen({ onBack }) {
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  autoCorrect={false}
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   style={styles.eyeIcon}
+                  activeOpacity={0.7}
                 >
                   {showPassword ? (
                     <EyeOff color="#9CA3AF" size={20} strokeWidth={2} />
@@ -284,13 +321,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    // shadowColor: '#000',
+    // shadowOffset: {
+    //   width: 0,
+    //   height: 4,
+    // },
+    // shadowOpacity: 0.3,
+    // shadowRadius: 8,
+    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
     elevation: 8,
   },
   contentCard: {
@@ -301,13 +339,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 32,
     paddingBottom: 32,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -4,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
+    // shadowColor: '#000',
+    // shadowOffset: {
+    //   width: 0,
+    //   height: -4,
+    // },
+    // shadowOpacity: 0.1,
+    // shadowRadius: 12,
+    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1)',
     elevation: 12,
   },
   appNameContainer: {
