@@ -12,26 +12,37 @@
     "@react-native-community/slider": "^5.1.2",
     "@react-navigation/native": "^7.1.26",
     "@react-navigation/native-stack": "^7.9.0",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "expo": "~54.0.30",
     "expo-linear-gradient": "^15.0.8",
     "expo-status-bar": "~3.0.9",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
     "lucide-react": "^0.562.0",
     "lucide-react-native": "^0.562.0",
     "motion": "^12.23.26",
+    "mysql2": "^3.16.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-chart-kit": "^6.12.0",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "^5.6.2",
     "react-native-screens": "^4.19.0",
+    "react-native-svg": "^15.15.1",
     "react-native-vector-icons": "^10.3.0",
-    "react-native-web": "^0.21.0"
+    "react-native-web": "^0.21.0",
+    "victory-native": "^41.20.2"
   },
   "private": true,
   "devDependencies": {
     "@react-native-community/cli": "^20.1.0",
     "@react-native/metro-config": "^0.83.1",
     "@types/react": "~19.1.10",
+    "nodemon": "^3.1.11",
     "typescript": "~5.9.2"
   }
 }

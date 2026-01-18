@@ -35,6 +35,7 @@ import {
 
 const { width, height } = Dimensions.get('window');
 
+
 // Responsive breakpoints
 const isSmallDevice = width < 375;
 const isMediumDevice = width >= 375 && width < 768;
@@ -53,11 +54,11 @@ const ProfileScreen = ({
 
   // Mock user data
   const userData = {
-    name: 'John Anderson',
-    email: 'john.anderson@builderco.com',
+    name: 'Sarah Johnson',
+    email: 'sarah.johnson@builderco.com',
     phone: '+1 (555) 123-4567',
-    profileImage: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400',
-    companyName: 'Anderson Real Estate Group',
+    profileImage: 'https://images.unsplash.com/photo-1548637724-cbc39e0c8d3b?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+    companyName: 'Johnson Real Estate Group',
     businessAddress: '123 Main Street, Beverly Hills, CA 90210',
     reraId: 'RERA-CA-2024-12345',
     verified: true,
