@@ -10,7 +10,7 @@ export const GOOGLE_CONFIG = {
   // This is your Web Client ID from Google Cloud Console
   // Path: Google Cloud Console > APIs & Services > Credentials > OAuth 2.0 Client IDs
   // MUST be type "Web application" and MUST match backend .env GOOGLE_CLIENT_ID
-  WEB_CLIENT_ID: '989936525414-khg84553v7oq0c09r7g48htkg6afm88s.apps.googleusercontent.com',
+  WEB_CLIENT_ID: 'WEB_CLIENT_ID.apps.googleusercontent.com',
   
   // ==================== IMPORTANT: DO NOT SET iOS CLIENT ID ====================
   // Leave this EMPTY unless you have a specific reason to use separate iOS client
