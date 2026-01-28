@@ -1,0 +1,1060 @@
+// backend/src/controllers/authControllers.js
+const pool = require("../config/db");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const { getRequestMetadata, getDeviceType, getBrowser, getOS } = require("../utils/requestUtils");
+
+// generate 6 digit OTP
+const generateOTP = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// send OTP via email (implement actual email service later)
+const sendOTP = async (email, phone, otp, purpose = "verification") => {
+    console.log(`OTP for ${email || phone}: ${otp} (Purpose: ${purpose})`);
+    // TODO: Implement actual email service (SendGrid, AWS SES, etc.)
+    return true;
+};
+
+// Send email notification (implement actual email service later)
+const sendEmailNotification = async (email, subject, message) => {
+    console.log(`Email to ${email}: ${subject} - ${message}`);
+    // TODO: Implement actual email service
+    return true;
+};
+
+// Helper function to log activity with device info
+const logUserActivity = async (userId, activityType, ipAddress, userAgent, description = null, loginMethod = 'email') => {
+    try {
+        const deviceType = getDeviceType(userAgent);
+        const browser = getBrowser(userAgent);
+        const os = getOS(userAgent);
+
+        await pool.query(
+            `INSERT INTO user_login_logs 
+            (user_id, login_time, login_method, ip_address, user_agent, device_type, browser, os, activity_type, description) 
+            VALUES (?, NOW(), ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId, loginMethod, ipAddress, userAgent, deviceType, browser, os, activityType, description]
+        );
+    } catch (err) {
+        console.error("Activity logging error:", err);
+    }
+};
+
+// Helper function to check for suspicious activity
+const checkSuspiciousActivity = async (userId, ipAddress) => {
+    try {
+        // Check for multiple failed login attempts
+        const [failedAttempts] = await pool.query(
+            `SELECT COUNT(*) as count FROM user_login_logs 
+             WHERE user_id = ? 
+             AND activity_type = 'failed_login' 
+             AND login_time > DATE_SUB(NOW(), INTERVAL 15 MINUTE)`,
+            [userId]
+        );
+
+        // Check for logins from different IPs in short time
+        const [differentIPs] = await pool.query(
+            `SELECT COUNT(DISTINCT ip_address) as ip_count 
+             FROM user_login_logs 
+             WHERE user_id = ? 
+             AND login_time > DATE_SUB(NOW(), INTERVAL 1 HOUR)`,
+            [userId]
+        );
+
+        return {
+            isSuspicious: failedAttempts[0].count >= 5 || differentIPs[0].ip_count >= 3,
+            failedAttempts: failedAttempts[0].count,
+            differentIPs: differentIPs[0].ip_count
+        };
+    } catch (err) {
+        console.error("Suspicious activity check error:", err);
+        return { isSuspicious: false, failedAttempts: 0, differentIPs: 0 };
+    }
+};
+
+// Helper function to check if account should be locked
+const checkAccountLockout = async (userId) => {
+    try {
+        const [attempts] = await pool.query(
+            `SELECT COUNT(*) as count FROM user_login_logs 
+             WHERE user_id = ? 
+             AND activity_type = 'failed_login' 
+             AND login_time > DATE_SUB(NOW(), INTERVAL 30 MINUTE)`,
+            [userId]
+        );
+
+        if (attempts[0].count >= 5) {
+            // Lock account temporarily
+            await pool.query(
+                "UPDATE users SET account_locked_until = DATE_ADD(NOW(), INTERVAL 30 MINUTE) WHERE id = ?",
+                [userId]
+            );
+            return true;
+        }
+        return false;
+    } catch (err) {
+        console.error("Account lockout check error:", err);
+        return false;
+    }
+};
+
+// ============================================
+// GOOGLE OAUTH LOGIN
+// ============================================
+exports.googleLogin = async (req, res) => {
+    try {
+        const { token } = req.body; 
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+        
+        if (!token) {
+            return res.status(400).json({ 
+                message: "Google token is required" 
+            });
+        }
+
+        // Verify Google token
+        const { OAuth2Client } = require('google-auth-library');
+        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+        
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        
+        const payload = ticket.getPayload();
+        const { email, name, picture, sub: googleId } = payload;
+
+        // Check if user exists
+        const [users] = await pool.query(
+            "SELECT * FROM users WHERE email = ? OR google_id = ?",
+            [email.toLowerCase().trim(), googleId]
+        );
+
+        let user;
+        let isNewUser = false;
+
+        if (users.length > 0) {
+            user = users[0];
+            
+            // Update google_id if not set
+            if (!user.google_id) {
+                await pool.query(
+                    "UPDATE users SET google_id = ?, profile_image = COALESCE(profile_image, ?), is_verified = true WHERE id = ?",
+                    [googleId, picture, user.id]
+                );
+            }
+        } else {
+            // Create new user
+            isNewUser = true;
+            const [result] = await pool.query(
+                `INSERT INTO users (name, email, google_id, profile_image, role, is_verified, email_verified_at, created_at) 
+                 VALUES (?, ?, ?, ?, 'buyer', true, NOW(), NOW())`,
+                [name, email.toLowerCase().trim(), googleId, picture]
+            );
+            
+            user = {
+                id: result.insertId,
+                name,
+                email: email.toLowerCase().trim(),
+                google_id: googleId,
+                profile_image: picture,
+                role: 'buyer',
+                is_verified: true,
+                is_blocked: false,
+                account_locked_until: null
+            };
+        }
+
+        // Check if account is blocked
+        if (user.is_blocked) {
+            await logUserActivity(user.id, 'blocked_login_attempt', ipAddress, userAgent, 'Blocked user attempted login', 'google');
+            return res.status(403).json({ 
+                message: "Your account has been blocked. Please contact support." 
+            });
+        }
+
+        // Check if account is temporarily locked
+        if (user.account_locked_until && new Date(user.account_locked_until) > new Date()) {
+            return res.status(403).json({ 
+                message: "Your account is temporarily locked due to suspicious activity. Please try again later.",
+                lockedUntil: user.account_locked_until
+            });
+        }
+
+        // Check for suspicious activity
+        const suspiciousCheck = await checkSuspiciousActivity(user.id, ipAddress);
+        if (suspiciousCheck.isSuspicious) {
+            await sendEmailNotification(
+                user.email,
+                'Suspicious Login Activity Detected',
+                `We detected unusual login activity on your account from IP: ${ipAddress}`
+            );
+        }
+
+        // Generate JWT token
+        const jwtToken = jwt.sign(
+            { id: user.id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        // Log successful login
+        await logUserActivity(
+            user.id, 
+            isNewUser ? 'registration' : 'login', 
+            ipAddress, 
+            userAgent, 
+            isNewUser ? 'New user registered via Google' : 'User logged in via Google',
+            'google'
+        );
+
+        // Update last login
+        await pool.query(
+            "UPDATE users SET last_login = NOW(), last_login_ip = ? WHERE id = ?",
+            [ipAddress, user.id]
+        );
+
+        // Send notification for new device login
+        const [recentLogins] = await pool.query(
+            `SELECT COUNT(*) as count FROM user_login_logs 
+             WHERE user_id = ? AND user_agent = ? AND login_time > DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+            [user.id, userAgent]
+        );
+
+        if (recentLogins[0].count === 0 && !isNewUser) {
+            const deviceType = getDeviceType(userAgent);
+            const browser = getBrowser(userAgent);
+            await sendEmailNotification(
+                user.email,
+                'New Device Login Detected',
+                `A new login was detected from ${deviceType} using ${browser} at IP: ${ipAddress}`
+            );
+        }
+
+        res.json({
+            message: isNewUser ? "Account created successfully via Google" : "Login successful via Google",
+            token: jwtToken,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                role: user.role,
+                profileImage: user.profile_image,
+                isVerified: true
+            }
+        });
+
+    } catch (err) {
+        console.error("Google login error:", err);
+        res.status(500).json({ 
+            message: "Server error during Google login. Please try again.",
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
+
+// ============================================
+// MICROSOFT OAUTH LOGIN
+// ============================================
+exports.microsoftLogin = async (req, res) => {
+    try {
+        const { token } = req.body;
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+        
+        if (!token) {
+            return res.status(400).json({ 
+                message: "Microsoft token is required" 
+            });
+        }
+
+        // Fetch user info from Microsoft Graph API
+        const axios = require('axios');
+        const response = await axios.get('https://graph.microsoft.com/v1.0/me', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const { id: microsoftId, displayName, mail, userPrincipalName } = response.data;
+        const email = mail || userPrincipalName;
+
+        if (!email) {
+            return res.status(400).json({ 
+                message: "Could not retrieve email from Microsoft account" 
+            });
+        }
+
+        // Check if user exists
+        const [users] = await pool.query(
+            "SELECT * FROM users WHERE email = ? OR microsoft_id = ?",
+            [email.toLowerCase().trim(), microsoftId]
+        );
+
+        let user;
+        let isNewUser = false;
+
+        if (users.length > 0) {
+            user = users[0];
+            
+            if (!user.microsoft_id) {
+                await pool.query(
+                    "UPDATE users SET microsoft_id = ?, is_verified = true WHERE id = ?",
+                    [microsoftId, user.id]
+                );
+            }
+        } else {
+            // Create new user
+            isNewUser = true;
+            const [result] = await pool.query(
+                `INSERT INTO users (name, email, microsoft_id, role, is_verified, email_verified_at, created_at) 
+                 VALUES (?, ?, ?, 'buyer', true, NOW(), NOW())`,
+                [displayName, email.toLowerCase().trim(), microsoftId]
+            );
+            
+            user = {
+                id: result.insertId,
+                name: displayName,
+                email: email.toLowerCase().trim(),
+                microsoft_id: microsoftId,
+                role: 'buyer',
+                is_verified: true,
+                is_blocked: false,
+                account_locked_until: null
+            };
+        }
+
+        // Check if account is blocked
+        if (user.is_blocked) {
+            await logUserActivity(user.id, 'blocked_login_attempt', ipAddress, userAgent, 'Blocked user attempted login', 'microsoft');
+            return res.status(403).json({ 
+                message: "Your account has been blocked. Please contact support." 
+            });
+        }
+
+        // Check if account is temporarily locked
+        if (user.account_locked_until && new Date(user.account_locked_until) > new Date()) {
+            return res.status(403).json({ 
+                message: "Your account is temporarily locked due to suspicious activity. Please try again later.",
+                lockedUntil: user.account_locked_until
+            });
+        }
+
+        // Check for suspicious activity
+        const suspiciousCheck = await checkSuspiciousActivity(user.id, ipAddress);
+        if (suspiciousCheck.isSuspicious) {
+            await sendEmailNotification(
+                user.email,
+                'Suspicious Login Activity Detected',
+                `We detected unusual login activity on your account from IP: ${ipAddress}`
+            );
+        }
+
+        // Generate JWT token
+        const jwtToken = jwt.sign(
+            { id: user.id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        // Log successful login
+        await logUserActivity(
+            user.id, 
+            isNewUser ? 'registration' : 'login', 
+            ipAddress, 
+            userAgent, 
+            isNewUser ? 'New user registered via Microsoft' : 'User logged in via Microsoft',
+            'microsoft'
+        );
+
+        // Update last login
+        await pool.query(
+            "UPDATE users SET last_login = NOW(), last_login_ip = ? WHERE id = ?",
+            [ipAddress, user.id]
+        );
+
+        res.json({
+            message: isNewUser ? "Account created successfully via Microsoft" : "Login successful via Microsoft",
+            token: jwtToken,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                role: user.role,
+                profileImage: user.profile_image,
+                isVerified: true
+            }
+        });
+
+    } catch (err) {
+        console.error("Microsoft login error:", err);
+        res.status(500).json({ 
+            message: "Server error during Microsoft login. Please try again.",
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
+
+// ============================================
+// REGULAR REGISTRATION
+// ============================================
+exports.register = async (req, res) => {
+    try {
+        const { name, email, phone, password, role, profileImage } = req.body;
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+
+        // Validate required fields
+        if (!name || !email || !phone || !password || !role) {
+            return res.status(400).json({ 
+                message: "All fields are required" 
+            });
+        }
+
+        // Validate role
+        const allowedRoles = ["buyer", "builder", "agent"];
+        if (!allowedRoles.includes(role)) {
+            return res.status(400).json({ 
+                message: "Invalid role selected. Must be buyer, builder, or agent" 
+            });
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ 
+                message: "Invalid email format" 
+            });
+        }
+
+        // Validate phone format (10-15 digits)
+        const phoneRegex = /^[0-9]{10,15}$/;
+        if (!phoneRegex.test(phone)) {
+            return res.status(400).json({ 
+                message: "Phone number must be 10-15 digits" 
+            });
+        }
+
+        // Validate password strength
+        if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+            return res.status(400).json({ 
+                message: "Password must be at least 8 characters with letters and numbers" 
+            });
+        }
+
+        // Check if email already exists
+        const [existing] = await pool.query(
+            "SELECT id FROM users WHERE email = ?",
+            [email.toLowerCase().trim()]
+        );
+
+        if (existing.length > 0) {
+            return res.status(409).json({
+                message: "This email is already registered. Please login instead.",
+            });
+        }
+
+        // Check if phone already exists
+        const [existingPhone] = await pool.query(
+            "SELECT id FROM users WHERE phone = ?",
+            [phone]
+        );
+
+        if (existingPhone.length > 0) {
+            return res.status(409).json({
+                message: "This phone number is already registered.",
+            });
+        }
+
+        console.log("Register payload:", { name, email, phone, role, profileImage: profileImage ? 'provided' : 'none' });
+
+        // Hash password
+        const hashed = await bcrypt.hash(password, 10);
+
+        // Insert user into database
+        const [result] = await pool.query(
+            "INSERT INTO users (name, email, phone, password, role, profile_image, created_at) VALUES (?,?,?,?,?,?, NOW())",
+            [name.trim(), email.toLowerCase().trim(), phone, hashed, role, profileImage || null]
+        );
+
+        const userId = result.insertId;
+
+        // Generate JWT token
+        const token = jwt.sign(
+            { id: userId, role: role },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        // Log registration activity
+        await logUserActivity(userId, 'registration', ipAddress, userAgent, 'User registered successfully', 'email');
+
+        // Return success response
+        res.status(201).json({ 
+            message: "Registration successful",
+            token,
+            user: {
+                id: userId,
+                name: name.trim(),
+                email: email.toLowerCase().trim(),
+                phone,
+                role: role,
+                profileImage: profileImage || null
+            }
+        });
+
+    } catch (err) {
+        console.error("Registration error:", err);
+        res.status(500).json({ 
+            message: "Server error during registration. Please try again.",
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
+
+// ============================================
+// REGULAR LOGIN
+// ============================================
+exports.login = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+
+        // Validate required fields
+        if (!email || !password) {
+            return res.status(400).json({ 
+                message: "Email and password are required" 
+            });
+        }
+
+        // Find user by email or phone
+        const [users] = await pool.query(
+            "SELECT * FROM users WHERE email = ? OR phone = ?",
+            [email.toLowerCase().trim(), email]
+        );
+
+        if (users.length === 0) {
+            // Log failed login attempt for unknown user
+            await pool.query(
+                `INSERT INTO user_login_logs 
+                (login_time, ip_address, user_agent, activity_type, description) 
+                VALUES (NOW(), ?, ?, 'failed_login', ?)`,
+                [ipAddress, userAgent, `Failed login attempt for unknown email: ${email}`]
+            );
+            
+            return res.status(400).json({ 
+                message: "Invalid credentials" 
+            });
+        }
+
+        const user = users[0];
+
+        // Check if account is temporarily locked
+        if (user.account_locked_until && new Date(user.account_locked_until) > new Date()) {
+            return res.status(403).json({ 
+                message: "Your account is temporarily locked due to too many failed login attempts. Please try again later.",
+                lockedUntil: user.account_locked_until
+            });
+        }
+
+        // Check if user registered via OAuth (no password)
+        if (!user.password && (user.google_id || user.microsoft_id)) {
+            const provider = user.google_id ? 'Google' : 'Microsoft';
+            await logUserActivity(user.id, 'failed_login', ipAddress, userAgent, `Attempted password login for OAuth account (${provider})`, 'email');
+            
+            return res.status(400).json({ 
+                message: `This account was created using ${provider}. Please login with ${provider}.` 
+            });
+        }
+
+        // Check if account is blocked
+        if (user.is_blocked) {
+            await logUserActivity(user.id, 'blocked_login_attempt', ipAddress, userAgent, 'Blocked user attempted login', 'email');
+            
+            return res.status(403).json({ 
+                message: "Your account has been blocked. Please contact support." 
+            });
+        }
+
+        // Verify password
+        const valid = await bcrypt.compare(password, user.password);
+        if (!valid) {
+            // Log failed login attempt
+            await logUserActivity(user.id, 'failed_login', ipAddress, userAgent, 'Invalid password', 'email');
+            
+            // Check if account should be locked after multiple failed attempts
+            await checkAccountLockout(user.id);
+            
+            return res.status(400).json({ 
+                message: "Invalid credentials" 
+            });
+        }
+
+        // Clear account lock if it was set
+        if (user.account_locked_until) {
+            await pool.query(
+                "UPDATE users SET account_locked_until = NULL WHERE id = ?",
+                [user.id]
+            );
+        }
+
+        // Check for suspicious activity
+        const suspiciousCheck = await checkSuspiciousActivity(user.id, ipAddress);
+        if (suspiciousCheck.isSuspicious) {
+            await sendEmailNotification(
+                user.email,
+                'Suspicious Login Activity Detected',
+                `We detected unusual login activity on your account from IP: ${ipAddress}`
+            );
+        }
+
+        // Generate JWT token
+        const token = jwt.sign(
+            { id: user.id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        // Log successful login
+        await logUserActivity(user.id, 'login', ipAddress, userAgent, 'User logged in successfully', 'email');
+
+        // Update last login timestamp
+        await pool.query(
+            "UPDATE users SET last_login = NOW(), last_login_ip = ? WHERE id = ?",
+            [ipAddress, user.id]
+        );
+
+        // Check for new device login
+        const [recentLogins] = await pool.query(
+            `SELECT COUNT(*) as count FROM user_login_logs 
+             WHERE user_id = ? AND user_agent = ? AND login_time > DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+            [user.id, userAgent]
+        );
+
+        if (recentLogins[0].count === 1) { // First time on this device
+            const deviceType = getDeviceType(userAgent);
+            const browser = getBrowser(userAgent);
+            await sendEmailNotification(
+                user.email,
+                'New Device Login Detected',
+                `A new login was detected from ${deviceType} using ${browser} at IP: ${ipAddress}`
+            );
+        }
+
+        // Return success response
+        res.json({
+            message: "Login successful",
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                phone: user.phone,
+                role: user.role,
+                profileImage: user.profile_image
+            }
+        });
+
+    } catch (err) {
+        console.error("Login error:", err);
+        res.status(500).json({ 
+            message: "Server error during login. Please try again.",
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
+
+// ============================================
+// LOGOUT
+// ============================================
+exports.logout = async (req, res) => {
+    try {
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+
+        if (req.user && req.user.id) {
+            // Update the most recent login session with logout time
+            await pool.query(
+                "UPDATE user_login_logs SET logout_time = NOW() WHERE user_id = ? AND logout_time IS NULL ORDER BY login_time DESC LIMIT 1",
+                [req.user.id]
+            );
+
+            // Log logout activity
+            await logUserActivity(req.user.id, 'logout', ipAddress, userAgent, 'User logged out', 'email');
+        }
+
+        res.json({ message: "Logout successful" });
+    } catch (err) {
+        console.error("Logout error:", err);
+        res.status(500).json({ message: "Server error during logout" });
+    }
+};
+
+// ============================================
+// OTP VERIFICATION
+// ============================================
+exports.verifyOtp = async (req, res) => {
+    try {
+        const { email, otp, purpose = "email_verification" } = req.body;
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+
+        // Validate required fields
+        if (!email || !otp) {
+            return res.status(400).json({ 
+                message: "Email and OTP are required" 
+            });
+        }
+
+        // Find the most recent OTP for this email and purpose
+        const [otpRecords] = await pool.query(
+            `SELECT ov.*, u.id as user_id, u.name, u.email, u.phone, u.role, u.profile_image, u.is_verified
+             FROM otp_verifications ov
+             JOIN users u ON ov.user_id = u.id
+             WHERE ov.email = ? AND ov.purpose = ? AND ov.is_used = false
+             ORDER BY ov.created_at DESC
+             LIMIT 1`,
+            [email.toLowerCase().trim(), purpose]
+        );
+
+        if (otpRecords.length === 0) {
+            return res.status(400).json({ 
+                message: "Invalid or expired OTP" 
+            });
+        }
+
+        const otpRecord = otpRecords[0];
+
+        // Check if OTP has expired
+        if (new Date() > new Date(otpRecord.expires_at)) {
+            return res.status(400).json({ 
+                message: "OTP has expired. Please request a new one." 
+            });
+        }
+
+        // Verify OTP
+        if (otpRecord.otp !== otp) {
+            // Increment attempt count
+            await pool.query(
+                "UPDATE otp_verifications SET attempts = attempts + 1 WHERE id = ?",
+                [otpRecord.id]
+            );
+
+            // Log failed OTP verification
+            await logUserActivity(otpRecord.user_id, 'failed_otp_verification', ipAddress, userAgent, `Failed OTP verification for ${purpose}`, 'email');
+
+            return res.status(400).json({ 
+                message: "Invalid OTP. Please try again." 
+            });
+        }
+
+        // Mark OTP as used
+        await pool.query(
+            "UPDATE otp_verifications SET is_used = true, verified_at = NOW() WHERE id = ?",
+            [otpRecord.id]
+        );
+
+        // Update user verification status
+        await pool.query(
+            "UPDATE users SET is_verified = true, email_verified_at = NOW() WHERE id = ?",
+            [otpRecord.user_id]
+        );
+
+        // Log successful verification
+        await logUserActivity(otpRecord.user_id, 'email_verification', ipAddress, userAgent, 'Email verified successfully', 'email');
+
+        // Generate JWT token
+        const token = jwt.sign(
+            { id: otpRecord.user_id, role: otpRecord.role },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        // Return success response
+        res.json({
+            message: "Email verified successfully",
+            token,
+            user: {
+                id: otpRecord.user_id,
+                name: otpRecord.name,
+                email: otpRecord.email,
+                phone: otpRecord.phone,
+                role: otpRecord.role,
+                profileImage: otpRecord.profile_image,
+                isVerified: true
+            }
+        });
+
+    } catch (err) {
+        console.error("OTP verification error:", err);
+        res.status(500).json({ 
+            message: "Server error during OTP verification. Please try again.",
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
+
+// ============================================
+// RESEND OTP
+// ============================================
+exports.resendOtp = async (req, res) => {
+    try {
+        const { email, purpose = "email_verification" } = req.body;
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+
+        if (!email) {
+            return res.status(400).json({ 
+                message: "Email is required" 
+            });
+        }
+
+        const [users] = await pool.query(
+            "SELECT id, email, phone, is_verified FROM users WHERE email = ?",
+            [email.toLowerCase().trim()]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({ 
+                message: "User not found with this email" 
+            });
+        }
+
+        const user = users[0];
+
+        if (purpose === "email_verification" && user.is_verified) {
+            return res.status(400).json({ 
+                message: "Email is already verified" 
+            });
+        }
+
+        const [recentOtps] = await pool.query(
+            `SELECT COUNT(*) as count FROM otp_verifications 
+             WHERE email = ? AND purpose = ? AND created_at > DATE_SUB(NOW(), INTERVAL 5 MINUTE)`,
+            [email.toLowerCase().trim(), purpose]
+        );
+
+        if (recentOtps[0].count >= 3) {
+            return res.status(429).json({ 
+                message: "Too many OTP requests. Please try again after 5 minutes." 
+            });
+        }
+
+        await pool.query(
+            "UPDATE otp_verifications SET is_used = true WHERE email = ? AND purpose = ? AND is_used = false",
+            [email.toLowerCase().trim(), purpose]
+        );
+
+        const otp = generateOTP();
+        const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        await pool.query(
+            "INSERT INTO otp_verifications (user_id, email, phone, otp, purpose, expires_at, created_at) VALUES (?,?,?,?,?, ?, NOW())",
+            [user.id, email.toLowerCase().trim(), user.phone, otp, purpose, otpExpiry]
+        );
+
+        await sendOTP(email, user.phone, otp, purpose);
+
+        // Log OTP resend activity
+        await logUserActivity(user.id, 'otp_resend', ipAddress, userAgent, `OTP resent for ${purpose}`, 'email');
+
+        res.json({ 
+            message: "OTP has been resent successfully",
+            email: email.toLowerCase().trim()
+        });
+
+    } catch (err) {
+        console.error("Resend OTP error:", err);
+        res.status(500).json({ 
+            message: "Server error while resending OTP. Please try again.",
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
+
+// ============================================
+// FORGOT PASSWORD
+// ============================================
+exports.forgotPassword = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+
+        if (!email) {
+            return res.status(400).json({ 
+                message: "Email is required" 
+            });
+        }
+
+        const [users] = await pool.query(
+            "SELECT id, email, phone, name, password, google_id, microsoft_id FROM users WHERE email = ?",
+            [email.toLowerCase().trim()]
+        );
+
+        if (users.length === 0) {
+            // Log attempt for non-existent user
+            await pool.query(
+                `INSERT INTO user_login_logs 
+                (login_time, ip_address, user_agent, activity_type, description) 
+                VALUES (NOW(), ?, ?, 'password_reset_request', ?)`,
+                [ipAddress, userAgent, `Password reset requested for non-existent email: ${email}`]
+            );
+
+            return res.json({ 
+                message: "If an account exists with this email, you will receive a password reset OTP." 
+            });
+        }
+
+        const user = users[0];
+
+        // Check if user registered via OAuth (no password to reset)
+        if (!user.password && (user.google_id || user.microsoft_id)) {
+            const provider = user.google_id ? 'Google' : 'Microsoft';
+            
+            await logUserActivity(user.id, 'password_reset_request', ipAddress, userAgent, `Password reset attempted for OAuth account (${provider})`, 'email');
+            
+            return res.status(400).json({ 
+                message: `This account was created using ${provider}. Please login with ${provider}.` 
+            });
+        }
+
+        const [recentOtps] = await pool.query(
+            `SELECT COUNT(*) as count FROM otp_verifications 
+             WHERE email = ? AND purpose = 'password_reset' AND created_at > DATE_SUB(NOW(), INTERVAL 15 MINUTE)`,
+            [email.toLowerCase().trim()]
+        );
+
+        if (recentOtps[0].count >= 3) {
+            return res.status(429).json({ 
+                message: "Too many password reset requests. Please try again after 15 minutes." 
+            });
+        }
+
+        const otp = generateOTP();
+        const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); 
+
+        await pool.query(
+            "INSERT INTO otp_verifications (user_id, email, phone, otp, purpose, expires_at, created_at) VALUES (?,?,?,?,?, ?, NOW())",
+            [user.id, email.toLowerCase().trim(), user.phone, otp, "password_reset", otpExpiry]
+        );
+
+        await sendOTP(email, user.phone, otp, "password_reset");
+
+        // Log password reset request
+        await logUserActivity(user.id, 'password_reset_request', ipAddress, userAgent, 'Password reset OTP requested', 'email');
+
+        res.json({ 
+            message: "If an account exists with this email, you will receive a password reset OTP.",
+            email: email.toLowerCase().trim()
+        });
+
+    } catch (err) {
+        console.error("Forgot password error:", err);
+        res.status(500).json({ 
+            message: "Server error during password reset request. Please try again.",
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
+
+// ============================================
+// RESET PASSWORD
+// ============================================
+exports.resetPassword = async (req, res) => {
+    try {
+        const { email, otp, newPassword } = req.body;
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ 
+                message: "Email, OTP, and new password are required" 
+            });
+        }
+
+        if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+            return res.status(400).json({ 
+                message: "Password must be at least 8 characters with letters and numbers" 
+            });
+        }
+
+        const [otpRecords] = await pool.query(
+            `SELECT ov.*, u.id as user_id, u.password as current_password, u.email as user_email
+             FROM otp_verifications ov
+             JOIN users u ON ov.user_id = u.id
+             WHERE ov.email = ? AND ov.purpose = 'password_reset' AND ov.is_used = false
+             ORDER BY ov.created_at DESC
+             LIMIT 1`,
+            [email.toLowerCase().trim()]
+        );
+
+        if (otpRecords.length === 0) {
+            return res.status(400).json({ 
+                message: "Invalid or expired OTP" 
+            });
+        }
+
+        const otpRecord = otpRecords[0];
+
+        if (new Date() > new Date(otpRecord.expires_at)) {
+            return res.status(400).json({ 
+                message: "OTP has expired. Please request a new one." 
+            });
+        }
+
+        if (otpRecord.otp !== otp) {
+            await pool.query(
+                "UPDATE otp_verifications SET attempts = attempts + 1 WHERE id = ?",
+                [otpRecord.id]
+            );
+
+            // Log failed password reset attempt
+            await logUserActivity(otpRecord.user_id, 'failed_password_reset', ipAddress, userAgent, 'Invalid OTP for password reset', 'email');
+
+            return res.status(400).json({ 
+                message: "Invalid OTP. Please try again." 
+            });
+        }
+
+        // Check if new password is same as current password
+        if (otpRecord.current_password) {
+            const isSamePassword = await bcrypt.compare(newPassword, otpRecord.current_password);
+            if (isSamePassword) {
+                return res.status(400).json({ 
+                    message: "New password cannot be the same as your current password" 
+                });
+            }
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await pool.query(
+            "UPDATE users SET password = ?, password_changed_at = NOW() WHERE id = ?",
+            [hashedPassword, otpRecord.user_id]
+        );
+
+        await pool.query(
+            "UPDATE otp_verifications SET is_used = true, verified_at = NOW() WHERE id = ?",
+            [otpRecord.id]
+        );
+
+        // Log successful password reset
+        await logUserActivity(otpRecord.user_id, 'password_reset', ipAddress, userAgent, 'Password was reset successfully', 'email');
+
+        // Send email notification about password change
+        await sendEmailNotification(
+            otpRecord.user_email,
+            'Password Changed Successfully',
+            `Your password was successfully changed from IP: ${ipAddress}. If you did not make this change, please contact support immediately.`
+        );
+
+        res.json({
+            message: "Password has been reset successfully. Please login with your new password."
+        });
+
+    } catch (err) {
+        console.error("Reset password error:", err);
+        res.status(500).json({ 
+            message: "Server error during password reset. Please try again.",
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};

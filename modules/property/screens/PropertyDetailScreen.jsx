@@ -36,7 +36,7 @@ import {
   Home,
   Flag,
 } from 'lucide-react-native';
-
+import ReportPropertyScreen from './ReportPropertyScreen';
 const { width } = Dimensions.get('window');
 
 const FeatureChip = ({ icon, label }) => (
@@ -57,6 +57,13 @@ const SpecCard = ({ icon, label, value }) => (
 export default function PropertyDetailScreen({ navigation, onBack, route }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
+
+  // Extract property data from route params or use defaults
+  const propertyData = route?.params || {};
+  const propertyId = propertyData.propertyId || 'property-123';
+  const propertyName = propertyData.propertyName || 'Modern Luxury Villa';
+  const propertyAddress = propertyData.propertyAddress || '1245 Sunset Boulevard, Beverly Hills, CA 90210';
+  const propertyPrice = propertyData.propertyPrice || '$789,000';
 
   const propertyImages = [
     'https://images.unsplash.com/photo-1706808849780-7a04fbac83ef?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBsdXh1cnklMjBob3VzZSUyMGV4dGVyaW9yfGVufDF8fHx8MTc2NjE0Mzk2MHww&ixlib=rb-4.1.0&q=80&w=1080',
@@ -79,7 +86,11 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
   const handleMakeOffer = () => {
     if (navigation && navigation.navigate) {
       try {
-        navigation.navigate('PaymentScreen');
+        navigation.navigate('PaymentScreen', {
+          propertyId,
+          propertyName,
+          propertyPrice,
+        });
       } catch (error) {
         console.error('Navigation error:', error);
         Alert.alert('Navigation Error', 'Unable to navigate to Payment Screen');
@@ -90,69 +101,31 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
   };
 
   const handleReportProperty = () => {
-    // Show alert with options
-    Alert.alert(
-      'Report Property',
-      'Why are you reporting this property?',
-      [
-        {
-          text: 'Incorrect Information',
-          onPress: () => handleReportSubmit('Incorrect Information')
-        },
-        {
-          text: 'Fraudulent Listing',
-          onPress: () => handleReportSubmit('Fraudulent Listing')
-        },
-        {
-          text: 'Property Not Available',
-          onPress: () => handleReportSubmit('Property Not Available')
-        },
-        {
-          text: 'Inappropriate Content',
-          onPress: () => handleReportSubmit('Inappropriate Content')
-        },
-        {
-          text: 'Other',
-          onPress: () => handleReportSubmit('Other')
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        }
-      ],
-      { cancelable: true }
-    );
-  };
-
-  const handleReportSubmit = (reason) => {
-    // Simulate report submission
-    console.log('Report submitted with reason:', reason);
-    
-    // Try to navigate if ReportPropertyScreen exists
-    if (navigation?.navigate) {
+    // Direct navigation to ReportPropertyScreen
+    if (navigation && navigation.navigate) {
       try {
         navigation.navigate('ReportPropertyScreen', {
-          propertyId: route?.params?.propertyId || 'property-123',
-          propertyName: 'Modern Luxury Villa',
-          reason: reason
+          propertyId: propertyId,
+          propertyName: propertyName,
+          propertyAddress: propertyAddress,
+          propertyPrice: propertyPrice,
+          propertyImage: propertyImages[0],
         });
       } catch (error) {
-        // If navigation fails, show success message
-        console.log('ReportPropertyScreen not found, showing success alert');
-        showReportSuccess(reason);
+        console.error('Navigation error:', error);
+        Alert.alert(
+          'Navigation Error',
+          'Unable to open Report Property screen. Please make sure ReportPropertyScreen is properly configured in your navigation stack.',
+          [{ text: 'OK' }]
+        );
       }
     } else {
-      // No navigation available, show success message
-      showReportSuccess(reason);
+      Alert.alert(
+        'Error',
+        'Navigation is not available. Please ensure this screen is part of a navigation stack.',
+        [{ text: 'OK' }]
+      );
     }
-  };
-
-  const showReportSuccess = (reason) => {
-    Alert.alert(
-      'Report Submitted',
-      `Thank you for reporting this property. Our team will review your report regarding "${reason}" and take appropriate action.`,
-      [{ text: 'OK', style: 'default' }]
-    );
   };
 
   const handleScheduleViewing = () => {
@@ -249,12 +222,12 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
               <Text style={styles.badgeBlueText}>New Listing</Text>
             </View>
           </View>
-          <Text style={styles.title}>Modern Luxury Villa</Text>
+          <Text style={styles.title}>{propertyName}</Text>
           <View style={styles.addressRow}>
             <MapPin size={16} color="#6B7280" strokeWidth={2} />
-            <Text style={styles.address}>1245 Sunset Boulevard, Beverly Hills, CA 90210</Text>
+            <Text style={styles.address}>{propertyAddress}</Text>
           </View>
-          <Text style={styles.price}>$789,000</Text>
+          <Text style={styles.price}>{propertyPrice}</Text>
         </View>
 
         <View style={styles.specsSection}>

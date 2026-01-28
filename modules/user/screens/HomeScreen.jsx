@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,12 @@ import {
   TouchableOpacity,
   ScrollView,
   ImageBackground,
-  Dimensions,
   Image,
+  Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Home,
   Search,
@@ -24,7 +27,11 @@ import {
   Bed,
   Bath,
   Maximize,
+  LogOut,
+  AlertCircle,
 } from 'lucide-react-native';
+
+// Import screens
 import ProfileScreen from './ProfileScreen';
 import ChatListScreen from '../../chat/screens/ChatListScreen';
 import SearchResultsScreen from '../../property/screens/SearchResultsScreen';
@@ -32,62 +39,373 @@ import FavoritesScreen from './FavoritesScreen';
 import PropertyDetailScreen from '../../property/screens/PropertyDetailScreen';
 import NotificationsScreen from './NotificationsScreen';
 
-const { width, height } = Dimensions.get('window');
+// API Configuration
+const API_BASE_URL = 'http://localhost:5000/api';
+// For physical device testing, use your computer's IP:
+// const API_BASE_URL = 'http://192.168.1.100:5000/api';
 
-export default function HomeScreen({
-  navigation,
-  userName = 'Sarah',
-  onHomeScreen,
-  onSearchPress,
-  onPropertyClick,
-  onProfilePress,
-  onMessagePress,
-  onFavoritesPress,
-  onNotificationsPress
-}) {
+export default function HomeScreen({ navigation }) {
+  // State Management
   const [activeTab, setActiveTab] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
   const [screen, setScreen] = useState('home');
   const [selectedProperty, setSelectedProperty] = useState(null);
+  
+  // User State
+  const [user, setUser] = useState(null);
+  const [authToken, setAuthToken] = useState(null);
+  
+  // Data State
+  const [properties, setProperties] = useState([]);
+  const [stats, setStats] = useState({
+    saved: 0,
+    viewed: 0,
+    new: 0,
+  });
+  const [notifications, setNotifications] = useState([]);
+  const [messages, setMessages] = useState([]);
+  
+  // UI State
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  if (screen === 'profile') {
-    return (
-      <ProfileScreen
-        onBack={() => setScreen('home')}
-      />
+  // Load user data and fetch initial data
+  useEffect(() => {
+    initializeData();
+  }, []);
+
+  const initializeData = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Load user data from AsyncStorage
+      const token = await AsyncStorage.getItem('authToken');
+      const userStr = await AsyncStorage.getItem('user');
+
+      if (!token || !userStr) {
+        // User not logged in, redirect to login
+        console.log('❌ No auth token found, redirecting to login');
+        navigation.replace('Login');
+        return;
+      }
+
+      const userData = JSON.parse(userStr);
+      setUser(userData);
+      setAuthToken(token);
+      
+      console.log('✅ User loaded:', userData.name);
+
+      // Fetch all initial data
+      await Promise.all([
+        fetchProperties(token),
+        fetchUserStats(token, userData.id),
+        fetchNotifications(token, userData.id),
+        fetchMessages(token, userData.id),
+      ]);
+
+    } catch (err) {
+      console.error('❌ Initialization error:', err);
+      setError('Failed to load data. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch Properties
+  const fetchProperties = async (token) => {
+    try {
+      console.log('📥 Fetching properties...');
+      
+      const response = await fetch(`${API_BASE_URL}/properties`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to fetch properties`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Properties loaded:', data.properties?.length || 0);
+      
+      setProperties(data.properties || []);
+    } catch (err) {
+      console.error('❌ Error fetching properties:', err);
+      // Use fallback mock data if API fails
+      setProperties(mockProperties);
+    }
+  };
+
+  // Fetch User Stats
+  const fetchUserStats = async (token, userId) => {
+    try {
+      console.log('📊 Fetching user stats...');
+      
+      const response = await fetch(`${API_BASE_URL}/users/${userId}/stats`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch stats');
+      }
+
+      const data = await response.json();
+      console.log('✅ Stats loaded:', data.stats);
+      
+      setStats(data.stats || { saved: 0, viewed: 0, new: 0 });
+    } catch (err) {
+      console.error('❌ Error fetching stats:', err);
+      // Keep default stats
+    }
+  };
+
+  // Fetch Notifications
+  const fetchNotifications = async (token, userId) => {
+    try {
+      console.log('🔔 Fetching notifications...');
+      
+      const response = await fetch(`${API_BASE_URL}/users/${userId}/notifications`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch notifications');
+      }
+
+      const data = await response.json();
+      console.log('✅ Notifications loaded:', data.notifications?.length || 0);
+      
+      setNotifications(data.notifications || []);
+    } catch (err) {
+      console.error('❌ Error fetching notifications:', err);
+    }
+  };
+
+  // Fetch Messages
+  const fetchMessages = async (token, userId) => {
+    try {
+      console.log('💬 Fetching messages...');
+      
+      const response = await fetch(`${API_BASE_URL}/users/${userId}/messages/unread`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch messages');
+      }
+
+      const data = await response.json();
+      console.log('✅ Unread messages:', data.unreadCount || 0);
+      
+      setMessages(data.messages || []);
+    } catch (err) {
+      console.error('❌ Error fetching messages:', err);
+    }
+  };
+
+  // Handle Pull to Refresh
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        fetchProperties(authToken),
+        fetchUserStats(authToken, user.id),
+        fetchNotifications(authToken, user.id),
+        fetchMessages(authToken, user.id),
+      ]);
+    } catch (err) {
+      console.error('Refresh error:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [authToken, user]);
+
+  // Toggle Favorite
+  const toggleFavorite = async (propertyId) => {
+    try {
+      console.log('❤️ Toggling favorite for property:', propertyId);
+      
+      const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/favorite`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to toggle favorite');
+      }
+
+      const data = await response.json();
+      console.log('✅ Favorite toggled:', data.isFavorited);
+      
+      // Update local state
+      setProperties(prevProperties =>
+        prevProperties.map(prop =>
+          prop.id === propertyId
+            ? { ...prop, isFavorited: data.isFavorited }
+            : prop
+        )
+      );
+
+      // Update stats
+      setStats(prev => ({
+        ...prev,
+        saved: data.isFavorited ? prev.saved + 1 : prev.saved - 1,
+      }));
+
+    } catch (err) {
+      console.error('❌ Error toggling favorite:', err);
+      Alert.alert('Error', 'Failed to update favorite status');
+    }
+  };
+
+  // Handle Logout
+  const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Call logout API
+              await fetch(`${API_BASE_URL}/auth/logout`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${authToken}`,
+                },
+              });
+
+              // Clear local storage
+              await AsyncStorage.removeItem('authToken');
+              await AsyncStorage.removeItem('user');
+              
+              console.log('✅ Logged out successfully');
+              
+              // Navigate to login
+              navigation.replace('Login');
+            } catch (err) {
+              console.error('❌ Logout error:', err);
+              Alert.alert('Error', 'Failed to logout');
+            }
+          },
+        },
+      ]
     );
+  };
+
+  // Handle Tab Press
+  const handleTabPress = (tab) => {
+    setActiveTab(tab);
+    setScreen(tab);
+  };
+
+  // Handle Property Click
+  const handlePropertyClick = async (property) => {
+    console.log('🏠 Property clicked:', property.title);
+    
+    try {
+      // Track property view
+      await fetch(`${API_BASE_URL}/properties/${property.id}/view`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Update viewed count
+      setStats(prev => ({ ...prev, viewed: prev.viewed + 1 }));
+    } catch (err) {
+      console.error('Error tracking view:', err);
+    }
+
+    setSelectedProperty(property);
+    setScreen('propertyDetail');
+  };
+
+  // Handle Search
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      Alert.alert('Search', 'Please enter a search term');
+      return;
+    }
+
+    try {
+      console.log('🔍 Searching for:', searchQuery);
+      
+      const response = await fetch(
+        `${API_BASE_URL}/properties/search?q=${encodeURIComponent(searchQuery)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+
+      const data = await response.json();
+      console.log('✅ Search results:', data.properties?.length || 0);
+      
+      setProperties(data.properties || []);
+    } catch (err) {
+      console.error('❌ Search error:', err);
+      Alert.alert('Error', 'Search failed. Please try again.');
+    }
+  };
+
+  // Quick Actions Data
+  const quickActions = [
+    { id: 'buy', label: 'Buy', icon: Home, color: '#2D6A4F' },
+    { id: 'rent', label: 'Rent', icon: Key, color: '#4A90E2' },
+    { id: 'sell', label: 'Sell', icon: TrendingUp, color: '#E27D4A' },
+    { id: 'agents', label: 'Agents', icon: Users, color: '#9B59B6' },
+  ];
+
+  // Screen Routing
+  if (screen === 'profile') {
+    return <ProfileScreen onBack={() => setScreen('home')} navigation={navigation} />;
   }
 
-  if (screen === 'message') {
-    return (
-      <ChatListScreen
-        onBack={() => setScreen('home')}
-      />
-    );
+  if (screen === 'messages') {
+    return <ChatListScreen onBack={() => setScreen('home')} navigation={navigation} />;
   }
 
   if (screen === 'search') {
-    return (
-      <SearchResultsScreen
-        onBack={() => setScreen('home')}
-      />
-    );
+    return <SearchResultsScreen onBack={() => setScreen('home')} navigation={navigation} />;
   }
 
   if (screen === 'favorites') {
-    return (
-      <FavoritesScreen
-        onBack={() => setScreen('home')}
-      />
-    );
+    return <FavoritesScreen onBack={() => setScreen('home')} navigation={navigation} />;
   }
 
   if (screen === 'notifications') {
-    return (
-      <NotificationsScreen
-        onBack={() => setScreen('home')}
-      />
-    );
+    return <NotificationsScreen onBack={() => setScreen('home')} navigation={navigation} />;
   }
 
   if (screen === 'propertyDetail' && selectedProperty) {
@@ -98,170 +416,33 @@ export default function HomeScreen({
           setScreen('home');
           setSelectedProperty(null);
         }}
+        navigation={navigation}
       />
     );
   }
 
-  // Featured properties data
-  const featuredProperties = [
-    {
-      id: '1',
-      title: 'Modern Luxury Villa',
-      price: '$2,450,000',
-      location: 'Beverly Hills, CA',
-      image:
-        'https://images.unsplash.com/photo-1638369022547-1c763b1b9b3b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBsdXh1cnklMjBob3VzZXxlbnwxfHx8fDE3NjYxNzI2Njd8MA&ixlib=rb-4.1.0&q=80&w=1080',
-      bedrooms: 5,
-      bathrooms: 4,
-      area: '4,200 sq ft',
-      type: 'For Sale',
-      description: 'Step into luxury with this stunning modern villa located in the heart of Beverly Hills.',
-    },
-    {
-      id: '2',
-      title: 'Luxury Apartment',
-      price: '$3,800/mo',
-      location: 'Manhattan, NY',
-      image:
-        'https://images.unsplash.com/photo-1654506012740-09321c969dc2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhcGFydG1lbnQlMjBpbnRlcmlvciUyMGxpdmluZ3xlbnwxfHx8fDE3NjYyMDg2NTh8MA&ixlib=rb-4.1.0&q=80&w=1080',
-      bedrooms: 2,
-      bathrooms: 2,
-      area: '1,450 sq ft',
-      type: 'For Rent',
-      description: 'Beautiful luxury apartment in the heart of Manhattan with stunning city views.',
-    },
-    {
-      id: '3',
-      title: 'Contemporary Villa',
-      price: '$1,850,000',
-      location: 'Miami Beach, FL',
-      image:
-        'https://images.unsplash.com/photo-1622015663381-d2e05ae91b72?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjB2aWxsYSUyMGV4dGVyaW9yfGVufDF8fHx8MTc2NjE2NjI5Nnww&ixlib=rb-4.1.0&q=80&w=1080',
-      bedrooms: 4,
-      bathrooms: 3,
-      area: '3,500 sq ft',
-      type: 'For Sale',
-      description: 'Contemporary villa with ocean views and modern amenities.',
-    },
-    {
-      id: '4',
-      title: 'Penthouse Suite',
-      price: '$5,200/mo',
-      location: 'Downtown LA',
-      image:
-        'https://images.unsplash.com/photo-1568115286680-d203e08a8be6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBwZW50aG91c2UlMjB2aWV3fGVufDF8fHx8MTc2NjEyNzI0Nnww&ixlib=rb-4.1.0&q=80&w=1080',
-      bedrooms: 3,
-      bathrooms: 2,
-      area: '2,100 sq ft',
-      type: 'For Rent',
-      description: 'Stunning penthouse with panoramic city views and luxury finishes.',
-    },
-    {
-      id: '5',
-      title: 'Cozy Family Home',
-      price: '$950,000',
-      location: 'Austin, TX',
-      image:
-        'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080',
-      bedrooms: 3,
-      bathrooms: 2,
-      area: '1,850 sq ft',
-      type: 'For Sale',
-      description: 'Perfect family home in a quiet neighborhood with great schools.',
-    },
-    {
-      id: '6',
-      title: 'Beachside Condo',
-      price: '$4,200/mo',
-      location: 'San Diego, CA',
-      image:
-        'https://images.unsplash.com/photo-1502673530728-f79b4cab31b1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080',
-      bedrooms: 2,
-      bathrooms: 2,
-      area: '1,300 sq ft',
-      type: 'For Rent',
-      description: 'Beachfront condo with direct beach access and ocean views.',
-    },
-    {
-      id: '7',
-      title: 'Mountain View Cabin',
-      price: '$1,250,000',
-      location: 'Aspen, CO',
-      image:
-        'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080',
-      bedrooms: 4,
-      bathrooms: 3,
-      area: '2,800 sq ft',
-      type: 'For Sale',
-      description: 'Luxury mountain cabin with breathtaking views and ski-in/ski-out access.',
-    },
-  ];
+  // Loading State
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2D6A4F" />
+        <Text style={styles.loadingText}>Loading your properties...</Text>
+      </View>
+    );
+  }
 
-  const quickActions = [
-    { id: 'buy', label: 'Buy', icon: Home, color: '#2D6A4F' },
-    { id: 'rent', label: 'Rent', icon: Key, color: '#4A90E2' },
-    { id: 'sell', label: 'Sell', icon: TrendingUp, color: '#E27D4A' },
-    { id: 'agents', label: 'Agents', icon: Users, color: '#9B59B6' },
-  ];
-
-  const handleTabPress = (tab) => {
-    setActiveTab(tab);
-
-    if (tab === 'home') {
-      setScreen('home');
-      if (onHomeScreen) {
-        onHomeScreen();
-      }
-    }
-
-    if (tab === 'profile') {
-      setScreen('profile');
-      if (onProfilePress) {
-        onProfilePress();
-      }
-    }
-
-    if (tab === 'messages') {
-      setScreen('message');
-      if (onMessagePress) {
-        onMessagePress();
-      }
-    }
-
-    if (tab === 'search') {
-      setScreen('search');
-      if (onSearchPress) {
-        onSearchPress();
-      }
-    }
-
-    if (tab === 'favorites') {
-      setScreen('favorites');
-      if (onFavoritesPress) {
-        onFavoritesPress();
-      }
-    }
-
-    if (tab === 'notifications') {
-      setScreen('notifications');
-      if (onNotificationsPress) {
-        onNotificationsPress();
-      }
-    }
-  };
-
-  // Handle property click - navigate to PropertyDetail screen
-  const handlePropertyClick = (property) => {
-    console.log('Property clicked in HomeScreen:', property.title);
-    
-    setSelectedProperty(property);
-    setScreen('propertyDetail');
-    
-    // Also call callback if provided
-    if (onPropertyClick) {
-      onPropertyClick(property);
-    }
-  };
+  // Error State
+  if (error && !user) {
+    return (
+      <View style={styles.errorContainer}>
+        <AlertCircle color="#EF4444" size={48} />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={initializeData}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -273,15 +454,27 @@ export default function HomeScreen({
           </View>
           <Text style={styles.appName}>EstateHub</Text>
         </View>
-        <TouchableOpacity 
-          style={styles.notificationButton}
-          onPress={() => handleTabPress('notifications')}
-        >
-          <Bell color="#374151" size={24} strokeWidth={2} />
-          <View style={styles.notificationBadge}>
-            <Text style={styles.notificationBadgeText}>3</Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity 
+            style={styles.notificationButton}
+            onPress={() => handleTabPress('notifications')}
+          >
+            <Bell color="#374151" size={24} strokeWidth={2} />
+            {notifications.length > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {notifications.length}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.logoutButton}
+            onPress={handleLogout}
+          >
+            <LogOut color="#EF4444" size={20} strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Scrollable Content */}
@@ -289,23 +482,31 @@ export default function HomeScreen({
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            colors={['#2D6A4F']}
+            tintColor="#2D6A4F"
+          />
+        }
       >
-        {/* Hero Section with Background */}
+        {/* Hero Section */}
         <View style={styles.heroSection}>
           <ImageBackground
             source={{
-              uri: 'https://images.unsplash.com/photo-1757233451731-9a34e164b208?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaXR5JTIwc2t5bGluZSUyMGJ1aWxkaW5nc3xlbnwxfHx8fDE3NjYyMjU3MTd8MA&ixlib=rb-4.1.0&q=80&w=1080',
+              uri: 'https://images.unsplash.com/photo-1757233451731-9a34e164b208?w=1080',
             }}
             style={styles.heroImage}
             resizeMode="cover"
           >
             <View style={styles.heroOverlay} />
-
-            {/* Welcome Text */}
             <View style={styles.heroTextContainer}>
-              <Text style={styles.heroTitle}>Welcome Back, {userName}</Text>
+              <Text style={styles.heroTitle}>
+                Welcome Back, {user?.name || 'User'}
+              </Text>
               <Text style={styles.heroSubtitle}>
-                Find your dream home from 1,200+ properties
+                Find your dream home from {properties.length}+ properties
               </Text>
             </View>
           </ImageBackground>
@@ -326,6 +527,8 @@ export default function HomeScreen({
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}
+              onSubmitEditing={handleSearch}
+              returnKeyType="search"
             />
           </View>
         </View>
@@ -334,15 +537,15 @@ export default function HomeScreen({
         <View style={styles.statsContainer}>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Saved</Text>
-            <Text style={styles.statValue}>24</Text>
+            <Text style={styles.statValue}>{stats.saved}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Viewed</Text>
-            <Text style={styles.statValue}>156</Text>
+            <Text style={styles.statValue}>{stats.viewed}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>New</Text>
-            <Text style={styles.statValue}>12</Text>
+            <Text style={styles.statValue}>{stats.new}</Text>
           </View>
         </View>
 
@@ -355,6 +558,13 @@ export default function HomeScreen({
                 key={action.id}
                 style={styles.quickAction}
                 activeOpacity={0.7}
+                onPress={() => {
+                  console.log('Quick action:', action.id);
+                  // Navigate based on action
+                  if (action.id === 'sell') {
+                    // Navigate to sell property screen
+                  }
+                }}
               >
                 <View
                   style={[
@@ -374,149 +584,158 @@ export default function HomeScreen({
         <View style={styles.featuredSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Featured Properties</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => handleTabPress('search')}>
               <Text style={styles.seeAllButton}>See All</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Horizontal Scrollable Cards */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.featuredScrollContent}
-          >
-            {featuredProperties.map((property) => (
-              <TouchableOpacity
-                key={property.id}
-                style={styles.propertyCard}
-                onPress={() => handlePropertyClick(property)}
-                activeOpacity={0.9}
-              >
-                {/* Property Image */}
-                <View style={styles.propertyImageContainer}>
-                  <Image
-                    source={{ uri: property.image }}
-                    style={styles.propertyImage}
-                    resizeMode="cover"
-                  />
-                  {/* Type Badge */}
-                  <View style={styles.typeBadge}>
-                    <Text style={styles.typeBadgeText}>{property.type}</Text>
+          {properties.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Home color="#9CA3AF" size={48} />
+              <Text style={styles.emptyStateText}>No properties available</Text>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.featuredScrollContent}
+            >
+              {properties.slice(0, 7).map((property) => (
+                <TouchableOpacity
+                  key={property.id}
+                  style={styles.propertyCard}
+                  onPress={() => handlePropertyClick(property)}
+                  activeOpacity={0.9}
+                >
+                  {/* Property Image */}
+                  <View style={styles.propertyImageContainer}>
+                    <Image
+                      source={{ uri: property.image || property.imageUrl }}
+                      style={styles.propertyImage}
+                      resizeMode="cover"
+                    />
+                    {/* Type Badge */}
+                    <View style={styles.typeBadge}>
+                      <Text style={styles.typeBadgeText}>
+                        {property.type || property.listingType}
+                      </Text>
+                    </View>
+                    {/* Favorite Button */}
+                    <TouchableOpacity
+                      style={styles.favoriteButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(property.id);
+                      }}
+                    >
+                      <Heart
+                        color={property.isFavorited ? '#EF4444' : '#374151'}
+                        size={16}
+                        strokeWidth={2}
+                        fill={property.isFavorited ? '#EF4444' : 'none'}
+                      />
+                    </TouchableOpacity>
                   </View>
-                  {/* Favorite Button */}
-                  <TouchableOpacity
-                    style={styles.favoriteButton}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      console.log('Favorite clicked for:', property.title);
-                    }}
-                  >
-                    <Heart color="#374151" size={16} strokeWidth={2} />
-                  </TouchableOpacity>
-                </View>
 
-                {/* Property Details */}
-                <View style={styles.propertyDetails}>
-                  <Text style={styles.propertyTitle} numberOfLines={1}>
-                    {property.title}
-                  </Text>
-                  <View style={styles.propertyLocation}>
-                    <MapPin color="#9CA3AF" size={12} strokeWidth={2} />
-                    <Text style={styles.propertyLocationText} numberOfLines={1}>
-                      {property.location}
+                  {/* Property Details */}
+                  <View style={styles.propertyDetails}>
+                    <Text style={styles.propertyTitle} numberOfLines={1}>
+                      {property.title || property.name}
+                    </Text>
+                    <View style={styles.propertyLocation}>
+                      <MapPin color="#9CA3AF" size={12} strokeWidth={2} />
+                      <Text style={styles.propertyLocationText} numberOfLines={1}>
+                        {property.location || property.address}
+                      </Text>
+                    </View>
+
+                    {/* Property Stats */}
+                    <View style={styles.propertyStats}>
+                      <View style={styles.propertyStat}>
+                        <Bed color="#9CA3AF" size={16} strokeWidth={2} />
+                        <Text style={styles.propertyStatText}>
+                          {property.bedrooms || property.beds}
+                        </Text>
+                      </View>
+                      <View style={styles.propertyStat}>
+                        <Bath color="#9CA3AF" size={16} strokeWidth={2} />
+                        <Text style={styles.propertyStatText}>
+                          {property.bathrooms || property.baths}
+                        </Text>
+                      </View>
+                      <View style={styles.propertyStat}>
+                        <Maximize color="#9CA3AF" size={16} strokeWidth={2} />
+                        <Text style={styles.propertyStatText}>
+                          {property.area || property.sqft}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Price */}
+                    <Text style={styles.propertyPrice}>
+                      ${property.price?.toLocaleString() || property.price}
                     </Text>
                   </View>
-
-                  {/* Property Stats */}
-                  <View style={styles.propertyStats}>
-                    <View style={styles.propertyStat}>
-                      <Bed color="#9CA3AF" size={16} strokeWidth={2} />
-                      <Text style={styles.propertyStatText}>
-                        {property.bedrooms}
-                      </Text>
-                    </View>
-                    <View style={styles.propertyStat}>
-                      <Bath color="#9CA3AF" size={16} strokeWidth={2} />
-                      <Text style={styles.propertyStatText}>
-                        {property.bathrooms}
-                      </Text>
-                    </View>
-                    <View style={styles.propertyStat}>
-                      <Maximize color="#9CA3AF" size={16} strokeWidth={2} />
-                      <Text style={styles.propertyStatText}>
-                        {property.area}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Price */}
-                  <Text style={styles.propertyPrice}>{property.price}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
         </View>
 
         {/* Recommended Section */}
-        <View style={styles.recommendedSection}>
-          <Text style={styles.sectionTitle}>Recommended for You</Text>
-
-          {/* List View Properties */}
-          <View style={styles.recommendedList}>
-            {featuredProperties.slice(0, 3).map((property) => (
-              <TouchableOpacity
-                key={property.id}
-                style={styles.recommendedCard}
-                onPress={() => handlePropertyClick(property)}
-                activeOpacity={0.9}
-              >
-                {/* Image */}
-                <Image
-                  source={{ uri: property.image }}
-                  style={styles.recommendedImage}
-                  resizeMode="cover"
-                />
-
-                {/* Details */}
-                <View style={styles.recommendedDetails}>
-                  <View style={styles.recommendedTop}>
-                    <Text style={styles.recommendedTitle} numberOfLines={1}>
-                      {property.title}
-                    </Text>
-                    <View style={styles.recommendedLocation}>
-                      <MapPin color="#9CA3AF" size={12} strokeWidth={2} />
-                      <Text
-                        style={styles.recommendedLocationText}
-                        numberOfLines={1}
-                      >
-                        {property.location}
+        {properties.length > 0 && (
+          <View style={styles.recommendedSection}>
+            <Text style={styles.sectionTitle}>Recommended for You</Text>
+            <View style={styles.recommendedList}>
+              {properties.slice(0, 3).map((property) => (
+                <TouchableOpacity
+                  key={property.id}
+                  style={styles.recommendedCard}
+                  onPress={() => handlePropertyClick(property)}
+                  activeOpacity={0.9}
+                >
+                  <Image
+                    source={{ uri: property.image || property.imageUrl }}
+                    style={styles.recommendedImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.recommendedDetails}>
+                    <View style={styles.recommendedTop}>
+                      <Text style={styles.recommendedTitle} numberOfLines={1}>
+                        {property.title || property.name}
                       </Text>
-                    </View>
-                  </View>
-                  <View style={styles.recommendedBottom}>
-                    <Text style={styles.recommendedPrice}>
-                      {property.price}
-                    </Text>
-                    <View style={styles.recommendedStats}>
-                      <View style={styles.recommendedStat}>
-                        <Bed color="#9CA3AF" size={12} strokeWidth={2} />
-                        <Text style={styles.recommendedStatText}>
-                          {property.bedrooms}
-                        </Text>
-                      </View>
-                      <View style={styles.recommendedStat}>
-                        <Bath color="#9CA3AF" size={12} strokeWidth={2} />
-                        <Text style={styles.recommendedStatText}>
-                          {property.bathrooms}
+                      <View style={styles.recommendedLocation}>
+                        <MapPin color="#9CA3AF" size={12} strokeWidth={2} />
+                        <Text style={styles.recommendedLocationText} numberOfLines={1}>
+                          {property.location || property.address}
                         </Text>
                       </View>
                     </View>
+                    <View style={styles.recommendedBottom}>
+                      <Text style={styles.recommendedPrice}>
+                        ${property.price?.toLocaleString() || property.price}
+                      </Text>
+                      <View style={styles.recommendedStats}>
+                        <View style={styles.recommendedStat}>
+                          <Bed color="#9CA3AF" size={12} strokeWidth={2} />
+                          <Text style={styles.recommendedStatText}>
+                            {property.bedrooms || property.beds}
+                          </Text>
+                        </View>
+                        <View style={styles.recommendedStat}>
+                          <Bath color="#9CA3AF" size={12} strokeWidth={2} />
+                          <Text style={styles.recommendedStatText}>
+                            {property.bathrooms || property.baths}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* CTA Banner */}
         <View style={styles.ctaBanner}>
@@ -599,9 +818,11 @@ export default function HomeScreen({
               size={24}
               strokeWidth={2}
             />
-            <View style={styles.messageBadge}>
-              <Text style={styles.messageBadgeText}>2</Text>
-            </View>
+            {messages.length > 0 && (
+              <View style={styles.messageBadge}>
+                <Text style={styles.messageBadgeText}>{messages.length}</Text>
+              </View>
+            )}
           </View>
           <Text
             style={[
@@ -636,10 +857,74 @@ export default function HomeScreen({
   );
 }
 
+// Mock data fallback
+const mockProperties = [
+  {
+    id: '1',
+    title: 'Modern Luxury Villa',
+    price: 2450000,
+    location: 'Beverly Hills, CA',
+    image: 'https://images.unsplash.com/photo-1638369022547-1c763b1b9b3b?w=1080',
+    bedrooms: 5,
+    bathrooms: 4,
+    area: '4,200 sq ft',
+    type: 'For Sale',
+    isFavorited: false,
+  },
+  {
+    id: '2',
+    title: 'Luxury Apartment',
+    price: 3800,
+    location: 'Manhattan, NY',
+    image: 'https://images.unsplash.com/photo-1654506012740-09321c969dc2?w=1080',
+    bedrooms: 2,
+    bathrooms: 2,
+    area: '1,450 sq ft',
+    type: 'For Rent',
+    isFavorited: false,
+  },
+];
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 24,
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    backgroundColor: '#2D6A4F',
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   header: {
     backgroundColor: '#FFFFFF',
@@ -659,6 +944,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
   logoBox: {
     width: 40,
     height: 40,
@@ -672,6 +962,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
+  logoutButton: {
+    padding: 4,
+  },
   notificationButton: {
     position: 'relative',
   },
@@ -679,10 +972,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -4,
     right: -4,
-    width: 16,
-    height: 16,
+    width: 18,
+    height: 18,
     backgroundColor: '#2D6A4F',
-    borderRadius: 8,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -832,6 +1125,16 @@ const styles = StyleSheet.create({
     color: '#2D6A4F',
     fontSize: 14,
     fontWeight: '500',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  emptyStateText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#9CA3AF',
   },
   featuredScrollContent: {
     paddingHorizontal: 24,

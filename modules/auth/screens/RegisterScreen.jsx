@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,29 +6,37 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  ImageBackground,
-  Dimensions,
-  Animated,
+  Image,
   Modal,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
-import { 
-  Home, 
-  User, 
-  Mail, 
-  Phone, 
-  Lock, 
-  Eye, 
-  EyeOff, 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  Camera,
+  Upload,
+  User,
+  Mail,
+  Phone,
+  Lock,
+  Eye,
+  EyeOff,
   ChevronDown,
   ShoppingBag,
   Building2,
   UserCheck,
   Check,
   Shield,
-  Apple
+  Home,
+  AlertCircle,
+  X,
 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 
-const { width, height } = Dimensions.get('window');
+// Backend API configuration - UPDATE THIS WITH YOUR ACTUAL API URL
+const API_BASE_URL = 'http://localhost:5000/api'; // For local development
+// const API_BASE_URL = 'http://YOUR_IP_ADDRESS:5000/api'; // For mobile testing
+// const API_BASE_URL = 'https://your-production-api.com/api'; // For production
 
 const USER_TYPES = [
   {
@@ -54,92 +62,272 @@ const USER_TYPES = [
   },
 ];
 
-export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
+export default function RegisterScreen({ navigation, onNavigateToLogin }) {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
     password: '',
-    userType: null,
+    role: '',
+    profileImage: null,
   });
+
   const [showPassword, setShowPassword] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [showUserTypeModal, setShowUserTypeModal] = useState(false);
+  const [showroleModal, setShowroleModal] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const logoScale = useRef(new Animated.Value(0.8)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  // Validation functions
+  const validateEmail = (email) => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(String(email).toLowerCase());
+  };
 
-  useEffect(() => {
-    // Entrance animations
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-      Animated.spring(logoScale, {
-        toValue: 1,
-        tension: 50,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
+  const validatePhone = (phone) => {
+    const re = /^[0-9]{10,15}$/;
+    return re.test(phone.replace(/[\s\-\(\)]/g, ''));
+  };
 
-    // Pulse animation for register button
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.02,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, []);
+  const validatePassword = (password) => {
+    return password.length >= 8 && /[a-zA-Z]/.test(password) && /[0-9]/.test(password);
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Full name is required';
+    } else if (formData.name.trim().length < 3) {
+      newErrors.name = 'Name must be at least 3 characters';
+    }
+
+    if (!formData.email) {
+      newErrors.email = 'Email is required';
+    } else if (!validateEmail(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+
+    if (!formData.phone) {
+      newErrors.phone = 'Phone number is required';
+    } else if (!validatePhone(formData.phone)) {
+      newErrors.phone = 'Please enter a valid 10-15 digit phone number';
+    }
+
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (!validatePassword(formData.password)) {
+      newErrors.password = 'Password must be 8+ characters with letters and numbers';
+    }
+
+    if (!formData.role) {
+      newErrors.role = 'Please select your role';
+    }
+
+    if (!termsAccepted) {
+      newErrors.terms = 'You must accept the terms and conditions';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: '' }));
+    }
+    setApiError('');
   };
 
-  const handleRegister = () => {
-    console.log('Register with:', formData);
-    if (onRegister) onRegister();
+  const handleImageUpload = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload an image.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        
+        if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
+          setErrors((prev) => ({ ...prev, profileImage: 'Image must be less than 5MB' }));
+          return;
+        }
+
+        setUploadingImage(true);
+        setErrors((prev) => ({ ...prev, profileImage: '' }));
+
+        try {
+          const formDataUpload = new FormData();
+          formDataUpload.append('profileImage', {
+            uri: asset.uri,
+            type: asset.type || 'image/jpeg',
+            name: asset.fileName || 'profile.jpg',
+          });
+
+          const response = await fetch(`${API_BASE_URL}/upload/profile-image`, {
+            method: 'POST',
+            body: formDataUpload,
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || 'Failed to upload image');
+          }
+
+          setFormData((prev) => ({
+            ...prev,
+            profileImage: data.imageUrl || data.url || asset.uri,
+          }));
+        } catch (error) {
+          console.error('Image upload error:', error);
+          // Fallback: use local URI if backend fails
+          setFormData((prev) => ({ ...prev, profileImage: asset.uri }));
+          Alert.alert('Info', 'Image will be uploaded after registration');
+        } finally {
+          setUploadingImage(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to pick image. Please try again.');
+    }
   };
 
-  const handleSelectUserType = (userType) => {
-    setFormData((prev) => ({ ...prev, userType }));
-    setShowUserTypeModal(false);
+  const handleRemoveImage = () => {
+    setFormData((prev) => ({ ...prev, profileImage: null }));
+    setErrors((prev) => ({ ...prev, profileImage: '' }));
   };
 
-  const selectedUserType = USER_TYPES.find((type) => type.value === formData.userType);
+  const handleRegister = async () => {
+    setApiError('');
+    setSuccessMessage('');
+
+    if (!validateForm()) {
+      setApiError('Please fix all errors before submitting');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const registrationData = {
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone: formData.phone.replace(/[\s\-\(\)]/g, ''),
+        password: formData.password,
+        role: formData.role, // Backend now expects 'role'
+        profileImage: formData.profileImage || null,
+      };
+
+      console.log('Sending registration request:', { ...registrationData, password: '***' });
+
+      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(registrationData),
+      });
+
+      const data = await response.json();
+      console.log('Server response:', data);
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          throw new Error(data.message || 'This email is already registered. Please login instead.');
+        } else if (response.status === 400) {
+          throw new Error(data.message || 'Invalid registration data');
+        } else if (response.status === 500) {
+          throw new Error(data.message || 'Server error. Please try again later.');
+        } else {
+          throw new Error(data.message || 'Registration failed');
+        }
+      }
+
+      // Registration successful
+      setSuccessMessage(data.message || 'Registration successful! Redirecting...');
+
+      // Store authentication token and user data
+      if (data.token) {
+        try {
+          await AsyncStorage.setItem('authToken', data.token);
+          await AsyncStorage.setItem('user', JSON.stringify(data.user));
+          console.log('Token and user data stored successfully');
+        } catch (storageError) {
+          console.error('Storage error:', storageError);
+        }
+      }
+
+      // Reset form
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        password: '',
+        role: '',
+        profileImage: null,
+      });
+      setTermsAccepted(false);
+
+      // Navigate to home/dashboard after 2 seconds
+      setTimeout(() => {
+        if (navigation) {
+          navigation.navigate('Home'); // or 'Dashboard'
+        } else if (onNavigateToLogin) {
+          onNavigateToLogin(); // Fallback
+        }
+      }, 2000);
+
+    } catch (error) {
+      console.error('Registration error:', error);
+      setApiError(error.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectrole = (role) => {
+    setFormData((prev) => ({ ...prev, role }));
+    setShowroleModal(false);
+    if (errors.role) {
+      setErrors((prev) => ({ ...prev, role: '' }));
+    }
+  };
+
+  const selectedrole = USER_TYPES.find((type) => type.value === formData.role);
 
   return (
     <View style={styles.container}>
-      {/* Animated Background */}
+      {/* Background */}
       <View style={styles.backgroundContainer}>
-        <ImageBackground
+        <Image
           source={{
-            uri: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBhcGFydG1lbnQlMjBza3lsaW5lJTIwY2l0eXxlbnwxfHx8fDE3NjYwNzI4NjB8MA&ixlib=rb-4.1.0&q=80&w=1080',
+            uri: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1080',
           }}
           style={styles.backgroundImage}
           resizeMode="cover"
         />
-        <View style={styles.gradientOverlay} />
+        <View style={styles.backgroundOverlay} />
       </View>
 
       {/* Main Content */}
@@ -147,55 +335,127 @@ export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Logo and App Name with Animation */}
-        <Animated.View
-          style={[
-            styles.logoContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ scale: logoScale }],
-            },
-          ]}
-        >
+        {/* Logo */}
+        <View style={styles.logoContainer}>
           <View style={styles.logoBox}>
-            <Home color="#FFFFFF" size={32} strokeWidth={2.5} />
+            <Home color="#FFFFFF" size={28} strokeWidth={2.5} />
           </View>
-          <Text style={styles.appName}>EstateHub</Text>
-        </Animated.View>
+          <Text style={styles.logoText}>EstateHub</Text>
+        </View>
 
-        {/* Headline and Subtext with Slide Animation */}
-        <Animated.View
-          style={[
-            styles.headlineContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
+        {/* Headline */}
+        <View style={styles.headlineContainer}>
           <Text style={styles.headline}>Create Your Account</Text>
-          <Text style={styles.subtext}>
+          <Text style={styles.subheadline}>
             Join thousands of users to buy, sell, and rent properties with ease
           </Text>
-        </Animated.View>
+        </View>
 
-        {/* Registration Form */}
-        <Animated.View
-          style={[
-            styles.form,
-            {
-              opacity: fadeAnim,
-            },
-          ]}
-        >
-          {/* Full Name Input */}
+        {/* Success Message */}
+        {successMessage ? (
+          <View style={styles.successMessage}>
+            <Check color="#059669" size={20} strokeWidth={2} />
+            <Text style={styles.successMessageText}>{successMessage}</Text>
+          </View>
+        ) : null}
+
+        {/* API Error Message */}
+        {apiError ? (
+          <View style={styles.errorMessage}>
+            <AlertCircle color="#DC2626" size={20} strokeWidth={2} />
+            <Text style={styles.errorMessageText}>{apiError}</Text>
+            <TouchableOpacity onPress={() => setApiError('')}>
+              <X color="#EF4444" size={16} strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {/* Form */}
+        <View style={styles.form}>
+          {/* Profile Image Upload */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Full Name</Text>
+            <Text style={styles.label}>
+              Profile Picture{' '}
+              <Text style={styles.labelOptional}>(Optional)</Text>
+            </Text>
+            <View style={styles.profileImageContainer}>
+              <View style={styles.profileImageWrapper}>
+                {formData.profileImage ? (
+                  <Image
+                    source={{ uri: formData.profileImage }}
+                    style={styles.profileImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.profileImagePlaceholder}>
+                    <User color="#9CA3AF" size={32} strokeWidth={2} />
+                  </View>
+                )}
+                <TouchableOpacity
+                  onPress={handleImageUpload}
+                  disabled={uploadingImage}
+                  style={styles.cameraButton}
+                  activeOpacity={0.8}
+                >
+                  {uploadingImage ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Camera color="#FFFFFF" size={16} strokeWidth={2} />
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.profileImageInfo}>
+                <Text style={styles.profileImageTitle}>
+                  {formData.profileImage ? 'Change Photo' : 'Upload Photo'}
+                </Text>
+                <Text style={styles.profileImageSubtitle}>
+                  JPG, PNG or GIF • Max 5MB
+                </Text>
+                <View style={styles.profileImageButtons}>
+                  <TouchableOpacity
+                    onPress={handleImageUpload}
+                    disabled={uploadingImage}
+                    style={styles.chooseFileButton}
+                    activeOpacity={0.8}
+                  >
+                    <Upload color="#2D6A4F" size={14} strokeWidth={2} />
+                    <Text style={styles.chooseFileButtonText}>
+                      {uploadingImage ? 'Uploading...' : 'Choose File'}
+                    </Text>
+                  </TouchableOpacity>
+                  {formData.profileImage && (
+                    <TouchableOpacity
+                      onPress={handleRemoveImage}
+                      style={styles.removeButton}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.removeButtonText}>Remove</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                {errors.profileImage && (
+                  <View style={styles.errorContainer}>
+                    <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                    <Text style={styles.errorText}>{errors.profileImage}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+
+          {/* Full Name */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Full Name <Text style={styles.required}>*</Text>
+            </Text>
             <View
               style={[
                 styles.inputWrapper,
                 focusedInput === 'name' && styles.inputWrapperFocused,
+                errors.name && styles.inputWrapperError,
               ]}
             >
               <User
@@ -215,15 +475,24 @@ export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
                 autoCapitalize="words"
               />
             </View>
+            {errors.name && (
+              <View style={styles.errorContainer}>
+                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                <Text style={styles.errorText}>{errors.name}</Text>
+              </View>
+            )}
           </View>
 
-          {/* Email Input */}
+          {/* Email */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Email Address</Text>
+            <Text style={styles.label}>
+              Email Address <Text style={styles.required}>*</Text>
+            </Text>
             <View
               style={[
                 styles.inputWrapper,
                 focusedInput === 'email' && styles.inputWrapperFocused,
+                errors.email && styles.inputWrapperError,
               ]}
             >
               <Mail
@@ -244,15 +513,24 @@ export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
                 autoCapitalize="none"
               />
             </View>
+            {errors.email && (
+              <View style={styles.errorContainer}>
+                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                <Text style={styles.errorText}>{errors.email}</Text>
+              </View>
+            )}
           </View>
 
-          {/* Phone Input */}
+          {/* Phone */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Phone Number</Text>
+            <Text style={styles.label}>
+              Phone Number <Text style={styles.required}>*</Text>
+            </Text>
             <View
               style={[
                 styles.inputWrapper,
                 focusedInput === 'phone' && styles.inputWrapperFocused,
+                errors.phone && styles.inputWrapperError,
               ]}
             >
               <Phone
@@ -272,15 +550,24 @@ export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
                 keyboardType="phone-pad"
               />
             </View>
+            {errors.phone && (
+              <View style={styles.errorContainer}>
+                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                <Text style={styles.errorText}>{errors.phone}</Text>
+              </View>
+            )}
           </View>
 
-          {/* Password Input */}
+          {/* Password */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Password</Text>
+            <Text style={styles.label}>
+              Password <Text style={styles.required}>*</Text>
+            </Text>
             <View
               style={[
                 styles.inputWrapper,
                 focusedInput === 'password' && styles.inputWrapperFocused,
+                errors.password && styles.inputWrapperError,
               ]}
             >
               <Lock
@@ -302,7 +589,7 @@ export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
               />
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeIcon}
+                style={styles.eyeButton}
               >
                 {showPassword ? (
                   <EyeOff color="#9CA3AF" size={20} strokeWidth={2} />
@@ -311,88 +598,124 @@ export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
                 )}
               </TouchableOpacity>
             </View>
-            <Text style={styles.passwordHint}>
-              Must be at least 8 characters with letters and numbers
-            </Text>
+            {errors.password ? (
+              <View style={styles.errorContainer}>
+                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                <Text style={styles.errorText}>{errors.password}</Text>
+              </View>
+            ) : (
+              <Text style={styles.passwordHint}>
+                Must be at least 8 characters with letters and numbers
+              </Text>
+            )}
           </View>
 
-          {/* User Type Dropdown */}
+          {/* User Type */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>I am a...</Text>
+            <Text style={styles.label}>
+              I am a... <Text style={styles.required}>*</Text>
+            </Text>
             <TouchableOpacity
+              onPress={() => setShowroleModal(true)}
               style={[
-                styles.dropdownButton,
-                formData.userType && styles.dropdownButtonSelected,
+                styles.roleButton,
+                formData.role && styles.roleButtonSelected,
+                errors.role && styles.roleButtonError,
               ]}
-              onPress={() => setShowUserTypeModal(true)}
-              activeOpacity={0.7}
+              activeOpacity={0.8}
             >
-              {selectedUserType ? (
-                <View style={styles.dropdownSelected}>
+              {selectedrole ? (
+                <View style={styles.roleSelected}>
                   <View
                     style={[
-                      styles.dropdownIconBox,
-                      { backgroundColor: `${selectedUserType.color}15` },
+                      styles.roleIcon,
+                      { backgroundColor: `${selectedrole.color}15` },
                     ]}
                   >
-                    <selectedUserType.icon
+                    <selectedrole.icon
+                      color={selectedrole.color}
                       size={20}
-                      color={selectedUserType.color}
                       strokeWidth={2}
                     />
                   </View>
-                  <View style={styles.dropdownTextContainer}>
-                    <Text style={styles.dropdownLabel}>
-                      {selectedUserType.label}
+                  <View style={styles.roleText}>
+                    <Text style={styles.roleLabel}>
+                      {selectedrole.label}
                     </Text>
-                    <Text style={styles.dropdownDescription}>
-                      {selectedUserType.description}
+                    <Text style={styles.roleDescription}>
+                      {selectedrole.description}
                     </Text>
                   </View>
                 </View>
               ) : (
-                <Text style={styles.dropdownPlaceholder}>Select your role</Text>
+                <Text style={styles.rolePlaceholder}>Select your role</Text>
               )}
               <ChevronDown color="#9CA3AF" size={20} strokeWidth={2} />
             </TouchableOpacity>
+            {errors.role && (
+              <View style={styles.errorContainer}>
+                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                <Text style={styles.errorText}>{errors.role}</Text>
+              </View>
+            )}
           </View>
 
           {/* Terms and Conditions */}
-          <TouchableOpacity
-            style={styles.termsContainer}
-            onPress={() => setTermsAccepted(!termsAccepted)}
-            activeOpacity={0.7}
-          >
-            <View
-              style={[
-                styles.checkbox,
-                termsAccepted && styles.checkboxChecked,
-              ]}
-            >
-              {termsAccepted && <Check color="#FFFFFF" size={12} strokeWidth={3} />}
-            </View>
-            <Text style={styles.termsText}>
-              I agree to the{' '}
-              <Text style={styles.termsLink}>Terms & Conditions</Text> and{' '}
-              <Text style={styles.termsLink}>Privacy Policy</Text>
-            </Text>
-          </TouchableOpacity>
-
-          {/* Register Button with Pulse Animation */}
-          <Animated.View style={{ transform: [{ scale: termsAccepted ? pulseAnim : 1 }] }}>
+          <View style={styles.inputGroup}>
             <TouchableOpacity
-              onPress={handleRegister}
-              style={[
-                styles.registerButton,
-                !termsAccepted && styles.registerButtonDisabled,
-              ]}
-              activeOpacity={0.8}
-              disabled={!termsAccepted}
+              onPress={() => {
+                setTermsAccepted(!termsAccepted);
+                if (errors.terms) {
+                  setErrors((prev) => ({ ...prev, terms: '' }));
+                }
+              }}
+              style={styles.termsButton}
+              activeOpacity={0.7}
             >
-              <Text style={styles.registerButtonText}>Create Account</Text>
+              <View
+                style={[
+                  styles.checkbox,
+                  termsAccepted && styles.checkboxChecked,
+                ]}
+              >
+                {termsAccepted && (
+                  <Check color="#FFFFFF" size={12} strokeWidth={3} />
+                )}
+              </View>
+              <Text style={styles.termsText}>
+                I agree to the{' '}
+                <Text style={styles.termsLink}>Terms & Conditions</Text> and{' '}
+                <Text style={styles.termsLink}>Privacy Policy</Text>
+              </Text>
             </TouchableOpacity>
-          </Animated.View>
-        </Animated.View>
+            {errors.terms && (
+              <View style={[styles.errorContainer, styles.errorContainerIndent]}>
+                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                <Text style={styles.errorText}>{errors.terms}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Register Button */}
+          <TouchableOpacity
+            onPress={handleRegister}
+            disabled={!termsAccepted || isLoading}
+            style={[
+              styles.registerButton,
+              (!termsAccepted || isLoading) && styles.registerButtonDisabled,
+            ]}
+            activeOpacity={0.8}
+          >
+            {isLoading ? (
+              <View style={styles.registerButtonContent}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={styles.registerButtonText}>Creating Account...</Text>
+              </View>
+            ) : (
+              <Text style={styles.registerButtonText}>Create Account</Text>
+            )}
+          </TouchableOpacity>
+        </View>
 
         {/* Divider */}
         <View style={styles.divider}>
@@ -401,35 +724,31 @@ export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
           <View style={styles.dividerLine} />
         </View>
 
-        {/* Social Registration Buttons */}
-        <View style={styles.socialButtonsContainer}>
-          <TouchableOpacity
-            style={styles.socialButton}
-            onPress={() => console.log('Register with Google')}
-            activeOpacity={0.7}
-          >
+        {/* Social Buttons
+        <View style={styles.socialButtons}>
+          <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
             <View style={styles.googleIcon}>
               <Text style={styles.googleIconText}>G</Text>
             </View>
             <Text style={styles.socialButtonText}>Google</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.socialButton}
-            onPress={() => console.log('Register with Apple')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.appleIconContainer}>
-              <Apple color="#000000" size={20} strokeWidth={2} fill="#000000" />
-            </View>
-            <Text style={styles.socialButtonText}>Apple</Text>
+          <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
+            <Text style={styles.socialButtonText}>🍎 Apple</Text>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* Login Link */}
         <View style={styles.loginLinkContainer}>
           <Text style={styles.loginLinkText}>Already have an account? </Text>
-          <TouchableOpacity onPress={onNavigateToLogin} activeOpacity={0.7}>
+          <TouchableOpacity 
+            onPress={() => {
+              if (navigation) {
+                navigation.navigate('Login');
+              } else if (onNavigateToLogin) {
+                onNavigateToLogin();
+              }
+            }}
+          >
             <Text style={styles.loginLink}>Login</Text>
           </TouchableOpacity>
         </View>
@@ -437,7 +756,7 @@ export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
         {/* Trust Badge */}
         <View style={styles.trustBadge}>
           <View style={styles.trustIcon}>
-            <Shield color="#FFFFFF" size={12} strokeWidth={2.5} />
+            <Shield color="#FFFFFF" size={12} strokeWidth={2} />
           </View>
           <Text style={styles.trustText}>
             Secure registration • Your data is protected
@@ -445,58 +764,74 @@ export default function RegisterScreen({ onRegister, onNavigateToLogin }) {
         </View>
       </ScrollView>
 
-      {/* User Type Selection Modal */}
+      {/* User Type Modal */}
       <Modal
-        visible={showUserTypeModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowUserTypeModal(false)}
+        visible={showroleModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowroleModal(false)}
       >
         <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
-          onPress={() => setShowUserTypeModal(false)}
+          onPress={() => setShowroleModal(false)}
         >
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Your Role</Text>
-              <Text style={styles.modalSubtitle}>
-                Choose how you want to use EstateHub
-              </Text>
+              <View>
+                <Text style={styles.modalTitle}>Select Your Role</Text>
+                <Text style={styles.modalSubtitle}>
+                  Choose how you want to use EstateHub
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowroleModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <X color="#6B7280" size={20} strokeWidth={2} />
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.userTypeList}>
-              {USER_TYPES.map((type) => (
-                <TouchableOpacity
-                  key={type.value}
-                  style={[
-                    styles.userTypeCard,
-                    formData.userType === type.value && styles.userTypeCardSelected,
-                  ]}
-                  onPress={() => handleSelectUserType(type.value)}
-                  activeOpacity={0.7}
-                >
-                  <View
+            <View style={styles.modalBody}>
+              {USER_TYPES.map((type) => {
+                const IconComponent = type.icon;
+                return (
+                  <TouchableOpacity
+                    key={type.value}
+                    onPress={() => handleSelectrole(type.value)}
                     style={[
-                      styles.userTypeIconBox,
-                      { backgroundColor: `${type.color}15` },
+                      styles.roleOption,
+                      formData.role === type.value &&
+                        styles.roleOptionSelected,
                     ]}
+                    activeOpacity={0.8}
                   >
-                    <type.icon size={24} color={type.color} strokeWidth={2} />
-                  </View>
-                  <View style={styles.userTypeInfo}>
-                    <Text style={styles.userTypeLabel}>{type.label}</Text>
-                    <Text style={styles.userTypeDescription}>
-                      {type.description}
-                    </Text>
-                  </View>
-                  {formData.userType === type.value && (
-                    <View style={styles.selectedCheckmark}>
-                      <Check color="#FFFFFF" size={14} strokeWidth={3} />
+                    <View
+                      style={[
+                        styles.roleOptionIcon,
+                        { backgroundColor: `${type.color}15` },
+                      ]}
+                    >
+                      <IconComponent
+                        color={type.color}
+                        size={24}
+                        strokeWidth={2}
+                      />
                     </View>
-                  )}
-                </TouchableOpacity>
-              ))}
+                    <View style={styles.roleOptionText}>
+                      <Text style={styles.roleOptionLabel}>{type.label}</Text>
+                      <Text style={styles.roleOptionDescription}>
+                        {type.description}
+                      </Text>
+                    </View>
+                    {formData.role === type.value && (
+                      <View style={styles.roleOptionCheck}>
+                        <Check color="#FFFFFF" size={14} strokeWidth={3} />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
         </TouchableOpacity>
@@ -515,19 +850,15 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 200,
+    height: 192,
     overflow: 'hidden',
   },
   backgroundImage: {
     width: '100%',
     height: '100%',
   },
-  gradientOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  backgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
   },
   scrollView: {
@@ -535,7 +866,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingTop: 32,
     paddingBottom: 40,
   },
   logoContainer: {
@@ -543,353 +874,520 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   logoBox: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
+    width: 64,
+    height: 64,
     backgroundColor: '#2D6A4F',
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    boxShadow: '0px 8px 24px rgba(45, 106, 79, 0.3)',
     marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  appName: {
+  logoText: {
     color: '#2D6A4F',
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
-    letterSpacing: -0.5,
   },
   headlineContainer: {
     alignItems: 'center',
     marginBottom: 32,
   },
   headline: {
-    color: '#111827',
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: '700',
+    color: '#111827',
     marginBottom: 8,
     textAlign: 'center',
-    letterSpacing: -0.5,
   },
-  subtext: {
-    color: '#6B7280',
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  form: {
-    marginBottom: 24,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    color: '#374151',
+  subheadline: {
     fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  inputWrapper: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    transition: 'all 0.3s ease',
-  },
-  inputWrapperFocused: {
-    borderColor: '#2D6A4F',
-    backgroundColor: '#FFFFFF',
-    boxShadow: '0px 0px 0px 4px rgba(45, 106, 79, 0.1)',
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: 14,
-    zIndex: 1,
-  },
-  input: {
-    flex: 1,
-    height: 52,
-    paddingLeft: 46,
-    paddingRight: 14,
-    fontSize: 15,
-    color: '#111827',
-    backgroundColor: 'transparent',
-  },
-  passwordInput: {
-    paddingRight: 46,
-  },
-  eyeIcon: {
-    position: 'absolute',
-    right: 14,
-    padding: 4,
-  },
-  passwordHint: {
     color: '#6B7280',
-    fontSize: 12,
-    marginTop: 6,
-    marginLeft: 4,
-  },
-  dropdownButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 56,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-  },
-  dropdownButtonSelected: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#2D6A4F',
-  },
-  dropdownPlaceholder: {
-    color: '#9CA3AF',
-    fontSize: 15,
-  },
-  dropdownSelected: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  dropdownIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dropdownTextContainer: {
-    flex: 1,
-  },
-  dropdownLabel: {
-    color: '#111827',
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  dropdownDescription: {
-    color: '#6B7280',
-    fontSize: 12,
-  },
-  termsContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginVertical: 20,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 2,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    marginRight: 10,
-    marginTop: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  checkboxChecked: {
-    backgroundColor: '#2D6A4F',
-    borderColor: '#2D6A4F',
-  },
-  termsText: {
-    flex: 1,
-    color: '#6B7280',
-    fontSize: 13,
+    textAlign: 'center',
     lineHeight: 20,
   },
-  termsLink: {
-    color: '#2D6A4F',
-    fontWeight: '600',
-  },
-  registerButton: {
-    width: '100%',
-    height: 56,
-    backgroundColor: '#2D6A4F',
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    boxShadow: '0px 4px 12px rgba(45, 106, 79, 0.3)',
-  },
-  registerButtonDisabled: {
-    opacity: 0.5,
-    boxShadow: 'none',
-  },
-  registerButtonText: {
-    color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  divider: {
+  successMessage: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 28,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E7EB',
-  },
-  dividerText: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    marginHorizontal: 16,
-    fontWeight: '500',
-  },
-  socialButtonsContainer: {
-    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 12,
-    marginBottom: 28,
-  },
-  socialButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 52,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F0FDF4',
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: '#BBF7D0',
     borderRadius: 12,
-    gap: 10,
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)',
-  },
-  googleIcon: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#4285F4',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  googleIconText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  appleIconContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  socialButtonText: {
-    color: '#374151',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  loginLinkContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 16,
     marginBottom: 24,
   },
-  loginLinkText: {
-    color: '#6B7280',
-    fontSize: 14,
-  },
-  loginLink: {
-    color: '#2D6A4F',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  trustBadge: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    paddingBottom: 16,
-  },
-  trustIcon: {
-    width: 18,
-    height: 18,
-    backgroundColor: '#2D6A4F',
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  trustText: {
-    color: '#6B7280',
-    fontSize: 12,
-  },
-  // Modal Styles
-  modalOverlay: {
+  successMessageText: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 40,
-    boxShadow: '0px -4px 24px rgba(0, 0, 0, 0.15)',
-  },
-  modalHeader: {
-    padding: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  modalSubtitle: {
+    color: '#15803D',
     fontSize: 14,
-    color: '#6B7280',
+    fontWeight: '500',
   },
-  userTypeList: {
-    padding: 16,
-    gap: 12,
-  },
-  userTypeCard: {
+  errorMessage: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#F9FAFB',
+    alignItems:'flex-start',
+    gap: 12,
+    backgroundColor: '#FEF2F2',
     borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 16,
-    gap: 12,
-  },
-  userTypeCardSelected: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#2D6A4F',
-    boxShadow: '0px 4px 12px rgba(45, 106, 79, 0.15)',
-  },
-  userTypeIconBox: {
-    width: 48,
-    height: 48,
+    borderColor: '#FECACA',
     borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  userTypeInfo: {
-    flex: 1,
-  },
-  userTypeLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  userTypeDescription: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  selectedCheckmark: {
-    width: 24,
-    height: 24,
-    backgroundColor: '#2D6A4F',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+    padding: 16,
+    marginBottom: 24,
+},
+errorMessageText: {
+flex: 1,
+color: '#B91C1C',
+fontSize: 14,
+fontWeight: '500',
+},
+form: {
+marginBottom: 24,
+},
+inputGroup: {
+marginBottom: 20,
+},
+label: {
+fontSize: 14,
+fontWeight: '600',
+color: '#374151',
+marginBottom: 8,
+},
+labelOptional: {
+fontWeight: '400',
+color: '#9CA3AF',
+},
+required: {
+color: '#EF4444',
+},
+profileImageContainer: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 16,
+backgroundColor: '#F9FAFB',
+borderWidth: 2,
+borderColor: '#E5E7EB',
+borderRadius: 12,
+padding: 16,
+},
+profileImageWrapper: {
+position: 'relative',
+},
+profileImage: {
+width: 80,
+height: 80,
+borderRadius: 40,
+borderWidth: 2,
+borderColor: '#FFFFFF',
+},
+profileImagePlaceholder: {
+width: 80,
+height: 80,
+borderRadius: 40,
+backgroundColor: '#F3F4F6',
+borderWidth: 2,
+borderStyle: 'dashed',
+borderColor: '#D1D5DB',
+justifyContent: 'center',
+alignItems: 'center',
+},
+cameraButton: {
+position: 'absolute',
+bottom: -4,
+right: -4,
+width: 32,
+height: 32,
+backgroundColor: '#2D6A4F',
+borderRadius: 16,
+justifyContent: 'center',
+alignItems: 'center',
+borderWidth: 3,
+borderColor: '#FFFFFF',
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.2,
+shadowRadius: 4,
+elevation: 4,
+},
+profileImageInfo: {
+flex: 1,
+},
+profileImageTitle: {
+fontSize: 14,
+fontWeight: '600',
+color: '#111827',
+marginBottom: 4,
+},
+profileImageSubtitle: {
+fontSize: 12,
+color: '#6B7280',
+marginBottom: 12,
+},
+profileImageButtons: {
+flexDirection: 'row',
+gap: 8,
+},
+chooseFileButton: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 8,
+paddingHorizontal: 12,
+paddingVertical: 6,
+backgroundColor: '#FFFFFF',
+borderWidth: 2,
+borderColor: '#2D6A4F',
+borderRadius: 8,
+},
+chooseFileButtonText: {
+color: '#2D6A4F',
+fontSize: 12,
+fontWeight: '600',
+},
+removeButton: {
+paddingHorizontal: 12,
+paddingVertical: 6,
+backgroundColor: '#FEF2F2',
+borderWidth: 2,
+borderColor: '#FECACA',
+borderRadius: 8,
+},
+removeButtonText: {
+color: '#DC2626',
+fontSize: 12,
+fontWeight: '600',
+},
+inputWrapper: {
+flexDirection: 'row',
+alignItems: 'center',
+height: 52,
+backgroundColor: '#F9FAFB',
+borderWidth: 2,
+borderColor: '#E5E7EB',
+borderRadius: 12,
+paddingHorizontal: 16,
+},
+inputWrapperFocused: {
+borderColor: '#2D6A4F',
+backgroundColor: '#FFFFFF',
+shadowColor: '#2D6A4F',
+shadowOffset: { width: 0, height: 0 },
+shadowOpacity: 0.1,
+shadowRadius: 8,
+elevation: 2,
+},
+inputWrapperError: {
+borderColor: '#FECACA',
+},
+inputIcon: {
+marginRight: 12,
+},
+input: {
+flex: 1,
+fontSize: 14,
+color: '#111827',
+height: '100%',
+},
+passwordInput: {
+paddingRight: 40,
+},
+eyeButton: {
+position: 'absolute',
+right: 16,
+padding: 4,
+},
+errorContainer: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 4,
+marginTop: 4,
+marginLeft: 4,
+},
+errorContainerIndent: {
+marginLeft: 32,
+},
+errorText: {
+fontSize: 12,
+color: '#DC2626',
+},
+passwordHint: {
+fontSize: 12,
+color: '#6B7280',
+marginTop: 4,
+marginLeft: 4,
+},
+roleButton: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'space-between',
+height: 56,
+paddingHorizontal: 16,
+backgroundColor: '#F9FAFB',
+borderWidth: 2,
+borderColor: '#E5E7EB',
+borderRadius: 12,
+},
+roleButtonSelected: {
+borderColor: '#2D6A4F',
+backgroundColor: '#FFFFFF',
+},
+roleButtonError: {
+borderColor: '#FECACA',
+},
+roleSelected: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 12,
+flex: 1,
+},
+roleIcon: {
+width: 40,
+height: 40,
+borderRadius: 8,
+justifyContent: 'center',
+alignItems: 'center',
+},
+roleText: {
+flex: 1,
+},
+roleLabel: {
+fontSize: 14,
+fontWeight: '600',
+color: '#111827',
+},
+roleDescription: {
+fontSize: 12,
+color: '#6B7280',
+},
+rolePlaceholder: {
+fontSize: 14,
+color: '#9CA3AF',
+},
+termsButton: {
+flexDirection: 'row',
+alignItems: 'flex-start',
+gap: 12,
+padding: 8,
+},
+checkbox: {
+width: 20,
+height: 20,
+borderRadius: 6,
+borderWidth: 2,
+borderColor: '#D1D5DB',
+justifyContent: 'center',
+alignItems: 'center',
+marginTop: 2,
+},
+checkboxChecked: {
+backgroundColor: '#2D6A4F',
+borderColor: '#2D6A4F',
+},
+termsText: {
+flex: 1,
+fontSize: 14,
+color: '#6B7280',
+lineHeight: 20,
+},
+termsLink: {
+color: '#2D6A4F',
+fontWeight: '600',
+},
+registerButton: {
+height: 56,
+backgroundColor: '#2D6A4F',
+borderRadius: 12,
+justifyContent: 'center',
+alignItems: 'center',
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 4 },
+shadowOpacity: 0.2,
+shadowRadius: 8,
+elevation: 8,
+marginTop: 4,
+},
+registerButtonDisabled: {
+backgroundColor: '#D1D5DB',
+shadowOpacity: 0,
+elevation: 0,
+},
+registerButtonContent: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 8,
+},
+registerButtonText: {
+color: '#FFFFFF',
+fontSize: 16,
+fontWeight: '700',
+},
+divider: {
+flexDirection: 'row',
+alignItems: 'center',
+marginVertical: 24,
+},
+dividerLine: {
+flex: 1,
+height: 1,
+backgroundColor: '#E5E7EB',
+},
+dividerText: {
+fontSize: 14,
+color: '#9CA3AF',
+fontWeight: '500',
+marginHorizontal: 16,
+},
+socialButtons: {
+flexDirection: 'row',
+gap: 12,
+marginBottom: 24,
+},
+socialButton: {
+flex: 1,
+height: 48,
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'center',
+gap: 8,
+backgroundColor: '#FFFFFF',
+borderWidth: 2,
+borderColor: '#E5E7EB',
+borderRadius: 12,
+},
+googleIcon: {
+width: 20,
+height: 20,
+backgroundColor: '#3B82F6',
+borderRadius: 10,
+justifyContent: 'center',
+alignItems: 'center',
+},
+googleIconText: {
+color: '#FFFFFF',
+fontSize: 12,
+fontWeight: '700',
+},
+socialButtonText: {
+fontSize: 14,
+fontWeight: '600',
+color: '#374151',
+},
+loginLinkContainer: {
+flexDirection: 'row',
+justifyContent: 'center',
+alignItems: 'center',
+marginBottom: 24,
+},
+loginLinkText: {
+fontSize: 14,
+color: '#6B7280',
+},
+loginLink: {
+fontSize: 14,
+color: '#2D6A4F',
+fontWeight: '700',
+},
+trustBadge: {
+flexDirection: 'row',
+justifyContent: 'center',
+alignItems: 'center',
+gap: 8,
+paddingBottom: 16,
+},
+trustIcon: {
+width: 20,
+height: 20,
+backgroundColor: '#2D6A4F',
+borderRadius: 10,
+justifyContent: 'center',
+alignItems: 'center',
+},
+trustText: {
+fontSize: 12,
+color: '#6B7280',
+},
+modalOverlay: {
+flex: 1,
+backgroundColor: 'rgba(0, 0, 0, 0.5)',
+justifyContent: 'flex-end',
+},
+modalContent: {
+backgroundColor: '#FFFFFF',
+borderTopLeftRadius: 24,
+borderTopRightRadius: 24,
+paddingBottom: 32,
+},
+modalHeader: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'flex-start',
+padding: 24,
+borderBottomWidth: 1,
+borderBottomColor: '#F3F4F6',
+},
+modalTitle: {
+fontSize: 20,
+fontWeight: '700',
+color: '#111827',
+marginBottom: 4,
+},
+modalSubtitle: {
+fontSize: 14,
+color: '#6B7280',
+},
+modalCloseButton: {
+padding: 4,
+},
+modalBody: {
+padding: 16,
+gap: 12,
+},
+roleOption: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 12,
+padding: 16,
+backgroundColor: '#F9FAFB',
+borderWidth: 2,
+borderColor: '#E5E7EB',
+borderRadius: 16,
+},
+roleOptionSelected: {
+backgroundColor: '#FFFFFF',
+borderColor: '#2D6A4F',
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 4 },
+shadowOpacity: 0.1,
+shadowRadius: 8,
+elevation: 4,
+},
+roleOptionIcon: {
+width: 48,
+height: 48,
+borderRadius: 12,
+justifyContent: 'center',
+alignItems: 'center',
+},
+roleOptionText: {
+flex: 1,
+},
+roleOptionLabel: {
+fontSize: 16,
+fontWeight: '600',
+color: '#111827',
+marginBottom: 2,
+},
+roleOptionDescription: {
+fontSize: 14,
+color: '#6B7280',
+},
+roleOptionCheck: {
+width: 24,
+height: 24,
+backgroundColor: '#2D6A4F',
+borderRadius: 12,
+justifyContent: 'center',
+alignItems: 'center',
+},
 });

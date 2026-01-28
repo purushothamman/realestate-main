@@ -7,6 +7,8 @@ const property = require("../controllers/propertyController")
 router.post( "/",protect,
     allow("builder","agent","admin"),
     property.createProperty
+
+
 )
 
 router.get("/",property.getVerifiedProperties)

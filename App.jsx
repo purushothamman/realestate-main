@@ -26,6 +26,7 @@ export default function App() {
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [reportPropertyData, setReportPropertyData] = useState(null);
+  const [paymentData, setPaymentData] = useState(null);
 
   const [userData, setUserData] = useState({
     name: 'Sarah',
@@ -38,12 +39,29 @@ export default function App() {
     setScreenStack(prev => [...prev, currentScreen]);
     setCurrentScreen(screen);
 
+    // Handle property selection
     if (params.property) setSelectedProperty(params.property);
+    
+    // Handle search query
     if (params.query !== undefined) setSearchQuery(params.query);
-    if (params.propertyId || params.propertyName) {
+    
+    // Handle Report Property data
+    if (params.propertyId || params.propertyName || params.propertyAddress || params.propertyPrice || params.propertyImage) {
       setReportPropertyData({
         propertyId: params.propertyId,
         propertyName: params.propertyName,
+        propertyAddress: params.propertyAddress,
+        propertyPrice: params.propertyPrice,
+        propertyImage: params.propertyImage,
+      });
+    }
+
+    // Handle Payment data
+    if (params.propertyPrice) {
+      setPaymentData({
+        propertyId: params.propertyId,
+        propertyName: params.propertyName,
+        propertyPrice: params.propertyPrice,
       });
     }
   };
@@ -61,6 +79,8 @@ export default function App() {
     setScreenStack([]);
     setCurrentScreen('welcome');
     setSelectedProperty(null);
+    setReportPropertyData(null);
+    setPaymentData(null);
   };
 
   const navigation = {
@@ -157,7 +177,14 @@ export default function App() {
             navigation={navigation}
             property={selectedProperty}
             onBack={goBack}
-            route={{ params: { propertyId: selectedProperty?.id || 'property-001' } }}
+            route={{ 
+              params: { 
+                propertyId: selectedProperty?.id || 'property-001',
+                propertyName: selectedProperty?.name || 'Modern Luxury Villa',
+                propertyAddress: selectedProperty?.address || '1245 Sunset Boulevard, Beverly Hills, CA 90210',
+                propertyPrice: selectedProperty?.price || '$789,000',
+              } 
+            }}
           />
         );
 
@@ -205,6 +232,9 @@ export default function App() {
               params: {
                 propertyId: reportPropertyData?.propertyId || 'property-001',
                 propertyName: reportPropertyData?.propertyName || 'Modern Luxury Villa',
+                propertyAddress: reportPropertyData?.propertyAddress || '1245 Sunset Boulevard, Beverly Hills, CA 90210',
+                propertyPrice: reportPropertyData?.propertyPrice || '$789,000',
+                propertyImage: reportPropertyData?.propertyImage || 'https://images.unsplash.com/photo-1706808849780-7a04fbac83ef',
               },
             }}
           />
@@ -215,6 +245,13 @@ export default function App() {
           <PaymentScreen
             navigation={navigation}
             onBack={goBack}
+            route={{
+              params: {
+                propertyId: paymentData?.propertyId || 'property-001',
+                propertyName: paymentData?.propertyName || 'Modern Luxury Villa',
+                propertyPrice: paymentData?.propertyPrice || '$789,000',
+              },
+            }}
           />
         );
 
