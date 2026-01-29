@@ -113,26 +113,26 @@ module.exports.googleLogin = async (req, res) => {
     console.log('\n' + '='.repeat(70));
     console.log('🔐 GOOGLE LOGIN REQUEST RECEIVED');
     console.log('='.repeat(70));
-    
+
     const startTime = Date.now();
-    
+
     try {
         const { token } = req.body;
         const { ipAddress, userAgent } = getRequestMetadata(req); // Uses existing function
-        
+
         console.log('📋 Request Details:');
         console.log(`  IP Address: ${ipAddress}`);
         console.log(`  User Agent: ${userAgent}`);
         console.log(`  Has Token: ${!!token}`);
         console.log('');
-        
+
         // ==================== STEP 1: VALIDATE REQUEST ====================
         console.log('STEP 1: Validating Request...');
-        
+
         if (!token) {
             console.error('❌ No token provided in request body');
-            return res.status(400).json({ 
-                message: "Google token is required" 
+            return res.status(400).json({
+                message: "Google token is required"
             });
         }
         console.log(`✅ Token present (length: ${token.length})`);
@@ -141,61 +141,61 @@ module.exports.googleLogin = async (req, res) => {
 
         // ==================== STEP 2: CHECK ENVIRONMENT ====================
         console.log('STEP 2: Checking Environment Configuration...');
-        
+
         if (!process.env.GOOGLE_CLIENT_ID) {
             console.error('❌ GOOGLE_CLIENT_ID not configured in environment variables');
             console.error('   Please add GOOGLE_CLIENT_ID to your .env file');
-            return res.status(500).json({ 
-                message: "Google authentication is not properly configured on the server" 
+            return res.status(500).json({
+                message: "Google authentication is not properly configured on the server"
             });
         }
-        
+
         console.log('✅ GOOGLE_CLIENT_ID found');
         console.log(`   Client ID: ${process.env.GOOGLE_CLIENT_ID.substring(0, 20)}...`);
-        
+
         if (!process.env.JWT_SECRET) {
             console.error('❌ JWT_SECRET not configured');
-            return res.status(500).json({ 
-                message: "Server authentication is not properly configured" 
+            return res.status(500).json({
+                message: "Server authentication is not properly configured"
             });
         }
-        
+
         console.log('✅ JWT_SECRET found');
         console.log('');
 
         // ==================== STEP 3: VERIFY GOOGLE TOKEN ====================
         console.log('STEP 3: Verifying Google Token...');
-        
+
         const { OAuth2Client } = require('google-auth-library');
         const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-        
+
         let ticket;
         let payload;
-        
+
         try {
             console.log('   Calling Google token verification API...');
             ticket = await client.verifyIdToken({
                 idToken: token,
                 audience: process.env.GOOGLE_CLIENT_ID,
             });
-            
+
             payload = ticket.getPayload();
-            
+
             if (!payload) {
                 throw new Error('No payload in verified token');
             }
-            
+
             console.log('✅ Token verified successfully');
             console.log(`   Token issued for: ${payload.email}`);
             console.log(`   Issued at: ${new Date(payload.iat * 1000).toISOString()}`);
             console.log(`   Expires at: ${new Date(payload.exp * 1000).toISOString()}`);
             console.log('');
-            
+
         } catch (verifyError) {
             console.error('❌ Token verification failed');
             console.error(`   Error: ${verifyError.message}`);
             console.error(`   Error code: ${verifyError.code || 'N/A'}`);
-            
+
             // Check for common issues
             if (verifyError.message.includes('audience')) {
                 console.error('   → Client ID mismatch: Token audience does not match server client ID');
@@ -205,8 +205,8 @@ module.exports.googleLogin = async (req, res) => {
             } else if (verifyError.message.includes('invalid')) {
                 console.error('   → Invalid token format or signature');
             }
-            
-            return res.status(401).json({ 
+
+            return res.status(401).json({
                 message: "Invalid or expired Google token. Please try signing in again.",
                 error: process.env.NODE_ENV === 'development' ? verifyError.message : undefined
             });
@@ -214,32 +214,32 @@ module.exports.googleLogin = async (req, res) => {
 
         // ==================== STEP 4: EXTRACT USER INFO ====================
         console.log('STEP 4: Extracting User Information...');
-        
+
         const { email, name, picture, sub: googleId } = payload;
-        
+
         console.log('   User data from Google:');
         console.log(`     Email: ${email}`);
         console.log(`     Name: ${name || 'Not provided'}`);
         console.log(`     Google ID: ${googleId.substring(0, 15)}...`);
         console.log(`     Picture: ${picture ? 'Yes' : 'No'}`);
         console.log('');
-        
+
         if (!email || !googleId) {
             console.error('❌ Missing required fields in Google payload');
-            return res.status(400).json({ 
-                message: "Invalid Google account information" 
+            return res.status(400).json({
+                message: "Invalid Google account information"
             });
         }
-        
+
         console.log('✅ Required fields validated');
         console.log('');
 
         // ==================== STEP 5: CHECK DATABASE FOR USER ====================
         console.log('STEP 5: Checking Database for User...');
-        
+
         const [users] = await pool.query(
-            "SELECT * FROM users WHERE email = ? OR google_id = ?",
-            [email.toLowerCase().trim(), googleId]
+            "SELECT * FROM users WHERE email = ?",
+            [email.toLowerCase().trim()]
         );
 
         console.log(`   Query returned ${users.length} user(s)`);
@@ -255,104 +255,76 @@ module.exports.googleLogin = async (req, res) => {
             console.log(`   User ID: ${user.id}`);
             console.log(`   Email: ${user.email}`);
             console.log(`   Role: ${user.role}`);
-            console.log(`   Has Google ID: ${!!user.google_id}`);
             console.log('');
-            
-            // Update google_id if not set (email login user now using Google)
-            if (!user.google_id) {
-                console.log('   Updating user with Google ID...');
-                await pool.query(
-                    "UPDATE users SET google_id = ?, profile_image = COALESCE(profile_image, ?), is_verified = true WHERE id = ?",
-                    [googleId, picture, user.id]
-                );
-                user.google_id = googleId;
-                user.profile_image = user.profile_image || picture;
-                console.log('✅ User updated with Google credentials');
-                console.log('');
-            }
-            
+
         } else {
             // ==================== NEW USER ====================
             console.log('🆕 Creating new user account...');
             isNewUser = true;
-            
+
             try {
                 const [result] = await pool.query(
-                    `INSERT INTO users (name, email, google_id, profile_image, role, is_verified, email_verified_at, created_at) 
-                     VALUES (?, ?, ?, ?, 'buyer', true, NOW(), NOW())`,
-                    [name, email.toLowerCase().trim(), googleId, picture]
+                    `INSERT INTO users (name, email, role, is_verified, created_at) 
+                     VALUES (?, ?, 'buyer', true, NOW())`,
+                    [name, email.toLowerCase().trim()]
                 );
-                
+
                 console.log('✅ New user created');
                 console.log(`   User ID: ${result.insertId}`);
                 console.log(`   Email: ${email}`);
                 console.log(`   Role: buyer (default)`);
                 console.log('');
-                
+
                 user = {
                     id: result.insertId,
                     name,
                     email: email.toLowerCase().trim(),
-                    google_id: googleId,
-                    profile_image: picture,
                     role: 'buyer',
                     is_verified: true,
                     is_blocked: false,
-                    account_locked_until: null,
                     phone: null
                 };
-                
+
             } catch (insertError) {
                 console.error('❌ Failed to create user');
                 console.error(`   Error: ${insertError.message}`);
                 console.error(`   Code: ${insertError.code}`);
-                
+
                 if (insertError.code === 'ER_DUP_ENTRY') {
                     console.error('   → Duplicate email detected');
-                    return res.status(409).json({ 
-                        message: "An account with this email already exists" 
+                    return res.status(409).json({
+                        message: "An account with this email already exists"
                     });
                 }
-                
+
                 throw insertError;
             }
         }
 
         // ==================== STEP 6: SECURITY CHECKS ====================
         console.log('STEP 6: Performing Security Checks...');
-        
+
         // Check if account is blocked
         if (user.is_blocked) {
             console.log('⛔ Blocked user attempted login');
-            
+
             // Use logUserActivity if it exists in your file
             if (typeof logUserActivity === 'function') {
                 await logUserActivity(
-                    user.id, 
-                    'blocked_login_attempt', 
-                    ipAddress, 
-                    userAgent, 
+                    user.id,
+                    'blocked_login_attempt',
+                    ipAddress,
+                    userAgent,
                     'Blocked user attempted Google login',
                     'google'
                 );
             }
-            
-            return res.status(403).json({ 
-                message: "Your account has been blocked. Please contact support." 
+
+            return res.status(403).json({
+                message: "Your account has been blocked. Please contact support."
             });
         }
         console.log('✅ Account not blocked');
-
-        // Check if account is temporarily locked
-        if (user.account_locked_until && new Date(user.account_locked_until) > new Date()) {
-            console.log('🔒 Locked account attempted login');
-            console.log(`   Locked until: ${user.account_locked_until}`);
-            return res.status(403).json({ 
-                message: "Your account is temporarily locked due to suspicious activity. Please try again later.",
-                lockedUntil: user.account_locked_until
-            });
-        }
-        console.log('✅ Account not locked');
         console.log('');
 
         // Check for suspicious activity (non-blocking) - only if function exists
@@ -361,7 +333,7 @@ module.exports.googleLogin = async (req, res) => {
                 const suspiciousCheck = await checkSuspiciousActivity(user.id, ipAddress);
                 if (suspiciousCheck.isSuspicious) {
                     console.log('⚠️  Suspicious activity detected');
-                    
+
                     if (typeof sendEmailNotification === 'function') {
                         await sendEmailNotification(
                             user.email,
@@ -381,32 +353,32 @@ module.exports.googleLogin = async (req, res) => {
 
         // ==================== STEP 7: GENERATE JWT TOKEN ====================
         console.log('STEP 7: Generating JWT Token...');
-        
+
         const jwt = require('jsonwebtoken');
         const jwtToken = jwt.sign(
-            { 
-                id: user.id, 
+            {
+                id: user.id,
                 role: user.role,
                 email: user.email
             },
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
         );
-        
+
         console.log('✅ JWT token generated');
         console.log(`   Expires in: 7 days`);
         console.log('');
 
         // ==================== STEP 8: LOG ACTIVITY ====================
         console.log('STEP 8: Logging User Activity...');
-        
+
         // Use logUserActivity if it exists in your file
         if (typeof logUserActivity === 'function') {
             await logUserActivity(
-                user.id, 
-                isNewUser ? 'registration' : 'login', 
-                ipAddress, 
-                userAgent, 
+                user.id,
+                isNewUser ? 'registration' : 'login',
+                ipAddress,
+                userAgent,
                 isNewUser ? 'New user registered via Google' : 'User logged in via Google',
                 'google'
             );
@@ -418,19 +390,19 @@ module.exports.googleLogin = async (req, res) => {
 
         // ==================== STEP 9: UPDATE LAST LOGIN ====================
         console.log('STEP 9: Updating Last Login...');
-        
+
         await pool.query(
-            "UPDATE users SET last_login = NOW(), last_login_ip = ? WHERE id = ?",
-            [ipAddress, user.id]
+            "UPDATE users SET updated_at = NOW() WHERE id = ?",
+            [user.id]
         );
-        
+
         console.log('✅ Last login updated');
         console.log('');
 
         // ==================== STEP 10: NEW DEVICE NOTIFICATION ====================
         if (!isNewUser) {
             console.log('STEP 10: Checking for New Device...');
-            
+
             try {
                 const [recentLogins] = await pool.query(
                     `SELECT COUNT(*) as count FROM user_login_logs 
@@ -440,14 +412,14 @@ module.exports.googleLogin = async (req, res) => {
 
                 if (recentLogins[0].count === 0) {
                     console.log('📧 New device detected');
-                    
+
                     // Only send notification if function exists
                     if (typeof sendEmailNotification === 'function') {
                         const deviceType = /mobile/i.test(userAgent) ? 'Mobile Device' : 'Desktop';
-                        const browser = /chrome/i.test(userAgent) ? 'Chrome' : 
-                                       /firefox/i.test(userAgent) ? 'Firefox' : 
-                                       /safari/i.test(userAgent) ? 'Safari' : 'Unknown Browser';
-                        
+                        const browser = /chrome/i.test(userAgent) ? 'Chrome' :
+                            /firefox/i.test(userAgent) ? 'Firefox' :
+                                /safari/i.test(userAgent) ? 'Safari' : 'Unknown Browser';
+
                         await sendEmailNotification(
                             user.email,
                             'New Device Login Detected',
@@ -471,7 +443,7 @@ module.exports.googleLogin = async (req, res) => {
 
         // ==================== STEP 11: SEND RESPONSE ====================
         console.log('STEP 11: Sending Success Response...');
-        
+
         const responseData = {
             message: isNewUser ? "Account created successfully via Google" : "Login successful via Google",
             token: jwtToken,
@@ -481,11 +453,10 @@ module.exports.googleLogin = async (req, res) => {
                 email: user.email,
                 phone: user.phone,
                 role: user.role,
-                profileImage: user.profile_image,
                 isVerified: true
             }
         };
-        
+
         console.log('Response data:');
         console.log(`  User ID: ${responseData.user.id}`);
         console.log(`  Email: ${responseData.user.email}`);
@@ -497,12 +468,12 @@ module.exports.googleLogin = async (req, res) => {
         console.log('='.repeat(70));
         console.log(`✅ GOOGLE LOGIN SUCCESSFUL (${duration}ms)`);
         console.log('='.repeat(70) + '\n');
-        
+
         res.json(responseData);
 
     } catch (err) {
         const duration = Date.now() - startTime;
-        
+
         console.error('\n' + '='.repeat(70));
         console.error('❌ GOOGLE LOGIN FAILED');
         console.error('='.repeat(70));
@@ -513,8 +484,8 @@ module.exports.googleLogin = async (req, res) => {
         console.error('\nStack Trace:');
         console.error(err.stack);
         console.error('='.repeat(70) + '\n');
-        
-        res.status(500).json({ 
+
+        res.status(500).json({
             message: "Server error during Google login. Please try again.",
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
@@ -528,9 +499,9 @@ module.exports.googleLogin = async (req, res) => {
 //                      req.connection?.remoteAddress || 
 //                      req.socket?.remoteAddress || 
 //                      'Unknown';
-    
+
 //     const userAgent = req.headers['user-agent'] || 'Unknown';
-    
+
 //     return { ipAddress, userAgent };
 // }
 
@@ -554,10 +525,10 @@ module.exports.microsoftLogin = async (req, res) => {
     try {
         const { token } = req.body;
         const { ipAddress, userAgent } = getRequestMetadata(req);
-        
+
         if (!token) {
-            return res.status(400).json({ 
-                message: "Microsoft token is required" 
+            return res.status(400).json({
+                message: "Microsoft token is required"
             });
         }
 
@@ -573,15 +544,15 @@ module.exports.microsoftLogin = async (req, res) => {
         const email = mail || userPrincipalName;
 
         if (!email) {
-            return res.status(400).json({ 
-                message: "Could not retrieve email from Microsoft account" 
+            return res.status(400).json({
+                message: "Could not retrieve email from Microsoft account"
             });
         }
 
         // Check if user exists
         const [users] = await pool.query(
-            "SELECT * FROM users WHERE email = ? OR microsoft_id = ?",
-            [email.toLowerCase().trim(), microsoftId]
+            "SELECT * FROM users WHERE email = ?",
+            [email.toLowerCase().trim()]
         );
 
         let user;
@@ -589,47 +560,30 @@ module.exports.microsoftLogin = async (req, res) => {
 
         if (users.length > 0) {
             user = users[0];
-            
-            if (!user.microsoft_id) {
-                await pool.query(
-                    "UPDATE users SET microsoft_id = ?, is_verified = true WHERE id = ?",
-                    [microsoftId, user.id]
-                );
-            }
         } else {
             // Create new user
             isNewUser = true;
             const [result] = await pool.query(
-                `INSERT INTO users (name, email, microsoft_id, role, is_verified, email_verified_at, created_at) 
-                 VALUES (?, ?, ?, 'buyer', true, NOW(), NOW())`,
-                [displayName, email.toLowerCase().trim(), microsoftId]
+                `INSERT INTO users (name, email, role, is_verified, created_at) 
+                 VALUES (?, ?, 'buyer', true, NOW())`,
+                [displayName, email.toLowerCase().trim()]
             );
-            
+
             user = {
                 id: result.insertId,
                 name: displayName,
                 email: email.toLowerCase().trim(),
-                microsoft_id: microsoftId,
                 role: 'buyer',
                 is_verified: true,
-                is_blocked: false,
-                account_locked_until: null
+                is_blocked: false
             };
         }
 
         // Check if account is blocked
         if (user.is_blocked) {
             await logUserActivity(user.id, 'blocked_login_attempt', ipAddress, userAgent, 'Blocked user attempted login', 'microsoft');
-            return res.status(403).json({ 
-                message: "Your account has been blocked. Please contact support." 
-            });
-        }
-
-        // Check if account is temporarily locked
-        if (user.account_locked_until && new Date(user.account_locked_until) > new Date()) {
-            return res.status(403).json({ 
-                message: "Your account is temporarily locked due to suspicious activity. Please try again later.",
-                lockedUntil: user.account_locked_until
+            return res.status(403).json({
+                message: "Your account has been blocked. Please contact support."
             });
         }
 
@@ -652,18 +606,18 @@ module.exports.microsoftLogin = async (req, res) => {
 
         // Log successful login
         await logUserActivity(
-            user.id, 
-            isNewUser ? 'registration' : 'login', 
-            ipAddress, 
-            userAgent, 
+            user.id,
+            isNewUser ? 'registration' : 'login',
+            ipAddress,
+            userAgent,
             isNewUser ? 'New user registered via Microsoft' : 'User logged in via Microsoft',
             'microsoft'
         );
 
         // Update last login
         await pool.query(
-            "UPDATE users SET last_login = NOW(), last_login_ip = ? WHERE id = ?",
-            [ipAddress, user.id]
+            "UPDATE users SET updated_at = NOW() WHERE id = ?",
+            [user.id]
         );
 
         res.json({
@@ -675,14 +629,13 @@ module.exports.microsoftLogin = async (req, res) => {
                 email: user.email,
                 phone: user.phone,
                 role: user.role,
-                profileImage: user.profile_image,
                 isVerified: true
             }
         });
 
     } catch (err) {
         console.error("Microsoft login error:", err);
-        res.status(500).json({ 
+        res.status(500).json({
             message: "Server error during Microsoft login. Please try again.",
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
@@ -692,52 +645,56 @@ module.exports.microsoftLogin = async (req, res) => {
 
 module.exports.register = async (req, res) => {
     try {
-        const { 
-            name, 
-            email, 
-            phone, 
-            password, 
-            role, 
+        const {
+            name,
+            email,
+            phone,
+            password,
+            role,
             profileImage,
             // Builder specific fields
             companyName,
-            gstOrPan,
+            gstNo,
+            panNo,
             website,
             description,
             experienceYears,
             address,
+            landmark,
+            area,
             city,
+            district,
             state,
             pincode
         } = req.body;
-        
+
         const { ipAddress, userAgent } = getRequestMetadata(req);
 
         // Validate required fields
         if (!name || !email || !phone || !password || !role) {
-            return res.status(400).json({ 
-                message: "All fields are required" 
+            return res.status(400).json({
+                message: "All fields are required"
             });
         }
 
         // Validate role
         const allowedRoles = ["buyer", "builder", "agent"];
         if (!allowedRoles.includes(role)) {
-            return res.status(400).json({ 
-                message: "Invalid role selected. Must be buyer, builder, or agent" 
+            return res.status(400).json({
+                message: "Invalid role selected. Must be buyer, builder, or agent"
             });
         }
 
         // Additional validation for builder
         if (role === "builder") {
             if (!companyName) {
-                return res.status(400).json({ 
-                    message: "Company name is required for builder registration" 
+                return res.status(400).json({
+                    message: "Company name is required for builder registration"
                 });
             }
-            if (!gstOrPan) {
-                return res.status(400).json({ 
-                    message: "GST or PAN is required for builder registration" 
+            if (!panNo) {
+                return res.status(400).json({
+                    message: "PAN number is required for builder registration"
                 });
             }
         }
@@ -745,23 +702,23 @@ module.exports.register = async (req, res) => {
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            return res.status(400).json({ 
-                message: "Invalid email format" 
+            return res.status(400).json({
+                message: "Invalid email format"
             });
         }
 
         // Validate phone format (10-15 digits)
         const phoneRegex = /^[0-9]{10,15}$/;
         if (!phoneRegex.test(phone)) {
-            return res.status(400).json({ 
-                message: "Phone number must be 10-15 digits" 
+            return res.status(400).json({
+                message: "Phone number must be 10-15 digits"
             });
         }
 
         // Validate password strength
         if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-            return res.status(400).json({ 
-                message: "Password must be at least 8 characters with letters and numbers" 
+            return res.status(400).json({
+                message: "Password must be at least 8 characters with letters and numbers"
             });
         }
 
@@ -777,20 +734,6 @@ module.exports.register = async (req, res) => {
             });
         }
 
-        // Check if email already exists in builder table (if builder role)
-        if (role === "builder") {
-            const [existingBuilder] = await pool.query(
-                "SELECT id FROM builder WHERE email = ?",
-                [email.toLowerCase().trim()]
-            );
-
-            if (existingBuilder.length > 0) {
-                return res.status(409).json({
-                    message: "This email is already registered. Please login instead.",
-                });
-            }
-        }
-
         // Check if phone already exists in users table
         const [existingPhone] = await pool.query(
             "SELECT id FROM users WHERE phone = ?",
@@ -803,86 +746,60 @@ module.exports.register = async (req, res) => {
             });
         }
 
-        // Check if phone already exists in builder table (if builder role)
-        if (role === "builder") {
-            const [existingBuilderPhone] = await pool.query(
-                "SELECT id FROM builder WHERE phone = ?",
-                [phone]
-            );
-
-            if (existingBuilderPhone.length > 0) {
-                return res.status(409).json({
-                    message: "This phone number is already registered.",
-                });
-            }
-        }
-
-        console.log("Register payload:", { 
-            name, 
-            email, 
-            phone, 
-            role, 
-            profileImage: profileImage ? 'provided' : 'none',
-            companyName: role === 'builder' ? companyName : 'N/A'
+        console.log("Register payload:", {
+            name,
+            email,
+            phone,
+            role,
+            companyName: role === 'builder' ? companyName : 'N/A',
+            panNo: role === 'builder' ? panNo : 'N/A'
         });
 
         // Hash password
         const hashed = await bcrypt.hash(password, 10);
 
         let userId;
-        let userIdString;
 
-        // Insert into appropriate table based on role
+        // Insert into users table first
+        const [result] = await pool.query(
+            "INSERT INTO users (name, email, phone, password, role, is_verified, created_at) VALUES (?,?,?,?,?, false, NOW())",
+            [name.trim(), email.toLowerCase().trim(), phone, hashed, role]
+        );
+        userId = result.insertId;
+
+        // If builder role, also insert into builders table
+        // If builder role, also insert into builders table
         if (role === "builder") {
-            // Generate unique user_id for builder
-            userIdString = `BLD${Date.now()}${Math.floor(Math.random() * 1000)}`;
-            
-            // Insert into builder table with all new fields
-            const [result] = await pool.query(
-                `INSERT INTO builder (
-                    user_id, name, email, phone, password, profile_image,
-                    company_name, gst_or_pan, website, description, experience_years,   
-                    address, city, state, pincode,
-                    role, is_active, verification_status,
-                    created_at, updated_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, NOW(), NOW())`,
+            await pool.query(
+                `INSERT INTO builders (
+                    user_id, company_name, gst_or_pan, pan_no, website, description, experience_years,   
+                    address, landmark, area, city, district, state, pincode, verification_status
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
                 [
-                    userIdString,
-                    name.trim(),
-                    email.toLowerCase().trim(),
-                    phone,
-                    hashed,
-                    profileImage || null,
+                    userId,
                     companyName?.trim() || null,
-                    gstOrPan?.trim() || null,
+                    gstNo?.trim() || null,
+                    panNo?.trim() || null,
                     website?.trim() || null,
                     description?.trim() || null,
                     experienceYears || null,
                     address?.trim() || null,
+                    landmark?.trim() || null,
+                    area?.trim() || null,
                     city?.trim() || null,
+                    district?.trim() || null,
                     state?.trim() || null,
                     pincode?.trim() || null,
-                    'builder',
-                    true,
                     'pending'
                 ]
             );
-            userId = result.insertId;
-        } else {
-            // Insert into users table for other roles
-            const [result] = await pool.query(
-                "INSERT INTO users (name, email, phone, password, role, profile_image, created_at) VALUES (?,?,?,?,?,?, NOW())",
-                [name.trim(), email.toLowerCase().trim(), phone, hashed, role, profileImage || null]
-            );
-            userId = result.insertId;
         }
 
         // Generate JWT token
         const token = jwt.sign(
-            { 
-                id: userId, 
-                role: role,
-                user_id: role === 'builder' ? userIdString : userId 
+            {
+                id: userId,
+                role: role
             },
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
@@ -897,15 +814,14 @@ module.exports.register = async (req, res) => {
             name: name.trim(),
             email: email.toLowerCase().trim(),
             phone,
-            role: role,
-            profileImage: profileImage || null
+            role: role
         };
 
         // Add builder-specific fields to response
         if (role === "builder") {
-            userResponse.userId = userIdString;
             userResponse.companyName = companyName?.trim() || null;
-            userResponse.gstOrPan = gstOrPan?.trim() || null;
+            userResponse.gstNo = (typeof gstNo !== 'undefined' && gstNo) ? gstNo?.trim() : (gstOrPan?.trim() || null);
+            userResponse.panNo = panNo?.trim() || null;
             userResponse.website = website?.trim() || null;
             userResponse.verificationStatus = 'pending';
             userResponse.city = city?.trim() || null;
@@ -913,19 +829,51 @@ module.exports.register = async (req, res) => {
         }
 
         // Return success response
-        res.status(201).json({ 
-            message: role === "builder" 
-                ? "Builder registration successful. Your account is pending verification." 
+        res.status(201).json({
+            message: role === "builder"
+                ? "Builder registration successful. Your account is pending verification."
                 : "Registration successful",
             token,
             user: userResponse
         });
 
     } catch (err) {
-        console.error("Registration error:", err);
-        res.status(500).json({ 
-            message: "Server error during registration. Please try again.",
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        console.error("\n❌ REGISTRATION ERROR");
+        console.error("Error Name:", err.name);
+        console.error("Error Message:", err.message);
+        console.error("Error Code:", err.code);
+        console.error("SQL State:", err.sqlState);
+        console.error("\nFull Error:", err);
+        console.error("\n");
+
+        // Provide detailed error in development mode
+        let errorMessage = "Server error during registration. Please try again.";
+        let errorDetails = undefined;
+
+        if (process.env.NODE_ENV === 'development') {
+            errorDetails = {
+                name: err.name,
+                message: err.message,
+                code: err.code,
+                sqlState: err.sqlState,
+                sql: err.sql
+            };
+
+            // Provide helpful hints for common errors
+            if (err.code === 'ER_NO_REFERENCED_ROW') {
+                errorMessage = "Database reference error. Please check if all required tables exist.";
+            } else if (err.code === 'ER_BAD_FIELD_ERROR' || err.code === 'ER_NO_SUCH_TABLE') {
+                errorMessage = "Database table or column not found. Please check your database schema.";
+            } else if (err.code === 'ER_DUP_ENTRY') {
+                errorMessage = "Duplicate entry. Email or phone may already be registered.";
+            } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+                errorMessage = "Database access denied. Check your credentials.";
+            }
+        }
+
+        res.status(500).json({
+            message: errorMessage,
+            error: errorDetails
         });
     }
 };
@@ -938,8 +886,8 @@ module.exports.login = async (req, res) => {
 
         // Validate required fields
         if (!email || !password) {
-            return res.status(400).json({ 
-                message: "Email and password are required" 
+            return res.status(400).json({
+                message: "Email and password are required"
             });
         }
 
@@ -957,38 +905,20 @@ module.exports.login = async (req, res) => {
                 VALUES (NOW(), ?, ?, 'failed_login', ?)`,
                 [ipAddress, userAgent, `Failed login attempt for unknown email: ${email}`]
             );
-            
-            return res.status(400).json({ 
-                message: "Invalid credentials" 
+
+            return res.status(400).json({
+                message: "Invalid credentials"
             });
         }
 
         const user = users[0];
 
-        // Check if account is temporarily locked
-        if (user.account_locked_until && new Date(user.account_locked_until) > new Date()) {
-            return res.status(403).json({ 
-                message: "Your account is temporarily locked due to too many failed login attempts. Please try again later.",
-                lockedUntil: user.account_locked_until
-            });
-        }
-
-        // Check if user registered via OAuth (no password)
-        if (!user.password && (user.google_id || user.microsoft_id)) {
-            const provider = user.google_id ? 'Google' : 'Microsoft';
-            await logUserActivity(user.id, 'failed_login', ipAddress, userAgent, `Attempted password login for OAuth account (${provider})`, 'email');
-            
-            return res.status(400).json({ 
-                message: `This account was created using ${provider}. Please login with ${provider}.` 
-            });
-        }
-
         // Check if account is blocked
         if (user.is_blocked) {
             await logUserActivity(user.id, 'blocked_login_attempt', ipAddress, userAgent, 'Blocked user attempted login', 'email');
-            
-            return res.status(403).json({ 
-                message: "Your account has been blocked. Please contact support." 
+
+            return res.status(403).json({
+                message: "Your account has been blocked. Please contact support."
             });
         }
 
@@ -997,21 +927,10 @@ module.exports.login = async (req, res) => {
         if (!valid) {
             // Log failed login attempt
             await logUserActivity(user.id, 'failed_login', ipAddress, userAgent, 'Invalid password', 'email');
-            
-            // Check if account should be locked after multiple failed attempts
-            await checkAccountLockout(user.id);
-            
-            return res.status(400).json({ 
-                message: "Invalid credentials" 
-            });
-        }
 
-        // Clear account lock if it was set
-        if (user.account_locked_until) {
-            await pool.query(
-                "UPDATE users SET account_locked_until = NULL WHERE id = ?",
-                [user.id]
-            );
+            return res.status(400).json({
+                message: "Invalid credentials"
+            });
         }
 
         // Check for suspicious activity
@@ -1022,6 +941,18 @@ module.exports.login = async (req, res) => {
                 'Suspicious Login Activity Detected',
                 `We detected unusual login activity on your account from IP: ${ipAddress}`
             );
+        }
+
+        // Fetch builder details if applicable
+        let builderDetails = {};
+        if (user.role === 'builder') {
+            const [builders] = await pool.query(
+                "SELECT * FROM builders WHERE user_id = ?",
+                [user.id]
+            );
+            if (builders.length > 0) {
+                builderDetails = builders[0];
+            }
         }
 
         // Generate JWT token
@@ -1036,44 +967,45 @@ module.exports.login = async (req, res) => {
 
         // Update last login timestamp
         await pool.query(
-            "UPDATE users SET last_login = NOW(), last_login_ip = ? WHERE id = ?",
-            [ipAddress, user.id]
+            "UPDATE users SET updated_at = NOW() WHERE id = ?",
+            [user.id]
         );
 
-        // Check for new device login
-        const [recentLogins] = await pool.query(
-            `SELECT COUNT(*) as count FROM user_login_logs 
-             WHERE user_id = ? AND user_agent = ? AND login_time > DATE_SUB(NOW(), INTERVAL 30 DAY)`,
-            [user.id, userAgent]
-        );
+        // Prepare user response object
+        const userResponse = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            isVerified: user.is_verified, // Assuming is_verified column exists
+            profileImage: user.profile_image // Assuming profile_image column exists
+        };
 
-        if (recentLogins[0].count === 1) { // First time on this device
-            const deviceType = getDeviceType(userAgent);
-            const browser = getBrowser(userAgent);
-            await sendEmailNotification(
-                user.email,
-                'New Device Login Detected',
-                `A new login was detected from ${deviceType} using ${browser} at IP: ${ipAddress}`
-            );
+        // Add builder specific fields
+        if (user.role === 'builder' && builderDetails.id) {
+            userResponse.companyName = builderDetails.company_name;
+            userResponse.gstNo = builderDetails.gst_or_pan; // Or separates if you prefer
+            userResponse.panNo = builderDetails.pan_no;
+            userResponse.website = builderDetails.website;
+            userResponse.verificationStatus = builderDetails.verification_status;
+            userResponse.businessAddress = builderDetails.address;
+            userResponse.city = builderDetails.city;
+            userResponse.state = builderDetails.state;
+            userResponse.pincode = builderDetails.pincode;
+            userResponse.experienceYears = builderDetails.experience_years;
         }
 
         // Return success response
         res.json({
             message: "Login successful",
             token,
-            user: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                phone: user.phone,
-                role: user.role,
-                profileImage: user.profile_image
-            }
+            user: userResponse
         });
 
     } catch (err) {
         console.error("Login error:", err);
-        res.status(500).json({ 
+        res.status(500).json({
             message: "Server error during login. Please try again.",
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
@@ -1105,6 +1037,75 @@ module.exports.logout = async (req, res) => {
 };
 
 
+// GET PROFILE
+module.exports.getProfile = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // Fetch basic user info
+        const [users] = await pool.query(
+            "SELECT id, name, email, phone, role, is_verified, profile_image FROM users WHERE id = ?",
+            [userId]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const user = users[0];
+
+        // Fetch builder details if applicable
+        let builderDetails = {};
+        if (user.role === 'builder') {
+            const [builders] = await pool.query(
+                "SELECT * FROM builders WHERE user_id = ?",
+                [userId]
+            );
+            if (builders.length > 0) {
+                builderDetails = builders[0];
+            }
+        }
+
+        // Prepare user response object
+        const userResponse = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            role: user.role,
+            isVerified: user.is_verified,
+            profileImage: user.profile_image
+        };
+
+        // Add builder specific fields
+        if (user.role === 'builder' && builderDetails.id) {
+            userResponse.companyName = builderDetails.company_name;
+            userResponse.gstNo = builderDetails.gst_or_pan;
+            userResponse.panNo = builderDetails.pan_no;
+            userResponse.website = builderDetails.website;
+            userResponse.verificationStatus = builderDetails.verification_status;
+            userResponse.businessAddress = builderDetails.address;
+            userResponse.landmark = builderDetails.landmark;
+            userResponse.area = builderDetails.area;
+            userResponse.district = builderDetails.district;
+            userResponse.city = builderDetails.city;
+            userResponse.state = builderDetails.state;
+            userResponse.pincode = builderDetails.pincode;
+            userResponse.experienceYears = builderDetails.experience_years;
+        }
+
+        res.json(userResponse);
+
+    } catch (err) {
+        console.error("Get Profile error:", err);
+        res.status(500).json({
+            message: "Server error fetching profile",
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
+
+
 // OTP VERIFICATION
 module.exports.verifyOtp = async (req, res) => {
     try {
@@ -1113,8 +1114,8 @@ module.exports.verifyOtp = async (req, res) => {
 
         // Validate required fields
         if (!email || !otp) {
-            return res.status(400).json({ 
-                message: "Email and OTP are required" 
+            return res.status(400).json({
+                message: "Email and OTP are required"
             });
         }
 
@@ -1130,8 +1131,8 @@ module.exports.verifyOtp = async (req, res) => {
         );
 
         if (otpRecords.length === 0) {
-            return res.status(400).json({ 
-                message: "Invalid or expired OTP" 
+            return res.status(400).json({
+                message: "Invalid or expired OTP"
             });
         }
 
@@ -1139,8 +1140,8 @@ module.exports.verifyOtp = async (req, res) => {
 
         // Check if OTP has expired
         if (new Date() > new Date(otpRecord.expires_at)) {
-            return res.status(400).json({ 
-                message: "OTP has expired. Please request a new one." 
+            return res.status(400).json({
+                message: "OTP has expired. Please request a new one."
             });
         }
 
@@ -1155,8 +1156,8 @@ module.exports.verifyOtp = async (req, res) => {
             // Log failed OTP verification
             await logUserActivity(otpRecord.user_id, 'failed_otp_verification', ipAddress, userAgent, `Failed OTP verification for ${purpose}`, 'email');
 
-            return res.status(400).json({ 
-                message: "Invalid OTP. Please try again." 
+            return res.status(400).json({
+                message: "Invalid OTP. Please try again."
             });
         }
 
@@ -1199,7 +1200,7 @@ module.exports.verifyOtp = async (req, res) => {
 
     } catch (err) {
         console.error("OTP verification error:", err);
-        res.status(500).json({ 
+        res.status(500).json({
             message: "Server error during OTP verification. Please try again.",
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
@@ -1214,8 +1215,8 @@ module.exports.resendOtp = async (req, res) => {
         const { ipAddress, userAgent } = getRequestMetadata(req);
 
         if (!email) {
-            return res.status(400).json({ 
-                message: "Email is required" 
+            return res.status(400).json({
+                message: "Email is required"
             });
         }
 
@@ -1225,16 +1226,16 @@ module.exports.resendOtp = async (req, res) => {
         );
 
         if (users.length === 0) {
-            return res.status(404).json({ 
-                message: "User not found with this email" 
+            return res.status(404).json({
+                message: "User not found with this email"
             });
         }
 
         const user = users[0];
 
         if (purpose === "email_verification" && user.is_verified) {
-            return res.status(400).json({ 
-                message: "Email is already verified" 
+            return res.status(400).json({
+                message: "Email is already verified"
             });
         }
 
@@ -1245,8 +1246,8 @@ module.exports.resendOtp = async (req, res) => {
         );
 
         if (recentOtps[0].count >= 3) {
-            return res.status(429).json({ 
-                message: "Too many OTP requests. Please try again after 5 minutes." 
+            return res.status(429).json({
+                message: "Too many OTP requests. Please try again after 5 minutes."
             });
         }
 
@@ -1268,14 +1269,14 @@ module.exports.resendOtp = async (req, res) => {
         // Log OTP resend activity
         await logUserActivity(user.id, 'otp_resend', ipAddress, userAgent, `OTP resent for ${purpose}`, 'email');
 
-        res.json({ 
+        res.json({
             message: "OTP has been resent successfully",
             email: email.toLowerCase().trim()
         });
 
     } catch (err) {
         console.error("Resend OTP error:", err);
-        res.status(500).json({ 
+        res.status(500).json({
             message: "Server error while resending OTP. Please try again.",
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
@@ -1290,13 +1291,13 @@ module.exports.forgotPassword = async (req, res) => {
         const { ipAddress, userAgent } = getRequestMetadata(req);
 
         if (!email) {
-            return res.status(400).json({ 
-                message: "Email is required" 
+            return res.status(400).json({
+                message: "Email is required"
             });
         }
 
         const [users] = await pool.query(
-            "SELECT id, email, phone, name, password, google_id, microsoft_id FROM users WHERE email = ?",
+            "SELECT id, email, phone, name, password FROM users WHERE email = ?",
             [email.toLowerCase().trim()]
         );
 
@@ -1309,23 +1310,14 @@ module.exports.forgotPassword = async (req, res) => {
                 [ipAddress, userAgent, `Password reset requested for non-existent email: ${email}`]
             );
 
-            return res.json({ 
-                message: "If an account exists with this email, you will receive a password reset OTP." 
+            return res.json({
+                message: "If an account exists with this email, you will receive a password reset OTP."
             });
         }
 
         const user = users[0];
 
-        // Check if user registered via OAuth (no password to reset)
-        if (!user.password && (user.google_id || user.microsoft_id)) {
-            const provider = user.google_id ? 'Google' : 'Microsoft';
-            
-            await logUserActivity(user.id, 'password_reset_request', ipAddress, userAgent, `Password reset attempted for OAuth account (${provider})`, 'email');
-            
-            return res.status(400).json({ 
-                message: `This account was created using ${provider}. Please login with ${provider}.` 
-            });
-        }
+        // User exists, proceed with password reset OTP
 
         const [recentOtps] = await pool.query(
             `SELECT COUNT(*) as count FROM otp_verifications 
@@ -1334,13 +1326,13 @@ module.exports.forgotPassword = async (req, res) => {
         );
 
         if (recentOtps[0].count >= 3) {
-            return res.status(429).json({ 
-                message: "Too many password reset requests. Please try again after 15 minutes." 
+            return res.status(429).json({
+                message: "Too many password reset requests. Please try again after 15 minutes."
             });
         }
 
         const otp = generateOTP();
-        const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); 
+        const otpExpiry = new Date(Date.now() + 15 * 60 * 1000);
 
         await pool.query(
             "INSERT INTO otp_verifications (user_id, email, phone, otp, purpose, expires_at, created_at) VALUES (?,?,?,?,?, ?, NOW())",
@@ -1352,14 +1344,14 @@ module.exports.forgotPassword = async (req, res) => {
         // Log password reset request
         await logUserActivity(user.id, 'password_reset_request', ipAddress, userAgent, 'Password reset OTP requested', 'email');
 
-        res.json({ 
+        res.json({
             message: "If an account exists with this email, you will receive a password reset OTP.",
             email: email.toLowerCase().trim()
         });
 
     } catch (err) {
         console.error("Forgot password error:", err);
-        res.status(500).json({ 
+        res.status(500).json({
             message: "Server error during password reset request. Please try again.",
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
@@ -1374,14 +1366,14 @@ module.exports.resetPassword = async (req, res) => {
         const { ipAddress, userAgent } = getRequestMetadata(req);
 
         if (!email || !otp || !newPassword) {
-            return res.status(400).json({ 
-                message: "Email, OTP, and new password are required" 
+            return res.status(400).json({
+                message: "Email, OTP, and new password are required"
             });
         }
 
         if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
-            return res.status(400).json({ 
-                message: "Password must be at least 8 characters with letters and numbers" 
+            return res.status(400).json({
+                message: "Password must be at least 8 characters with letters and numbers"
             });
         }
 
@@ -1396,16 +1388,16 @@ module.exports.resetPassword = async (req, res) => {
         );
 
         if (otpRecords.length === 0) {
-            return res.status(400).json({ 
-                message: "Invalid or expired OTP" 
+            return res.status(400).json({
+                message: "Invalid or expired OTP"
             });
         }
 
         const otpRecord = otpRecords[0];
 
         if (new Date() > new Date(otpRecord.expires_at)) {
-            return res.status(400).json({ 
-                message: "OTP has expired. Please request a new one." 
+            return res.status(400).json({
+                message: "OTP has expired. Please request a new one."
             });
         }
 
@@ -1418,8 +1410,8 @@ module.exports.resetPassword = async (req, res) => {
             // Log failed password reset attempt
             await logUserActivity(otpRecord.user_id, 'failed_password_reset', ipAddress, userAgent, 'Invalid OTP for password reset', 'email');
 
-            return res.status(400).json({ 
-                message: "Invalid OTP. Please try again." 
+            return res.status(400).json({
+                message: "Invalid OTP. Please try again."
             });
         }
 
@@ -1427,8 +1419,8 @@ module.exports.resetPassword = async (req, res) => {
         if (otpRecord.current_password) {
             const isSamePassword = await bcrypt.compare(newPassword, otpRecord.current_password);
             if (isSamePassword) {
-                return res.status(400).json({ 
-                    message: "New password cannot be the same as your current password" 
+                return res.status(400).json({
+                    message: "New password cannot be the same as your current password"
                 });
             }
         }
@@ -1461,7 +1453,7 @@ module.exports.resetPassword = async (req, res) => {
 
     } catch (err) {
         console.error("Reset password error:", err);
-        res.status(500).json({ 
+        res.status(500).json({
             message: "Server error during password reset. Please try again.",
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });

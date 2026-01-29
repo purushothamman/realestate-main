@@ -1,2 +1,2 @@
 #!/bin/bash
-mysql -u root -p'root' realestate_db -e "CALL cleanup_expired_data();"
+mysql -u root -p'hibro' realestate -e "CALL cleanup_expired_data();"

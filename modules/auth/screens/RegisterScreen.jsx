@@ -30,6 +30,8 @@ import {
   Home,
   AlertCircle,
   X,
+  TrendingUp,
+  MapPin,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -70,6 +72,19 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
     password: '',
     role: '',
     profileImage: null,
+    companyName: '',
+    gstNo: '',
+    panNo: '',
+    website: '',
+    description: '',
+    experienceYears: '',
+    address: '',
+    landmark: '',
+    area: '',
+    city: '',
+    district: '',
+    state: '',
+    pincode: '',
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -128,6 +143,27 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
       newErrors.role = 'Please select your role';
     }
 
+    // Builder-specific client-side validation
+    if (formData.role === 'builder') {
+      if (!formData.companyName || !formData.companyName.trim()) {
+        newErrors.companyName = 'Company name is required for builders';
+      }
+      if (!formData.panNo || !formData.panNo.trim()) {
+        newErrors.panNo = 'PAN number is required for builders';
+      } else {
+        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]$/i;
+        if (!panRegex.test(formData.panNo.trim())) {
+          newErrors.panNo = 'Please enter a valid PAN (e.g. AAAAA1111A)';
+        }
+      }
+      if (formData.gstNo && formData.gstNo.trim()) {
+        const gstRegex = /^[0-9A-Z]{15}$/i;
+        if (!gstRegex.test(formData.gstNo.trim())) {
+          newErrors.gstNo = 'Please enter a valid GST number (15 characters)';
+        }
+      }
+    }
+
     if (!termsAccepted) {
       newErrors.terms = 'You must accept the terms and conditions';
     }
@@ -147,7 +183,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
   const handleImageUpload = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Please grant camera roll permissions to upload an image.');
         return;
@@ -162,7 +198,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
 
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        
+
         if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
           setErrors((prev) => ({ ...prev, profileImage: 'Image must be less than 5MB' }));
           return;
@@ -234,9 +270,25 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         email: formData.email.trim().toLowerCase(),
         phone: formData.phone.replace(/[\s\-\(\)]/g, ''),
         password: formData.password,
-        role: formData.role, // Backend now expects 'role'
-        profileImage: formData.profileImage || null,
+        role: formData.role,
       };
+
+      // Add builder-specific fields if role is builder
+      if (formData.role === 'builder') {
+        registrationData.companyName = formData.companyName?.trim() || null;
+        registrationData.gstNo = formData.gstNo?.trim() || null;
+        registrationData.panNo = formData.panNo?.trim() || null;
+        registrationData.website = formData.website?.trim() || null;
+        registrationData.description = formData.description?.trim() || null;
+        registrationData.experienceYears = formData.experienceYears || null;
+        registrationData.address = formData.address?.trim() || null;
+        registrationData.landmark = formData.landmark?.trim() || null;
+        registrationData.area = formData.area?.trim() || null;
+        registrationData.city = formData.city?.trim() || null;
+        registrationData.district = formData.district?.trim() || null;
+        registrationData.state = formData.state?.trim() || null;
+        registrationData.pincode = formData.pincode?.trim() || null;
+      }
 
       console.log('Sending registration request:', { ...registrationData, password: '***' });
 
@@ -265,14 +317,14 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
       }
 
       // Registration successful
-      setSuccessMessage(data.message || 'Registration successful! Redirecting...');
+      setSuccessMessage(data.message || 'Registration successful! Redirecting to login...');
 
-      // Store authentication token and user data
+      // Store authentication token and user data for immediate login
       if (data.token) {
         try {
           await AsyncStorage.setItem('authToken', data.token);
           await AsyncStorage.setItem('user', JSON.stringify(data.user));
-          console.log('Token and user data stored successfully');
+          console.log('✅ Token and user data stored successfully');
         } catch (storageError) {
           console.error('Storage error:', storageError);
         }
@@ -286,17 +338,36 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         password: '',
         role: '',
         profileImage: null,
+        companyName: '',
+        gstNo: '',
+        panNo: '',
+        website: '',
+        description: '',
+        experienceYears: '',
+        address: '',
+        landmark: '',
+        area: '',
+        city: '',
+        district: '',
+        state: '',
+        pincode: '',
       });
       setTermsAccepted(false);
 
-      // Navigate to home/dashboard after 2 seconds
+      // Navigate to Login page after 1.5 seconds, then to Home if token exists
       setTimeout(() => {
-        if (navigation) {
-          navigation.navigate('Home'); // or 'Dashboard'
+        if (data.token && navigation) {
+          // If registration includes auto-login, go directly to Home
+          console.log('🏠 Auto-login: Navigating to Home');
+          navigation.navigate('Home');
+        } else if (navigation) {
+          // Otherwise navigate to Login
+          console.log('🔐 Navigating to Login');
+          navigation.navigate('login');
         } else if (onNavigateToLogin) {
-          onNavigateToLogin(); // Fallback
+          onNavigateToLogin();
         }
-      }, 2000);
+      }, 1500);
 
     } catch (error) {
       console.error('Registration error:', error);
@@ -660,6 +731,251 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
             )}
           </View>
 
+          {/* Builder Specific Fields */}
+          {formData.role === 'builder' && (
+            <View style={styles.builderFieldsContainer}>
+              <Text style={styles.sectionHeader}>Builder Details</Text>
+
+              {/* Company Name */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>
+                  Company Name <Text style={styles.required}>*</Text>
+                </Text>
+                <View style={[styles.inputWrapper, focusedInput === 'companyName' && styles.inputWrapperFocused]}>
+                  <Building2
+                    color={focusedInput === 'companyName' ? '#2D6A4F' : '#9CA3AF'}
+                    size={20}
+                    strokeWidth={2}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter company name"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.companyName}
+                    onChangeText={(value) => handleInputChange('companyName', value)}
+                    onFocus={() => setFocusedInput('companyName')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                </View>
+              </View>
+
+              {/* GST Number (Optional) */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>
+                  GST Number <Text style={styles.labelOptional}>(Optional)</Text>
+                </Text>
+                <View style={[styles.inputWrapper, focusedInput === 'gstNo' && styles.inputWrapperFocused]}>
+                  <Shield
+                    color={focusedInput === 'gstNo' ? '#2D6A4F' : '#9CA3AF'}
+                    size={20}
+                    strokeWidth={2}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter GST number"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.gstNo}
+                    onChangeText={(value) => handleInputChange('gstNo', value)}
+                    onFocus={() => setFocusedInput('gstNo')}
+                    onBlur={() => setFocusedInput(null)}
+                    autoCapitalize="characters"
+                  />
+                </View>
+              </View>
+
+              {/* PAN Number (Required for builders) */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>
+                  PAN Number <Text style={styles.required}>*</Text>
+                </Text>
+                <View style={[styles.inputWrapper, focusedInput === 'panNo' && styles.inputWrapperFocused]}>
+                  <Shield
+                    color={focusedInput === 'panNo' ? '#2D6A4F' : '#9CA3AF'}
+                    size={20}
+                    strokeWidth={2}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter PAN number (e.g. AAAAA1111A)"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.panNo}
+                    onChangeText={(value) => handleInputChange('panNo', value)}
+                    onFocus={() => setFocusedInput('panNo')}
+                    onBlur={() => setFocusedInput(null)}
+                    autoCapitalize="characters"
+                  />
+                </View>
+              </View>
+
+              {/* Website */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>
+                  Website <Text style={styles.labelOptional}>(Optional)</Text>
+                </Text>
+                <View style={[styles.inputWrapper, focusedInput === 'website' && styles.inputWrapperFocused]}>
+                  <TrendingUp
+                    color={focusedInput === 'website' ? '#2D6A4F' : '#9CA3AF'}
+                    size={20}
+                    strokeWidth={2}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="https://example.com"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.website}
+                    onChangeText={(value) => handleInputChange('website', value)}
+                    onFocus={() => setFocusedInput('website')}
+                    onBlur={() => setFocusedInput(null)}
+                    keyboardType="url"
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+
+              {/* Experience Years */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Experience (Years)</Text>
+                <View style={[styles.inputWrapper, focusedInput === 'experienceYears' && styles.inputWrapperFocused]}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 5"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.experienceYears}
+                    onChangeText={(value) => handleInputChange('experienceYears', value)}
+                    onFocus={() => setFocusedInput('experienceYears')}
+                    onBlur={() => setFocusedInput(null)}
+                    keyboardType="numeric"
+                  />
+                </View>
+              </View>
+
+              {/* Address Section */}
+              <Text style={[styles.label, { marginTop: 8 }]}>Street Address / Building</Text>
+
+              <View style={styles.inputGroup}>
+                <View style={[styles.inputWrapper, focusedInput === 'address' && styles.inputWrapperFocused]}>
+                  <MapPin
+                    color={focusedInput === 'address' ? '#2D6A4F' : '#9CA3AF'}
+                    size={20}
+                    strokeWidth={2}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Floor, Building Name, Street"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.address}
+                    onChangeText={(value) => handleInputChange('address', value)}
+                    onFocus={() => setFocusedInput('address')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                </View>
+              </View>
+
+              {/* Area / Locality */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Area / Locality</Text>
+                <View style={[styles.inputWrapper, focusedInput === 'area' && styles.inputWrapperFocused]}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. Indiranagar, Bandra West"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.area}
+                    onChangeText={(value) => handleInputChange('area', value)}
+                    onFocus={() => setFocusedInput('area')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                </View>
+              </View>
+
+              {/* Landmark */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Landmark <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                <View style={[styles.inputWrapper, focusedInput === 'landmark' && styles.inputWrapperFocused]}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Near City Hospital"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.landmark}
+                    onChangeText={(value) => handleInputChange('landmark', value)}
+                    onFocus={() => setFocusedInput('landmark')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>City</Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'city' && styles.inputWrapperFocused]}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="City"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.city}
+                      onChangeText={(value) => handleInputChange('city', value)}
+                      onFocus={() => setFocusedInput('city')}
+                      onBlur={() => setFocusedInput(null)}
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>District</Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'district' && styles.inputWrapperFocused]}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="District"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.district}
+                      onChangeText={(value) => handleInputChange('district', value)}
+                      onFocus={() => setFocusedInput('district')}
+                      onBlur={() => setFocusedInput(null)}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>State</Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'state' && styles.inputWrapperFocused]}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="State"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.state}
+                      onChangeText={(value) => handleInputChange('state', value)}
+                      onFocus={() => setFocusedInput('state')}
+                      onBlur={() => setFocusedInput(null)}
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Pincode</Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'pincode' && styles.inputWrapperFocused]}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Pincode"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.pincode}
+                      onChangeText={(value) => handleInputChange('pincode', value)}
+                      onFocus={() => setFocusedInput('pincode')}
+                      onBlur={() => setFocusedInput(null)}
+                      keyboardType="numeric"
+                      maxLength={6}
+                    />
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+
           {/* Terms and Conditions */}
           <View style={styles.inputGroup}>
             <TouchableOpacity
@@ -740,7 +1056,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         {/* Login Link */}
         <View style={styles.loginLinkContainer}>
           <Text style={styles.loginLinkText}>Already have an account? </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => {
               if (navigation) {
                 navigation.navigate('Login');
@@ -802,7 +1118,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                     style={[
                       styles.roleOption,
                       formData.role === type.value &&
-                        styles.roleOptionSelected,
+                      styles.roleOptionSelected,
                     ]}
                     activeOpacity={0.8}
                   >
@@ -928,7 +1244,7 @@ const styles = StyleSheet.create({
   },
   errorMessage: {
     flexDirection: 'row',
-    alignItems:'flex-start',
+    alignItems: 'flex-start',
     gap: 12,
     backgroundColor: '#FEF2F2',
     borderWidth: 2,
@@ -936,458 +1252,473 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 24,
-},
-errorMessageText: {
-flex: 1,
-color: '#B91C1C',
-fontSize: 14,
-fontWeight: '500',
-},
-form: {
-marginBottom: 24,
-},
-inputGroup: {
-marginBottom: 20,
-},
-label: {
-fontSize: 14,
-fontWeight: '600',
-color: '#374151',
-marginBottom: 8,
-},
-labelOptional: {
-fontWeight: '400',
-color: '#9CA3AF',
-},
-required: {
-color: '#EF4444',
-},
-profileImageContainer: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 16,
-backgroundColor: '#F9FAFB',
-borderWidth: 2,
-borderColor: '#E5E7EB',
-borderRadius: 12,
-padding: 16,
-},
-profileImageWrapper: {
-position: 'relative',
-},
-profileImage: {
-width: 80,
-height: 80,
-borderRadius: 40,
-borderWidth: 2,
-borderColor: '#FFFFFF',
-},
-profileImagePlaceholder: {
-width: 80,
-height: 80,
-borderRadius: 40,
-backgroundColor: '#F3F4F6',
-borderWidth: 2,
-borderStyle: 'dashed',
-borderColor: '#D1D5DB',
-justifyContent: 'center',
-alignItems: 'center',
-},
-cameraButton: {
-position: 'absolute',
-bottom: -4,
-right: -4,
-width: 32,
-height: 32,
-backgroundColor: '#2D6A4F',
-borderRadius: 16,
-justifyContent: 'center',
-alignItems: 'center',
-borderWidth: 3,
-borderColor: '#FFFFFF',
-shadowColor: '#000',
-shadowOffset: { width: 0, height: 2 },
-shadowOpacity: 0.2,
-shadowRadius: 4,
-elevation: 4,
-},
-profileImageInfo: {
-flex: 1,
-},
-profileImageTitle: {
-fontSize: 14,
-fontWeight: '600',
-color: '#111827',
-marginBottom: 4,
-},
-profileImageSubtitle: {
-fontSize: 12,
-color: '#6B7280',
-marginBottom: 12,
-},
-profileImageButtons: {
-flexDirection: 'row',
-gap: 8,
-},
-chooseFileButton: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 8,
-paddingHorizontal: 12,
-paddingVertical: 6,
-backgroundColor: '#FFFFFF',
-borderWidth: 2,
-borderColor: '#2D6A4F',
-borderRadius: 8,
-},
-chooseFileButtonText: {
-color: '#2D6A4F',
-fontSize: 12,
-fontWeight: '600',
-},
-removeButton: {
-paddingHorizontal: 12,
-paddingVertical: 6,
-backgroundColor: '#FEF2F2',
-borderWidth: 2,
-borderColor: '#FECACA',
-borderRadius: 8,
-},
-removeButtonText: {
-color: '#DC2626',
-fontSize: 12,
-fontWeight: '600',
-},
-inputWrapper: {
-flexDirection: 'row',
-alignItems: 'center',
-height: 52,
-backgroundColor: '#F9FAFB',
-borderWidth: 2,
-borderColor: '#E5E7EB',
-borderRadius: 12,
-paddingHorizontal: 16,
-},
-inputWrapperFocused: {
-borderColor: '#2D6A4F',
-backgroundColor: '#FFFFFF',
-shadowColor: '#2D6A4F',
-shadowOffset: { width: 0, height: 0 },
-shadowOpacity: 0.1,
-shadowRadius: 8,
-elevation: 2,
-},
-inputWrapperError: {
-borderColor: '#FECACA',
-},
-inputIcon: {
-marginRight: 12,
-},
-input: {
-flex: 1,
-fontSize: 14,
-color: '#111827',
-height: '100%',
-},
-passwordInput: {
-paddingRight: 40,
-},
-eyeButton: {
-position: 'absolute',
-right: 16,
-padding: 4,
-},
-errorContainer: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 4,
-marginTop: 4,
-marginLeft: 4,
-},
-errorContainerIndent: {
-marginLeft: 32,
-},
-errorText: {
-fontSize: 12,
-color: '#DC2626',
-},
-passwordHint: {
-fontSize: 12,
-color: '#6B7280',
-marginTop: 4,
-marginLeft: 4,
-},
-roleButton: {
-flexDirection: 'row',
-alignItems: 'center',
-justifyContent: 'space-between',
-height: 56,
-paddingHorizontal: 16,
-backgroundColor: '#F9FAFB',
-borderWidth: 2,
-borderColor: '#E5E7EB',
-borderRadius: 12,
-},
-roleButtonSelected: {
-borderColor: '#2D6A4F',
-backgroundColor: '#FFFFFF',
-},
-roleButtonError: {
-borderColor: '#FECACA',
-},
-roleSelected: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 12,
-flex: 1,
-},
-roleIcon: {
-width: 40,
-height: 40,
-borderRadius: 8,
-justifyContent: 'center',
-alignItems: 'center',
-},
-roleText: {
-flex: 1,
-},
-roleLabel: {
-fontSize: 14,
-fontWeight: '600',
-color: '#111827',
-},
-roleDescription: {
-fontSize: 12,
-color: '#6B7280',
-},
-rolePlaceholder: {
-fontSize: 14,
-color: '#9CA3AF',
-},
-termsButton: {
-flexDirection: 'row',
-alignItems: 'flex-start',
-gap: 12,
-padding: 8,
-},
-checkbox: {
-width: 20,
-height: 20,
-borderRadius: 6,
-borderWidth: 2,
-borderColor: '#D1D5DB',
-justifyContent: 'center',
-alignItems: 'center',
-marginTop: 2,
-},
-checkboxChecked: {
-backgroundColor: '#2D6A4F',
-borderColor: '#2D6A4F',
-},
-termsText: {
-flex: 1,
-fontSize: 14,
-color: '#6B7280',
-lineHeight: 20,
-},
-termsLink: {
-color: '#2D6A4F',
-fontWeight: '600',
-},
-registerButton: {
-height: 56,
-backgroundColor: '#2D6A4F',
-borderRadius: 12,
-justifyContent: 'center',
-alignItems: 'center',
-shadowColor: '#000',
-shadowOffset: { width: 0, height: 4 },
-shadowOpacity: 0.2,
-shadowRadius: 8,
-elevation: 8,
-marginTop: 4,
-},
-registerButtonDisabled: {
-backgroundColor: '#D1D5DB',
-shadowOpacity: 0,
-elevation: 0,
-},
-registerButtonContent: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 8,
-},
-registerButtonText: {
-color: '#FFFFFF',
-fontSize: 16,
-fontWeight: '700',
-},
-divider: {
-flexDirection: 'row',
-alignItems: 'center',
-marginVertical: 24,
-},
-dividerLine: {
-flex: 1,
-height: 1,
-backgroundColor: '#E5E7EB',
-},
-dividerText: {
-fontSize: 14,
-color: '#9CA3AF',
-fontWeight: '500',
-marginHorizontal: 16,
-},
-socialButtons: {
-flexDirection: 'row',
-gap: 12,
-marginBottom: 24,
-},
-socialButton: {
-flex: 1,
-height: 48,
-flexDirection: 'row',
-alignItems: 'center',
-justifyContent: 'center',
-gap: 8,
-backgroundColor: '#FFFFFF',
-borderWidth: 2,
-borderColor: '#E5E7EB',
-borderRadius: 12,
-},
-googleIcon: {
-width: 20,
-height: 20,
-backgroundColor: '#3B82F6',
-borderRadius: 10,
-justifyContent: 'center',
-alignItems: 'center',
-},
-googleIconText: {
-color: '#FFFFFF',
-fontSize: 12,
-fontWeight: '700',
-},
-socialButtonText: {
-fontSize: 14,
-fontWeight: '600',
-color: '#374151',
-},
-loginLinkContainer: {
-flexDirection: 'row',
-justifyContent: 'center',
-alignItems: 'center',
-marginBottom: 24,
-},
-loginLinkText: {
-fontSize: 14,
-color: '#6B7280',
-},
-loginLink: {
-fontSize: 14,
-color: '#2D6A4F',
-fontWeight: '700',
-},
-trustBadge: {
-flexDirection: 'row',
-justifyContent: 'center',
-alignItems: 'center',
-gap: 8,
-paddingBottom: 16,
-},
-trustIcon: {
-width: 20,
-height: 20,
-backgroundColor: '#2D6A4F',
-borderRadius: 10,
-justifyContent: 'center',
-alignItems: 'center',
-},
-trustText: {
-fontSize: 12,
-color: '#6B7280',
-},
-modalOverlay: {
-flex: 1,
-backgroundColor: 'rgba(0, 0, 0, 0.5)',
-justifyContent: 'flex-end',
-},
-modalContent: {
-backgroundColor: '#FFFFFF',
-borderTopLeftRadius: 24,
-borderTopRightRadius: 24,
-paddingBottom: 32,
-},
-modalHeader: {
-flexDirection: 'row',
-justifyContent: 'space-between',
-alignItems: 'flex-start',
-padding: 24,
-borderBottomWidth: 1,
-borderBottomColor: '#F3F4F6',
-},
-modalTitle: {
-fontSize: 20,
-fontWeight: '700',
-color: '#111827',
-marginBottom: 4,
-},
-modalSubtitle: {
-fontSize: 14,
-color: '#6B7280',
-},
-modalCloseButton: {
-padding: 4,
-},
-modalBody: {
-padding: 16,
-gap: 12,
-},
-roleOption: {
-flexDirection: 'row',
-alignItems: 'center',
-gap: 12,
-padding: 16,
-backgroundColor: '#F9FAFB',
-borderWidth: 2,
-borderColor: '#E5E7EB',
-borderRadius: 16,
-},
-roleOptionSelected: {
-backgroundColor: '#FFFFFF',
-borderColor: '#2D6A4F',
-shadowColor: '#000',
-shadowOffset: { width: 0, height: 4 },
-shadowOpacity: 0.1,
-shadowRadius: 8,
-elevation: 4,
-},
-roleOptionIcon: {
-width: 48,
-height: 48,
-borderRadius: 12,
-justifyContent: 'center',
-alignItems: 'center',
-},
-roleOptionText: {
-flex: 1,
-},
-roleOptionLabel: {
-fontSize: 16,
-fontWeight: '600',
-color: '#111827',
-marginBottom: 2,
-},
-roleOptionDescription: {
-fontSize: 14,
-color: '#6B7280',
-},
-roleOptionCheck: {
-width: 24,
-height: 24,
-backgroundColor: '#2D6A4F',
-borderRadius: 12,
-justifyContent: 'center',
-alignItems: 'center',
-},
+  },
+  errorMessageText: {
+    flex: 1,
+    color: '#B91C1C',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  form: {
+    marginBottom: 24,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  labelOptional: {
+    fontWeight: '400',
+    color: '#9CA3AF',
+  },
+  required: {
+    color: '#EF4444',
+  },
+  profileImageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+  },
+  profileImageWrapper: {
+    position: 'relative',
+  },
+  profileImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  profileImagePlaceholder: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#D1D5DB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraButton: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    width: 32,
+    height: 32,
+    backgroundColor: '#2D6A4F',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  profileImageInfo: {
+    flex: 1,
+  },
+  profileImageTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  profileImageSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 12,
+  },
+  profileImageButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  chooseFileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#2D6A4F',
+    borderRadius: 8,
+  },
+  chooseFileButtonText: {
+    color: '#2D6A4F',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  removeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 2,
+    borderColor: '#FECACA',
+    borderRadius: 8,
+  },
+  removeButtonText: {
+    color: '#DC2626',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 52,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+  },
+  inputWrapperFocused: {
+    borderColor: '#2D6A4F',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#2D6A4F',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  inputWrapperError: {
+    borderColor: '#FECACA',
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    fontSize: 14,
+    color: '#111827',
+    height: '100%',
+  },
+  passwordInput: {
+    paddingRight: 40,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 16,
+    padding: 4,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  errorContainerIndent: {
+    marginLeft: 32,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#DC2626',
+  },
+  passwordHint: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  roleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 56,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+  },
+  roleButtonSelected: {
+    borderColor: '#2D6A4F',
+    backgroundColor: '#FFFFFF',
+  },
+  roleButtonError: {
+    borderColor: '#FECACA',
+  },
+  roleSelected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  roleIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  roleText: {
+    flex: 1,
+  },
+  roleLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  roleDescription: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  rolePlaceholder: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  termsButton: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    padding: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: '#2D6A4F',
+    borderColor: '#2D6A4F',
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: '#2D6A4F',
+    fontWeight: '600',
+  },
+  registerButton: {
+    height: 56,
+    backgroundColor: '#2D6A4F',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+    marginTop: 4,
+  },
+  registerButtonDisabled: {
+    backgroundColor: '#D1D5DB',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  registerButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  registerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E7EB',
+  },
+  dividerText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontWeight: '500',
+    marginHorizontal: 16,
+  },
+  socialButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  socialButton: {
+    flex: 1,
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+  },
+  googleIcon: {
+    width: 20,
+    height: 20,
+    backgroundColor: '#3B82F6',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  googleIconText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  socialButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  loginLinkContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  loginLinkText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  loginLink: {
+    fontSize: 14,
+    color: '#2D6A4F',
+    fontWeight: '700',
+  },
+  trustBadge: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 16,
+  },
+  trustIcon: {
+    width: 20,
+    height: 20,
+    backgroundColor: '#2D6A4F',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  trustText: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: 32,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 16,
+    gap: 12,
+  },
+  roleOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 16,
+  },
+  roleOptionSelected: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#2D6A4F',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  roleOptionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  roleOptionText: {
+    flex: 1,
+  },
+  roleOptionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  roleOptionDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  roleOptionCheck: {
+    width: 24,
+    height: 24,
+    backgroundColor: '#2D6A4F',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  builderFieldsContainer: {
+    gap: 16,
+    padding: 16,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
 });

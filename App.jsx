@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 
 import { SplashScreen } from './modules/user/screens/SplashScreen';
@@ -33,6 +33,18 @@ export default function App() {
     email: 'sarah@example.com',
     phone: '+1 234 567 8900',
   });
+
+  // 🔹 Splash Screen Timeout (fallback)
+  useEffect(() => {
+    if (currentScreen === 'splash') {
+      const splashTimer = setTimeout(() => {
+        console.log('⏱️ Splash timeout - auto-navigate to welcome');
+        setCurrentScreen('welcome');
+      }, 5000); // After 5 seconds, go to welcome if not already done
+
+      return () => clearTimeout(splashTimer);
+    }
+  }, [currentScreen]);
 
   // 🔹 Navigation handler (Stack based)
   const navigateTo = (screen, params = {}) => {
@@ -90,6 +102,8 @@ export default function App() {
 
   // 🔹 Render Screens
   const renderScreen = () => {
+    console.log('🎬 Rendering screen:', currentScreen);
+    
     switch (currentScreen) {
 
       case 'splash':
@@ -256,11 +270,22 @@ export default function App() {
         );
 
       default:
-        return null;
+        console.warn('⚠️ Unknown screen:', currentScreen);
+        return (
+          <WelcomeScreen
+            onGetStarted={() => navigateTo('register')}
+            onExploreAsBuilder={() => navigateTo('exploreProperties')}
+            onNavigateToLogin={() => navigateTo('login')}
+          />
+        );
     }
   };
 
-  return <View style={styles.container}>{renderScreen()}</View>;
+  return (
+    <View style={styles.container}>
+      {renderScreen()}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({

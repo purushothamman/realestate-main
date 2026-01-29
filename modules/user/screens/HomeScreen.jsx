@@ -50,11 +50,11 @@ export default function HomeScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [screen, setScreen] = useState('home');
   const [selectedProperty, setSelectedProperty] = useState(null);
-  
+
   // User State
   const [user, setUser] = useState(null);
   const [authToken, setAuthToken] = useState(null);
-  
+
   // Data State
   const [properties, setProperties] = useState([]);
   const [stats, setStats] = useState({
@@ -64,7 +64,7 @@ export default function HomeScreen({ navigation }) {
   });
   const [notifications, setNotifications] = useState([]);
   const [messages, setMessages] = useState([]);
-  
+
   // UI State
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -94,7 +94,7 @@ export default function HomeScreen({ navigation }) {
       const userData = JSON.parse(userStr);
       setUser(userData);
       setAuthToken(token);
-      
+
       console.log('✅ User loaded:', userData.name);
 
       // Fetch all initial data
@@ -117,7 +117,7 @@ export default function HomeScreen({ navigation }) {
   const fetchProperties = async (token) => {
     try {
       console.log('📥 Fetching properties...');
-      
+
       const response = await fetch(`${API_BASE_URL}/properties`, {
         method: 'GET',
         headers: {
@@ -132,7 +132,7 @@ export default function HomeScreen({ navigation }) {
 
       const data = await response.json();
       console.log('✅ Properties loaded:', data.properties?.length || 0);
-      
+
       setProperties(data.properties || []);
     } catch (err) {
       console.error('❌ Error fetching properties:', err);
@@ -145,7 +145,7 @@ export default function HomeScreen({ navigation }) {
   const fetchUserStats = async (token, userId) => {
     try {
       console.log('📊 Fetching user stats...');
-      
+
       const response = await fetch(`${API_BASE_URL}/users/${userId}/stats`, {
         method: 'GET',
         headers: {
@@ -160,7 +160,7 @@ export default function HomeScreen({ navigation }) {
 
       const data = await response.json();
       console.log('✅ Stats loaded:', data.stats);
-      
+
       setStats(data.stats || { saved: 0, viewed: 0, new: 0 });
     } catch (err) {
       console.error('❌ Error fetching stats:', err);
@@ -172,7 +172,7 @@ export default function HomeScreen({ navigation }) {
   const fetchNotifications = async (token, userId) => {
     try {
       console.log('🔔 Fetching notifications...');
-      
+
       const response = await fetch(`${API_BASE_URL}/users/${userId}/notifications`, {
         method: 'GET',
         headers: {
@@ -187,7 +187,7 @@ export default function HomeScreen({ navigation }) {
 
       const data = await response.json();
       console.log('✅ Notifications loaded:', data.notifications?.length || 0);
-      
+
       setNotifications(data.notifications || []);
     } catch (err) {
       console.error('❌ Error fetching notifications:', err);
@@ -198,7 +198,7 @@ export default function HomeScreen({ navigation }) {
   const fetchMessages = async (token, userId) => {
     try {
       console.log('💬 Fetching messages...');
-      
+
       const response = await fetch(`${API_BASE_URL}/users/${userId}/messages/unread`, {
         method: 'GET',
         headers: {
@@ -213,7 +213,7 @@ export default function HomeScreen({ navigation }) {
 
       const data = await response.json();
       console.log('✅ Unread messages:', data.unreadCount || 0);
-      
+
       setMessages(data.messages || []);
     } catch (err) {
       console.error('❌ Error fetching messages:', err);
@@ -241,7 +241,7 @@ export default function HomeScreen({ navigation }) {
   const toggleFavorite = async (propertyId) => {
     try {
       console.log('❤️ Toggling favorite for property:', propertyId);
-      
+
       const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/favorite`, {
         method: 'POST',
         headers: {
@@ -256,7 +256,7 @@ export default function HomeScreen({ navigation }) {
 
       const data = await response.json();
       console.log('✅ Favorite toggled:', data.isFavorited);
-      
+
       // Update local state
       setProperties(prevProperties =>
         prevProperties.map(prop =>
@@ -301,9 +301,9 @@ export default function HomeScreen({ navigation }) {
               // Clear local storage
               await AsyncStorage.removeItem('authToken');
               await AsyncStorage.removeItem('user');
-              
+
               console.log('✅ Logged out successfully');
-              
+
               // Navigate to login
               navigation.replace('Login');
             } catch (err) {
@@ -325,7 +325,7 @@ export default function HomeScreen({ navigation }) {
   // Handle Property Click
   const handlePropertyClick = async (property) => {
     console.log('🏠 Property clicked:', property.title);
-    
+
     try {
       // Track property view
       await fetch(`${API_BASE_URL}/properties/${property.id}/view`, {
@@ -355,7 +355,7 @@ export default function HomeScreen({ navigation }) {
 
     try {
       console.log('🔍 Searching for:', searchQuery);
-      
+
       const response = await fetch(
         `${API_BASE_URL}/properties/search?q=${encodeURIComponent(searchQuery)}`,
         {
@@ -371,7 +371,7 @@ export default function HomeScreen({ navigation }) {
 
       const data = await response.json();
       console.log('✅ Search results:', data.properties?.length || 0);
-      
+
       setProperties(data.properties || []);
     } catch (err) {
       console.error('❌ Search error:', err);
@@ -455,7 +455,7 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.appName}>EstateHub</Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.notificationButton}
             onPress={() => handleTabPress('notifications')}
           >
@@ -468,7 +468,7 @@ export default function HomeScreen({ navigation }) {
               </View>
             )}
           </TouchableOpacity>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.logoutButton}
             onPress={handleLogout}
           >
@@ -551,33 +551,41 @@ export default function HomeScreen({ navigation }) {
 
         {/* Quick Actions */}
         <View style={styles.quickActionsContainer}>
-          {quickActions.map((action) => {
-            const IconComponent = action.icon;
-            return (
-              <TouchableOpacity
-                key={action.id}
-                style={styles.quickAction}
-                activeOpacity={0.7}
-                onPress={() => {
-                  console.log('Quick action:', action.id);
-                  // Navigate based on action
-                  if (action.id === 'sell') {
-                    // Navigate to sell property screen
-                  }
-                }}
-              >
-                <View
-                  style={[
-                    styles.quickActionIcon,
-                    { backgroundColor: `${action.color}15` },
-                  ]}
+          {quickActions
+            .filter(action => {
+              // Only show 'Sell' to builders and agents
+              if (action.id === 'sell') {
+                return user?.role === 'builder' || user?.role === 'agent';
+              }
+              return true;
+            })
+            .map((action) => {
+              const IconComponent = action.icon;
+              return (
+                <TouchableOpacity
+                  key={action.id}
+                  style={styles.quickAction}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    console.log('Quick action:', action.id);
+                    // Navigate based on action
+                    if (action.id === 'sell') {
+                      // Navigate to sell property screen
+                    }
+                  }}
                 >
-                  <IconComponent color={action.color} size={24} strokeWidth={2} />
-                </View>
-                <Text style={styles.quickActionLabel}>{action.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
+                  <View
+                    style={[
+                      styles.quickActionIcon,
+                      { backgroundColor: `${action.color}15` },
+                    ]}
+                  >
+                    <IconComponent color={action.color} size={24} strokeWidth={2} />
+                  </View>
+                  <Text style={styles.quickActionLabel}>{action.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
         </View>
 
         {/* Featured Properties */}
@@ -737,16 +745,18 @@ export default function HomeScreen({ navigation }) {
           </View>
         )}
 
-        {/* CTA Banner */}
-        <View style={styles.ctaBanner}>
-          <Text style={styles.ctaTitle}>Looking to Sell?</Text>
-          <Text style={styles.ctaSubtitle}>
-            Get a free property valuation and connect with top agents
-          </Text>
-          <TouchableOpacity style={styles.ctaButton} activeOpacity={0.8}>
-            <Text style={styles.ctaButtonText}>Get Started</Text>
-          </TouchableOpacity>
-        </View>
+        {/* CTA Banner - Only show for Builders and Agents */}
+        {(user?.role === 'builder' || user?.role === 'agent') && (
+          <View style={styles.ctaBanner}>
+            <Text style={styles.ctaTitle}>Looking to Sell?</Text>
+            <Text style={styles.ctaSubtitle}>
+              Get a free property valuation and connect with top agents
+            </Text>
+            <TouchableOpacity style={styles.ctaButton} activeOpacity={0.8}>
+              <Text style={styles.ctaButtonText}>Get Started</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Fixed Bottom Navigation */}

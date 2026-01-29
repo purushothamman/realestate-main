@@ -9,6 +9,8 @@ import {
   Alert,
   Dimensions,
   Platform,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import {
   House,
@@ -31,10 +33,14 @@ import {
   Heart,
   Trash2,
   ArrowLeft,
+  AlertCircle,
+  XCircle,
 } from 'lucide-react-native';
 
-const { width, height } = Dimensions.get('window');
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const { width, height } = Dimensions.get('window');
+const API_BASE_URL = 'http://localhost:5000/api'; // Replace with your actual API URL
 
 // Responsive breakpoints
 const isSmallDevice = width < 375;
@@ -42,31 +48,60 @@ const isMediumDevice = width >= 375 && width < 768;
 const isLargeDevice = width >= 768;
 
 const ProfileScreen = ({
-  onEditProfile = () => {},
-  onMyProperties = () => {},
-  onNotifications = () => {},
-  onHelpSupport = () => {},
-  onLogout = () => {},
-  onChangePassword = () => {},
-  onBack = () => {},
+  onEditProfile = () => { },
+  onMyProperties = () => { },
+  onNotifications = () => { },
+  onHelpSupport = () => { },
+  onLogout = () => { },
+  onChangePassword = () => { },
+  onBack = () => { },
 }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [userData, setUserData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Mock user data
-  const userData = {
-    name: 'Sarah Johnson',
-    email: 'sarah.johnson@builderco.com',
-    phone: '+1 (555) 123-4567',
-    profileImage: 'https://images.unsplash.com/photo-1548637724-cbc39e0c8d3b?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-    companyName: 'Johnson Real Estate Group',
-    businessAddress: '123 Main Street, Beverly Hills, CA 90210',
-    reraId: 'RERA-CA-2024-12345',
-    verified: true,
-    stats: {
-      totalProperties: 24,
-      activeListings: 18,
-      soldProperties: 6,
-    },
+  // Load user data
+  React.useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      const userStr = await AsyncStorage.getItem('user');
+      const token = await AsyncStorage.getItem('authToken');
+
+      // Optimitically set from storage first
+      if (userStr) {
+        setUserData(JSON.parse(userStr));
+        setIsLoading(false);
+      }
+
+      // Then fetch fresh data from API
+      if (token) {
+        const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const freshData = await response.json();
+          setUserData(freshData);
+          await AsyncStorage.setItem('user', JSON.stringify(freshData));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load user data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadUserData();
+    setRefreshing(false);
   };
 
   const handleLogout = () => {
@@ -80,7 +115,15 @@ const ProfileScreen = ({
         },
         {
           text: 'Logout',
-          onPress: () => onLogout(),
+          onPress: async () => {
+            try {
+              await AsyncStorage.multiRemove(['authToken', 'user']);
+              onLogout();
+            } catch (error) {
+              console.error('Logout error:', error);
+              onLogout(); // Force logout anyway
+            }
+          },
           style: 'destructive',
         },
       ],
@@ -88,38 +131,92 @@ const ProfileScreen = ({
     );
   };
 
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#2D6A4F" />
+      </View>
+    );
+  }
+
+  if (!userData) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: '#6B7280' }}>Please login to view profile</Text>
+      </View>
+    );
+  }
+
+  // Helper to render verification badge
+  const renderVerificationBadge = () => {
+    const status = userData.verificationStatus || userData.verificationType; // Fallback or adjust based on API
+
+    if (userData.isVerified || status === 'verified') {
+      return <CheckCircle size={isSmallDevice ? 16 : 20} color="#60A5FA" fill="#E6F2FF" />;
+    }
+
+    if (userData.role === 'builder') {
+      if (status === 'pending') {
+        return (
+          <View style={styles.badgeContainer}>
+            <Image
+              source={{ uri: 'https://cdn-icons-png.flaticon.com/512/9502/9502332.png' }}
+              style={{ width: 16, height: 16, tintColor: '#F59E0B' }}
+            />
+          </View>
+        );
+      } else if (status === 'rejected') {
+        return <XCircle size={isSmallDevice ? 16 : 20} color="#EF4444" />;
+      }
+    }
+    return null;
+  };
+
+
   const profileSections = [
     {
       title: 'Personal Information',
       items: [
         { icon: User, label: 'Full Name', value: userData.name },
         { icon: Mail, label: 'Email Address', value: userData.email },
-        { icon: Phone, label: 'Phone Number', value: userData.phone },
-      ],
-    },
-    {
-      title: 'Business Information',
-      items: [
-        { icon: House, label: 'Company Name', value: userData.companyName },
-        { icon: MapPin, label: 'Business Address', value: userData.businessAddress },
-        { icon: Shield, label: 'RERA ID', value: userData.reraId },
-      ],
-    },
-    {
-      title: 'Account Settings',
-      items: [
-        { icon: Lock, label: 'Change Password', value: '••••••••', action: onChangePassword },
-        { icon: Bell, label: 'Notifications', value: 'Enabled', action: onNotifications },
-        { icon: Globe, label: 'Language', value: 'English (US)' },
+        { icon: Phone, label: 'Phone Number', value: userData.phone || 'Not provided' },
       ],
     },
   ];
+
+  // Add Business Information for Builders
+  if (userData.role === 'builder') {
+    profileSections.push({
+      title: 'Business Information',
+      items: [
+        { icon: House, label: 'Company Name', value: userData.companyName || 'N/A' },
+        { icon: MapPin, label: 'Business Address', value: [userData.businessAddress, userData.city, userData.state].filter(Boolean).join(', ') || 'N/A' },
+        { icon: Shield, label: 'GST Number', value: userData.gstNo || 'N/A' },
+        { icon: Shield, label: 'PAN Number', value: userData.panNo || 'N/A' },
+        {
+          icon: userData.verificationStatus === 'verified' ? CheckCircle : (userData.verificationStatus === 'rejected' ? XCircle : AlertCircle),
+          label: 'Verification Status',
+          value: (userData.verificationStatus || 'Pending').charAt(0).toUpperCase() + (userData.verificationStatus || 'pending').slice(1),
+          valueColor: userData.verificationStatus === 'verified' ? '#10B981' : (userData.verificationStatus === 'rejected' ? '#EF4444' : '#F59E0B')
+        },
+      ],
+    });
+  }
+
+  // ... (stats and quickActions setup remains similar) ...
+
+  // Ensure stats object exists
+  const stats = userData.stats || {
+    totalProperties: 0,
+    activeListings: 0,
+    soldProperties: 0,
+  };
 
   const quickActions = [
     {
       icon: Home,
       label: 'My Properties',
-      value: userData.stats.totalProperties,
+      value: stats.totalProperties,
       color: '#2D6A4F',
       action: onMyProperties,
     },
@@ -140,6 +237,7 @@ const ProfileScreen = ({
       <View style={styles.header}>
         {/* Top Bar */}
         <View style={styles.topBar}>
+          {/* ... (Logo and Back button code - no changes) ... */}
           <View style={styles.logoContainer}>
             <TouchableOpacity onPress={onBack} style={styles.backButton}>
               <ArrowLeft size={20} color="#FFF" />
@@ -161,7 +259,7 @@ const ProfileScreen = ({
           <View style={styles.profileImageContainer}>
             <View style={styles.profileImageWrapper}>
               <Image
-                source={{ uri: userData.profileImage }}
+                source={userData.profileImage ? { uri: userData.profileImage } : { uri: 'https://via.placeholder.com/150' }}
                 style={styles.profileImage}
               />
             </View>
@@ -176,7 +274,7 @@ const ProfileScreen = ({
               <Text style={styles.name} numberOfLines={1}>
                 {userData.name}
               </Text>
-              {userData.verified && <CheckCircle size={isSmallDevice ? 16 : 20} color="#60A5FA" />}
+              {renderVerificationBadge()}
             </View>
             <View style={styles.contactRow}>
               <Mail size={isSmallDevice ? 10 : 12} color="rgba(255,255,255,0.9)" />
@@ -184,10 +282,11 @@ const ProfileScreen = ({
                 {userData.email}
               </Text>
             </View>
+            {/* ... */}
             <View style={styles.contactRow}>
               <Phone size={isSmallDevice ? 10 : 12} color="rgba(255,255,255,0.9)" />
               <Text style={styles.contactText} numberOfLines={1}>
-                {userData.phone}
+                {userData.phone || 'No phone provided'}
               </Text>
             </View>
           </View>
@@ -195,26 +294,31 @@ const ProfileScreen = ({
       </View>
 
       {/* Scrollable Content */}
-      <ScrollView 
-        style={styles.scrollContent} 
+      <ScrollView
+        style={styles.scrollContent}
         contentContainerStyle={styles.scrollContentContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2D6A4F']} />
+        }
       >
+        {/* ... (Rest of the JSX) ... */}
+
         {/* Stats Summary */}
         <View style={styles.statsContainer}>
           <View style={styles.statBox}>
-            <Text style={styles.statNumber}>{userData.stats.totalProperties}</Text>
+            <Text style={styles.statNumber}>{stats.totalProperties}</Text>
             <Text style={styles.statLabel}>Total{isSmallDevice ? '' : ' Properties'}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={[styles.statNumber, { color: '#10B981' }]}>
-              {userData.stats.activeListings}
+              {stats.activeListings}
             </Text>
             <Text style={styles.statLabel}>Active</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={[styles.statNumber, { color: '#3B82F6' }]}>
-              {userData.stats.soldProperties}
+              {stats.soldProperties}
             </Text>
             <Text style={styles.statLabel}>Sold</Text>
           </View>
@@ -270,7 +374,7 @@ const ProfileScreen = ({
                     <item.icon size={16} color="#9CA3AF" />
                     <View style={styles.detailTextContainer}>
                       <Text style={styles.detailLabel}>{item.label}</Text>
-                      <Text style={styles.detailValue} numberOfLines={isSmallDevice ? 2 : 1}>
+                      <Text style={[styles.detailValue, item.valueColor ? { color: item.valueColor, fontWeight: '600' } : {}]} numberOfLines={isSmallDevice ? 2 : 1}>
                         {item.value}
                       </Text>
                     </View>

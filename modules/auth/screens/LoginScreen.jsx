@@ -40,7 +40,13 @@ const getApiUrl = () => {
 
 const API_BASE_URL = getApiUrl();
 
-export default function LoginScreen({ navigation }) {
+export default function LoginScreen({ 
+  navigation,
+  onNavigateToLoginSuccess,
+  onRegister,
+  onForgotPassword,
+  onBack 
+}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -525,16 +531,22 @@ export default function LoginScreen({ navigation }) {
       setEmail('');
       setPassword('');
 
-      Alert.alert(
-        'Login Successful',
-        `Welcome back, ${data.user.name || 'User'}!`,
-        [
-          {
-            text: 'OK',
-            onPress: () => navigateByRole(data.user.role, data.user),
-          }
-        ]
-      );
+      console.log('✅ About to call navigateByRole with role:', data.user.role);
+      console.log('✅ User data:', data.user);
+      
+      // Navigate immediately without showing alert
+      setTimeout(() => {
+        navigateByRole(data.user.role, data.user);
+      }, 500);
+
+      // Show alert after navigating
+      setTimeout(() => {
+        Alert.alert(
+          'Login Successful',
+          `Welcome back, ${data.user.name || 'User'}!`,
+          [{ text: 'OK' }]
+        );
+      }, 600);
 
     } catch (error) {
       console.error('❌ Email login error:', error);
@@ -567,51 +579,76 @@ export default function LoginScreen({ navigation }) {
 
   // ==================== NAVIGATION BY ROLE ====================
   const navigateByRole = (userRole, userData) => {
-    console.log('🧭 Navigating based on role:', userRole);
+    console.log('\n' + '='.repeat(60));
+    console.log('🧭 NAVIGATE BY ROLE FUNCTION CALLED');
+    console.log('='.repeat(60));
+    console.log('User Role:', userRole);
+    console.log('User Data:', userData);
+    console.log('onNavigateToLoginSuccess available:', !!onNavigateToLoginSuccess);
+    console.log('='.repeat(60) + '\n');
 
-    if (!navigation) {
-      console.error('❌ Navigation prop is missing');
-      Alert.alert('Error', 'Navigation error. Please restart the app.');
+    // Use callback-based navigation from App.jsx
+    if (onNavigateToLoginSuccess) {
+      console.log('✅ Executing onNavigateToLoginSuccess callback');
+      console.log('→ This should trigger: setUserData(user) + navigateTo("home")');
+      onNavigateToLoginSuccess(userData);
+      console.log('✅ Callback executed');
       return;
     }
 
-    try {
-      switch (userRole.toLowerCase()) {
-        case 'buyer':
-        case 'user':
-          console.log('→ Navigating to Home');
-          navigation.replace('Home', { user: userData });
-          break;
-        case 'builder':
-        case 'developer':
-          console.log('→ Navigating to BuilderDashboard');
-          navigation.replace('BuilderDashboard', { user: userData });
-          break;
-        case 'agent':
-        case 'realtor':
-          console.log('→ Navigating to AgentDashboard');
-          navigation.replace('AgentDashboard', { user: userData });
-          break;
-        case 'admin':
-          console.log('→ Navigating to AdminDashboard');
-          navigation.replace('AdminDashboard', { user: userData });
-          break;
-        default:
-          console.log('→ Navigating to Home (default)');
-          navigation.replace('Home', { user: userData });
-          break;
+    // Fallback for modern React Navigation
+    if (navigation?.replace) {
+      try {
+        switch (userRole.toLowerCase()) {
+          case 'buyer':
+          case 'user':
+            console.log('→ Navigating to Home');
+            navigation.replace('Home', { user: userData });
+            break;
+          case 'builder':
+          case 'developer':
+            console.log('→ Navigating to BuilderDashboard');
+            navigation.replace('BuilderDashboard', { user: userData });
+            break;
+          case 'agent':
+          case 'realtor':
+            console.log('→ Navigating to AgentDashboard');
+            navigation.replace('AgentDashboard', { user: userData });
+            break;
+          case 'admin':
+            console.log('→ Navigating to AdminDashboard');
+            navigation.replace('AdminDashboard', { user: userData });
+            break;
+          default:
+            console.log('→ Navigating to Home (default)');
+            navigation.replace('Home', { user: userData });
+            break;
+        }
+      } catch (navError) {
+        console.error('❌ Navigation error:', navError);
+        Alert.alert('Navigation Error', 'Failed to navigate. Please restart the app.');
       }
-    } catch (navError) {
-      console.error('❌ Navigation error:', navError);
-      Alert.alert('Navigation Error', 'Failed to navigate. Please restart the app.');
+    } else {
+      console.error('❌ Navigation callbacks/methods not available');
+      Alert.alert('Error', 'Navigation error. Please restart the app.');
     }
   };
 
+
   // ==================== NAVIGATE TO REGISTER ====================
   const handleNavigateToRegister = () => {
-    if (navigation) {
+    console.log('📝 Navigating to Register screen');
+    
+    // Use callback-based navigation from App.jsx
+    if (onRegister) {
+      console.log('→ Using onRegister callback');
+      onRegister();
+    } else if (navigation?.navigate) {
+      // Fallback for modern React Navigation
+      console.log('→ Using navigation.navigate');
       navigation.navigate('Register');
     } else {
+      console.error('❌ Navigation not available');
       Alert.alert('Error', 'Navigation not available');
     }
   };
