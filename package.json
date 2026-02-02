@@ -21,6 +21,7 @@
     "dotenv": "^17.2.3",
     "expo": "~54.0.32",
     "expo-auth-session": "~7.0.10",
+    "expo-document-picker": "~14.0.8",
     "expo-google-sign-in": "^10.1.1",
     "expo-image-picker": "~17.0.10",
     "expo-linear-gradient": "^15.0.8",
@@ -50,7 +51,7 @@
   },
   "private": true,
   "devDependencies": {
-    "@react-native-community/cli": "^20.1.0",
+    "@react-native-community/cli": "^14.0.1",
     "@react-native/metro-config": "^0.83.1",
     "@types/react": "~19.1.10",
     "nodemon": "^3.1.11",

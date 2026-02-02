@@ -33,6 +33,8 @@ import {
   Sparkles
 } from 'lucide-react-native';
 
+import UserNavigator from '../../../navigation/UserNavigator';
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
 const isSmallScreen = SCREEN_WIDTH < 768;
@@ -306,11 +308,13 @@ const FilterChip = ({ label, onRemove, index }) => {
   );
 };
 
-export default function SearchResultsScreen({ navigation, onPropertyClick }) {
+export default function SearchResultsScreen({ navigation, onPropertyClick, onBack }) {
   const [savedProperties, setSavedProperties] = useState([0, 3]);
   const [activeFilters, setActiveFilters] = useState(['$400k - $800k', '3+ Beds', 'Modern']);
   const [sortOption, setSortOption] = useState('Relevance');
   const [scrollY, setScrollY] = useState(0);
+  const [messages, setMessages] = useState([]);
+  const [activeTab, setActiveTab] = useState('search');
   
   const headerOpacity = useRef(new Animated.Value(1)).current;
   const headerHeight = useRef(new Animated.Value(0)).current;
@@ -387,6 +391,29 @@ export default function SearchResultsScreen({ navigation, onPropertyClick }) {
 
   const clearAllFilters = () => {
     setActiveFilters([]);
+  };
+
+  const handleTabPress = (tab) => {
+    setActiveTab(tab);
+    // Add navigation logic here based on the tab
+    if (tab === 'home' && onBack) {
+      onBack();
+    }
+  };
+
+  const handleBackPress = () => {
+    // First try onBack callback (for non-navigation scenarios)
+    if (onBack) {
+      onBack();
+    } 
+    // Then try navigation.goBack() (for React Navigation)
+    else if (navigation && navigation.goBack) {
+      navigation.goBack();
+    }
+    // Fallback: try to navigate to home
+    else if (navigation && navigation.navigate) {
+      navigation.navigate('Home');
+    }
   };
 
   const properties = [
@@ -487,9 +514,8 @@ export default function SearchResultsScreen({ navigation, onPropertyClick }) {
           <View style={styles.topBarLeft}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => navigation && navigation.goBack()}
+              onPress={handleBackPress}
               activeOpacity={0.7}
-              onBack={() => setScreen('home')}
             >
               <ArrowLeft size={20} color="#111827" />
             </TouchableOpacity>
@@ -601,41 +627,11 @@ export default function SearchResultsScreen({ navigation, onPropertyClick }) {
       </Animated.View>
 
       {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <Home size={22} color="#9CA3AF" />
-          <Text style={styles.navLabel}>Home</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItemActive} activeOpacity={0.7}>
-          <Search size={22} color="#2D6A4F" />
-          <Text style={styles.navLabelActive}>Search</Text>
-          <View style={styles.activeIndicator} />
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <Heart size={22} color="#9CA3AF" />
-          <Text style={styles.navLabel}>Favorites</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <View>
-            <MessageCircle size={22} color="#9CA3AF" />
-            <Animated.View 
-              style={[
-                styles.notificationBadge, 
-                { transform: [{ scale: pulseAnim }] }
-              ]} 
-            />
-          </View>
-          <Text style={styles.navLabel}>Messages</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <User size={22} color="#9CA3AF" />
-          <Text style={styles.navLabel}>Profile</Text>
-        </TouchableOpacity>
-      </View>
+      <UserNavigator 
+        activeTab={activeTab}
+        onTabPress={handleTabPress}
+        messageCount={messages.length}
+      />
     </View>
   );
 }
@@ -1105,68 +1101,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.3,
-  },
-  bottomNav: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    paddingHorizontal: getResponsiveValue(10, 20, 40),
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 10,
-      },
-      web: {
-        boxShadow: '0 -2px 12px rgba(0,0,0,0.1)',
-      },
-    }),
-  },
-  navItem: {
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: getResponsiveValue(8, 12, 16),
-  },
-  navItemActive: {
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: getResponsiveValue(8, 12, 16),
-    position: 'relative',
-  },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    width: 24,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: '#2D6A4F',
-  },
-  navLabel: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontWeight: '700',
-  },
-  navLabelActive: {
-    fontSize: 11,
-    color: '#2D6A4F',
-    fontWeight: '900',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
   },
 });

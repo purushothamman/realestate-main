@@ -32,8 +32,12 @@ import {
   X,
   TrendingUp,
   MapPin,
+  Briefcase,
+  FileText,
+  MessageSquare,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 
 // Backend API configuration - UPDATE THIS WITH YOUR ACTUAL API URL
 const API_BASE_URL = 'http://localhost:5000/api'; // For local development
@@ -78,11 +82,10 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
     website: '',
     description: '',
     experienceYears: '',
+    totalProjects: '',
+    registrationCertificate: null,
     address: '',
-    landmark: '',
-    area: '',
     city: '',
-    district: '',
     state: '',
     pincode: '',
   });
@@ -96,6 +99,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
   const [apiError, setApiError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
 
   // Validation functions
   const validateEmail = (email) => {
@@ -245,12 +249,101 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
     } catch (error) {
       console.error('Error picking image:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
+      setUploadingImage(false);
     }
   };
 
   const handleRemoveImage = () => {
     setFormData((prev) => ({ ...prev, profileImage: null }));
     setErrors((prev) => ({ ...prev, profileImage: '' }));
+  };
+
+  const handleDocumentUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.type === 'cancel') {
+        return;
+      }
+
+      if (result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+
+        if (asset.size && asset.size > 10 * 1024 * 1024) {
+          setErrors((prev) => ({ ...prev, registrationCertificate: 'Document must be less than 10MB' }));
+          return;
+        }
+
+        setUploadingDocument(true);
+        setErrors((prev) => ({ ...prev, registrationCertificate: '' }));
+
+        try {
+          const formDataUpload = new FormData();
+          formDataUpload.append('registrationCertificate', {
+            uri: asset.uri,
+            type: asset.mimeType || 'application/pdf',
+            name: asset.name || 'certificate.pdf',
+          });
+
+          const response = await fetch(`${API_BASE_URL}/upload/registration-certificate`, {
+            method: 'POST',
+            body: formDataUpload,
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || 'Failed to upload document');
+          }
+
+          setFormData((prev) => ({
+            ...prev,
+            registrationCertificate: {
+              uri: data.documentUrl || data.url || asset.uri,
+              name: asset.name,
+              size: asset.size,
+            },
+          }));
+        } catch (error) {
+          console.error('Document upload error:', error);
+          // Fallback: use local data if backend fails
+          setFormData((prev) => ({
+            ...prev,
+            registrationCertificate: {
+              uri: asset.uri,
+              name: asset.name,
+              size: asset.size,
+            },
+          }));
+          Alert.alert('Info', 'Document will be uploaded after registration');
+        } finally {
+          setUploadingDocument(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error picking document:', error);
+      Alert.alert('Error', 'Failed to pick document. Please try again.');
+      setUploadingDocument(false);
+    }
+  };
+
+  const handleRemoveDocument = () => {
+    setFormData((prev) => ({ ...prev, registrationCertificate: null }));
+    setErrors((prev) => ({ ...prev, registrationCertificate: '' }));
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   const handleRegister = async () => {
@@ -281,11 +374,10 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         registrationData.website = formData.website?.trim() || null;
         registrationData.description = formData.description?.trim() || null;
         registrationData.experienceYears = formData.experienceYears || null;
+        registrationData.totalProjects = formData.totalProjects || null;
+        registrationData.registrationCertificate = formData.registrationCertificate?.uri || null;
         registrationData.address = formData.address?.trim() || null;
-        registrationData.landmark = formData.landmark?.trim() || null;
-        registrationData.area = formData.area?.trim() || null;
         registrationData.city = formData.city?.trim() || null;
-        registrationData.district = formData.district?.trim() || null;
         registrationData.state = formData.state?.trim() || null;
         registrationData.pincode = formData.pincode?.trim() || null;
       }
@@ -301,7 +393,20 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         body: JSON.stringify(registrationData),
       });
 
-      const data = await response.json();
+      // Clone response to avoid "Body already read" error
+      const responseClone = response.clone();
+      let data;
+      
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('JSON parse error:', jsonError);
+        // Try to get text if JSON parsing fails
+        const text = await responseClone.text();
+        console.log('Response text:', text);
+        throw new Error('Invalid server response');
+      }
+
       console.log('Server response:', data);
 
       if (!response.ok) {
@@ -344,11 +449,10 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         website: '',
         description: '',
         experienceYears: '',
+        totalProjects: '',
+        registrationCertificate: null,
         address: '',
-        landmark: '',
-        area: '',
         city: '',
-        district: '',
         state: '',
         pincode: '',
       });
@@ -363,7 +467,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         } else if (navigation) {
           // Otherwise navigate to Login
           console.log('🔐 Navigating to Login');
-          navigation.navigate('login');
+          navigation.navigate('Login');
         } else if (onNavigateToLogin) {
           onNavigateToLogin();
         }
@@ -741,7 +845,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                 <Text style={styles.label}>
                   Company Name <Text style={styles.required}>*</Text>
                 </Text>
-                <View style={[styles.inputWrapper, focusedInput === 'companyName' && styles.inputWrapperFocused]}>
+                <View style={[styles.inputWrapper, focusedInput === 'companyName' && styles.inputWrapperFocused, errors.companyName && styles.inputWrapperError]}>
                   <Building2
                     color={focusedInput === 'companyName' ? '#2D6A4F' : '#9CA3AF'}
                     size={20}
@@ -758,6 +862,39 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                     onBlur={() => setFocusedInput(null)}
                   />
                 </View>
+                {errors.companyName && (
+                  <View style={styles.errorContainer}>
+                    <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                    <Text style={styles.errorText}>{errors.companyName}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Description */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>
+                  Company Description <Text style={styles.labelOptional}>(Optional)</Text>
+                </Text>
+                <View style={[styles.textAreaWrapper, focusedInput === 'description' && styles.inputWrapperFocused]}>
+                  <MessageSquare
+                    color={focusedInput === 'description' ? '#2D6A4F' : '#9CA3AF'}
+                    size={20}
+                    strokeWidth={2}
+                    style={styles.textAreaIcon}
+                  />
+                  <TextInput
+                    style={styles.textArea}
+                    placeholder="Brief description about your company and projects..."
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.description}
+                    onChangeText={(value) => handleInputChange('description', value)}
+                    onFocus={() => setFocusedInput('description')}
+                    onBlur={() => setFocusedInput(null)}
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                  />
+                </View>
               </View>
 
               {/* GST Number (Optional) */}
@@ -765,7 +902,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                 <Text style={styles.label}>
                   GST Number <Text style={styles.labelOptional}>(Optional)</Text>
                 </Text>
-                <View style={[styles.inputWrapper, focusedInput === 'gstNo' && styles.inputWrapperFocused]}>
+                <View style={[styles.inputWrapper, focusedInput === 'gstNo' && styles.inputWrapperFocused, errors.gstNo && styles.inputWrapperError]}>
                   <Shield
                     color={focusedInput === 'gstNo' ? '#2D6A4F' : '#9CA3AF'}
                     size={20}
@@ -783,6 +920,12 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                     autoCapitalize="characters"
                   />
                 </View>
+                {errors.gstNo && (
+                  <View style={styles.errorContainer}>
+                    <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                    <Text style={styles.errorText}>{errors.gstNo}</Text>
+                  </View>
+                )}
               </View>
 
               {/* PAN Number (Required for builders) */}
@@ -790,7 +933,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                 <Text style={styles.label}>
                   PAN Number <Text style={styles.required}>*</Text>
                 </Text>
-                <View style={[styles.inputWrapper, focusedInput === 'panNo' && styles.inputWrapperFocused]}>
+                <View style={[styles.inputWrapper, focusedInput === 'panNo' && styles.inputWrapperFocused, errors.panNo && styles.inputWrapperError]}>
                   <Shield
                     color={focusedInput === 'panNo' ? '#2D6A4F' : '#9CA3AF'}
                     size={20}
@@ -807,6 +950,70 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                     onBlur={() => setFocusedInput(null)}
                     autoCapitalize="characters"
                   />
+                </View>
+                {errors.panNo && (
+                  <View style={styles.errorContainer}>
+                    <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                    <Text style={styles.errorText}>{errors.panNo}</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Registration Certificate Upload */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>
+                  Registration Certificate <Text style={styles.labelOptional}>(Optional)</Text>
+                </Text>
+                <View style={styles.documentUploadContainer}>
+                  {formData.registrationCertificate ? (
+                    <View style={styles.documentPreview}>
+                      <View style={styles.documentInfo}>
+                        <FileText color="#2D6A4F" size={24} strokeWidth={2} />
+                        <View style={styles.documentDetails}>
+                          <Text style={styles.documentName} numberOfLines={1}>
+                            {formData.registrationCertificate.name}
+                          </Text>
+                          <Text style={styles.documentSize}>
+                            {formatFileSize(formData.registrationCertificate.size || 0)}
+                          </Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        onPress={handleRemoveDocument}
+                        style={styles.documentRemoveButton}
+                        activeOpacity={0.8}
+                      >
+                        <X color="#DC2626" size={18} strokeWidth={2} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={handleDocumentUpload}
+                      disabled={uploadingDocument}
+                      style={styles.documentUploadButton}
+                      activeOpacity={0.8}
+                    >
+                      {uploadingDocument ? (
+                        <ActivityIndicator color="#2D6A4F" size="small" />
+                      ) : (
+                        <>
+                          <Upload color="#2D6A4F" size={20} strokeWidth={2} />
+                          <Text style={styles.documentUploadText}>
+                            Upload Certificate (PDF or Image)
+                          </Text>
+                          <Text style={styles.documentUploadSubtext}>
+                            Max 10MB
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                  {errors.registrationCertificate && (
+                    <View style={styles.errorContainer}>
+                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                      <Text style={styles.errorText}>{errors.registrationCertificate}</Text>
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -836,25 +1043,55 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                 </View>
               </View>
 
-              {/* Experience Years */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Experience (Years)</Text>
-                <View style={[styles.inputWrapper, focusedInput === 'experienceYears' && styles.inputWrapperFocused]}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 5"
-                    placeholderTextColor="#9CA3AF"
-                    value={formData.experienceYears}
-                    onChangeText={(value) => handleInputChange('experienceYears', value)}
-                    onFocus={() => setFocusedInput('experienceYears')}
-                    onBlur={() => setFocusedInput(null)}
-                    keyboardType="numeric"
-                  />
+              {/* Experience Years and Total Projects in a row */}
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Experience (Years) <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'experienceYears' && styles.inputWrapperFocused]}>
+                    <Briefcase
+                      color={focusedInput === 'experienceYears' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. 5"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.experienceYears}
+                      onChangeText={(value) => handleInputChange('experienceYears', value)}
+                      onFocus={() => setFocusedInput('experienceYears')}
+                      onBlur={() => setFocusedInput(null)}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.label}>Total Projects <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'totalProjects' && styles.inputWrapperFocused]}>
+                    <Building2
+                      color={focusedInput === 'totalProjects' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. 10"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.totalProjects}
+                      onChangeText={(value) => handleInputChange('totalProjects', value)}
+                      onFocus={() => setFocusedInput('totalProjects')}
+                      onBlur={() => setFocusedInput(null)}
+                      keyboardType="numeric"
+                    />
+                  </View>
                 </View>
               </View>
 
               {/* Address Section */}
-              <Text style={[styles.label, { marginTop: 8 }]}>Street Address / Building</Text>
+              <Text style={[styles.label, { marginTop: 8 }]}>Street Address / Building <Text style={styles.labelOptional}>(Optional)</Text></Text>
 
               <View style={styles.inputGroup}>
                 <View style={[styles.inputWrapper, focusedInput === 'address' && styles.inputWrapperFocused]}>
@@ -876,41 +1113,10 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                 </View>
               </View>
 
-              {/* Area / Locality */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Area / Locality</Text>
-                <View style={[styles.inputWrapper, focusedInput === 'area' && styles.inputWrapperFocused]}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Indiranagar, Bandra West"
-                    placeholderTextColor="#9CA3AF"
-                    value={formData.area}
-                    onChangeText={(value) => handleInputChange('area', value)}
-                    onFocus={() => setFocusedInput('area')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                </View>
-              </View>
-
-              {/* Landmark */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Landmark <Text style={styles.labelOptional}>(Optional)</Text></Text>
-                <View style={[styles.inputWrapper, focusedInput === 'landmark' && styles.inputWrapperFocused]}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Near City Hospital"
-                    placeholderTextColor="#9CA3AF"
-                    value={formData.landmark}
-                    onChangeText={(value) => handleInputChange('landmark', value)}
-                    onFocus={() => setFocusedInput('landmark')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                </View>
-              </View>
-
+              {/* City and State in a row */}
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>City</Text>
+                  <Text style={styles.label}>City <Text style={styles.labelOptional}>(Optional)</Text></Text>
                   <View style={[styles.inputWrapper, focusedInput === 'city' && styles.inputWrapperFocused]}>
                     <TextInput
                       style={styles.input}
@@ -925,24 +1131,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                 </View>
 
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>District</Text>
-                  <View style={[styles.inputWrapper, focusedInput === 'district' && styles.inputWrapperFocused]}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="District"
-                      placeholderTextColor="#9CA3AF"
-                      value={formData.district}
-                      onChangeText={(value) => handleInputChange('district', value)}
-                      onFocus={() => setFocusedInput('district')}
-                      onBlur={() => setFocusedInput(null)}
-                    />
-                  </View>
-                </View>
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>State</Text>
+                  <Text style={styles.label}>State <Text style={styles.labelOptional}>(Optional)</Text></Text>
                   <View style={[styles.inputWrapper, focusedInput === 'state' && styles.inputWrapperFocused]}>
                     <TextInput
                       style={styles.input}
@@ -955,22 +1144,29 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                     />
                   </View>
                 </View>
+              </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Pincode</Text>
-                  <View style={[styles.inputWrapper, focusedInput === 'pincode' && styles.inputWrapperFocused]}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Pincode"
-                      placeholderTextColor="#9CA3AF"
-                      value={formData.pincode}
-                      onChangeText={(value) => handleInputChange('pincode', value)}
-                      onFocus={() => setFocusedInput('pincode')}
-                      onBlur={() => setFocusedInput(null)}
-                      keyboardType="numeric"
-                      maxLength={6}
-                    />
-                  </View>
+              {/* Pincode */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Pincode <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                <View style={[styles.inputWrapper, focusedInput === 'pincode' && styles.inputWrapperFocused]}>
+                  <MapPin
+                    color={focusedInput === 'pincode' ? '#2D6A4F' : '#9CA3AF'}
+                    size={20}
+                    strokeWidth={2}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Pincode"
+                    placeholderTextColor="#9CA3AF"
+                    value={formData.pincode}
+                    onChangeText={(value) => handleInputChange('pincode', value)}
+                    onFocus={() => setFocusedInput('pincode')}
+                    onBlur={() => setFocusedInput(null)}
+                    keyboardType="numeric"
+                    maxLength={6}
+                  />
                 </View>
               </View>
             </View>
@@ -1039,19 +1235,6 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
           <Text style={styles.dividerText}>or continue with</Text>
           <View style={styles.dividerLine} />
         </View>
-
-        {/* Social Buttons
-        <View style={styles.socialButtons}>
-          <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
-            <View style={styles.googleIcon}>
-              <Text style={styles.googleIconText}>G</Text>
-            </View>
-            <Text style={styles.socialButtonText}>Google</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
-            <Text style={styles.socialButtonText}>🍎 Apple</Text>
-          </TouchableOpacity>
-        </View> */}
 
         {/* Login Link */}
         <View style={styles.loginLinkContainer}>
@@ -1413,6 +1596,80 @@ const styles = StyleSheet.create({
     right: 16,
     padding: 4,
   },
+  textAreaWrapper: {
+    flexDirection: 'row',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 100,
+  },
+  textAreaIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  textArea: {
+    flex: 1,
+    fontSize: 14,
+    color: '#111827',
+    minHeight: 80,
+  },
+  documentUploadContainer: {
+    marginTop: 4,
+  },
+  documentUploadButton: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    gap: 8,
+  },
+  documentUploadText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2D6A4F',
+    marginTop: 8,
+  },
+  documentUploadSubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  documentPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+  },
+  documentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  documentDetails: {
+    flex: 1,
+  },
+  documentName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  documentSize: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  documentRemoveButton: {
+    padding: 8,
+  },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1553,41 +1810,6 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontWeight: '500',
     marginHorizontal: 16,
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-  },
-  socialButton: {
-    flex: 1,
-    height: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-  },
-  googleIcon: {
-    width: 20,
-    height: 20,
-    backgroundColor: '#3B82F6',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  googleIconText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  socialButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
   },
   loginLinkContainer: {
     flexDirection: 'row',

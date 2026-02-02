@@ -1,5 +1,18 @@
 import React, { useState } from 'react';
 import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  TextInput,
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
+  Dimensions,
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
   Building2,
   Search,
   MapPin,
@@ -18,10 +31,12 @@ import {
   Grid3x3,
   List,
   Award,
-  Sparkles,
-} from 'lucide-react';
+  Sparkles
+} from 'lucide-react-native';
 
-export default function ExploreProperties() {
+const { width } = Dimensions.get('window');
+
+const ExploreProperties = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('All');
   const [selectedStatus, setSelectedStatus] = useState('All');
@@ -141,15 +156,15 @@ export default function ExploreProperties() {
   const getStatusConfig = (status) => {
     switch (status) {
       case 'Featured':
-        return { bg: 'from-amber-500 to-orange-500', icon: Sparkles };
+        return { colors: ['#f59e0b', '#f97316'], icon: Sparkles };
       case 'New':
-        return { bg: 'from-emerald-500 to-teal-500', icon: Award };
+        return { colors: ['#10b981', '#14b8a6'], icon: Award };
       case 'Ready':
-        return { bg: 'from-blue-500 to-indigo-500', icon: Home };
+        return { colors: ['#3b82f6', '#6366f1'], icon: Home };
       case 'Under Construction':
-        return { bg: 'from-orange-500 to-red-500', icon: Building2 };
+        return { colors: ['#f97316', '#ef4444'], icon: Building2 };
       default:
-        return { bg: 'from-gray-500 to-gray-600', icon: Star };
+        return { colors: ['#6b7280', '#4b5563'], icon: Star };
     }
   };
 
@@ -181,369 +196,1210 @@ export default function ExploreProperties() {
   const hasActiveFilters = selectedType !== 'All' || selectedStatus !== 'All' || searchQuery !== '';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
       {/* Animated Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200 opacity-30 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-indigo-200 opacity-30 rounded-full blur-3xl animate-pulse"></div>
-      </div>
+      <View style={styles.backgroundContainer}>
+        <View style={[styles.backgroundBlob, styles.backgroundBlob1]} />
+        <View style={[styles.backgroundBlob, styles.backgroundBlob2]} />
+      </View>
 
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-white bg-opacity-70 backdrop-blur-xl border-b border-white border-opacity-20 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          {/* Top Bar */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg">
-                  <Building2 size={24} className="text-white" strokeWidth={2.5} />
-                </div>
-                <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">
-                  EstateHub
-                </h1>
-                <p className="text-xs text-gray-500">Premium Properties</p>
-              </div>
-            </div>
-            <button className="relative w-11 h-11 bg-white rounded-2xl flex items-center justify-center shadow-md transition-all hover:scale-105">
-              <Heart size={20} className="text-gray-700" strokeWidth={2} />
-              {favorites.length > 0 && (
-                <span className="absolute -top-2 -right-2 min-w-[20px] h-5 bg-gradient-to-r from-red-500 to-pink-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5 shadow-lg">
-                  {favorites.length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Hero */}
-          <div className="mb-6">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              Discover Your <span className="bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">Dream Home</span>
-            </h2>
-            <p className="text-gray-600">
-              Explore premium properties curated just for you
-            </p>
-          </div>
-
-          {/* Search */}
-          <div className="relative mb-5">
-            <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl blur opacity-20"></div>
-            <div className="relative bg-white rounded-2xl shadow-xl">
-              <Search size={20} className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400" strokeWidth={2} />
-              <input
-                type="text"
-                placeholder="Search by location, project name, or developer..."
-                className="w-full h-14 bg-transparent pl-14 pr-32 text-gray-900 placeholder-gray-400 focus:outline-none rounded-2xl"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-                <button className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors flex items-center gap-2">
-                  <MapPin size={16} className="text-gray-600" strokeWidth={2} />
-                  <span className="text-sm font-medium text-gray-700">Near me</span>
-                </button>
-                <button className="w-10 h-10 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center transition-all hover:scale-105">
-                  <Search size={18} className="text-white" strokeWidth={2} />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Type Filters */}
-          <div className="flex items-center gap-3 mb-4 overflow-x-auto pb-2 no-scrollbar">
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-medium shadow-lg transition-all hover:scale-105 whitespace-nowrap">
-              <Filter size={18} strokeWidth={2} />
-              <span>Filters</span>
-              {hasActiveFilters && (
-                <span className="w-2 h-2 bg-yellow-400 rounded-full"></span>
-              )}
-            </button>
-            {propertyTypes.map((type) => (
-              <button
-                key={type}
-                onClick={() => setSelectedType(type)}
-                className={`px-5 py-2.5 rounded-xl font-medium whitespace-nowrap transition-all hover:scale-105 ${
-                  selectedType === type
-                    ? 'bg-white text-blue-600 shadow-lg'
-                    : 'bg-white bg-opacity-60 text-gray-700 hover:bg-white hover:shadow-md'
-                }`}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View style={styles.headerLeft}>
+            <View style={styles.logoContainer}>
+              <LinearGradient
+                colors={['#2563eb', '#6366f1']}
+                style={styles.logoGradient}
               >
-                {type}
-              </button>
-            ))}
-          </div>
-
-          {/* Status Filters */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-              {statusOptions.map((status) => {
-                const config = getStatusConfig(status);
-                const StatusIcon = config.icon;
-                return (
-                  <button
-                    key={status}
-                    onClick={() => setSelectedStatus(status)}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
-                      selectedStatus === status
-                        ? `bg-gradient-to-r ${config.bg} text-white shadow-lg`
-                        : 'bg-white bg-opacity-60 text-gray-700 hover:bg-white hover:shadow-md'
-                    }`}
-                  >
-                    {selectedStatus === status && <StatusIcon size={14} strokeWidth={2} />}
-                    {status}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
-                  viewMode === 'grid'
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white bg-opacity-60 text-gray-600 hover:bg-white'
-                }`}
+                <Building2 width={24} height={24} color="#ffffff" strokeWidth={2.5} />
+              </LinearGradient>
+              <View style={styles.onlineIndicator} />
+            </View>
+            <View>
+              <Text style={styles.appName}>EstateHub</Text>
+              <Text style={styles.appTagline}>Premium Properties</Text>
+            </View>
+          </View>
+          
+          <TouchableOpacity style={styles.favoritesButton}>
+            <Heart width={20} height={20} color="#374151" strokeWidth={2} />
+            {favorites.length > 0 && (
+              <LinearGradient
+                colors={['#ef4444', '#ec4899']}
+                style={styles.favoritesBadge}
               >
-                <Grid3x3 size={18} strokeWidth={2} />
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${
-                  viewMode === 'list'
-                    ? 'bg-blue-600 text-white shadow-lg'
-                    : 'bg-white bg-opacity-60 text-gray-600 hover:bg-white'
-                }`}
-              >
-                <List size={18} strokeWidth={2} />
-              </button>
-            </div>
-          </div>
-
-          {/* Summary */}
-          <div className="flex items-center justify-between bg-white bg-opacity-60 backdrop-blur-sm rounded-xl px-4 py-3">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center">
-                <TrendingUp size={18} className="text-white" strokeWidth={2} />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">Found Properties</p>
-                <p className="text-lg font-bold text-gray-900">{filteredProperties.length} listings</p>
-              </div>
-            </div>
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="px-4 py-2 bg-white hover:bg-gray-50 text-blue-600 font-medium rounded-xl shadow-md transition-all hover:scale-105"
-              >
-                Clear All
-              </button>
+                <Text style={styles.favoritesBadgeText}>{favorites.length}</Text>
+              </LinearGradient>
             )}
-          </div>
-        </div>
-      </div>
+          </TouchableOpacity>
+        </View>
+
+        {/* Hero */}
+        <View style={styles.heroSection}>
+          <Text style={styles.heroTitle}>
+            Discover Your <Text style={styles.heroTitleGradient}>Dream Home</Text>
+          </Text>
+          <Text style={styles.heroSubtitle}>
+            Explore premium properties curated just for you
+          </Text>
+        </View>
+
+        {/* Search */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchWrapper}>
+            <Search width={20} height={20} color="#9ca3af" strokeWidth={2} style={styles.searchIcon} />
+            <TextInput
+              placeholder="Search by location, project name..."
+              placeholderTextColor="#9ca3af"
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            <View style={styles.searchActions}>
+              <TouchableOpacity style={styles.nearMeButton}>
+                <MapPin width={16} height={16} color="#6b7280" strokeWidth={2} />
+                <Text style={styles.nearMeText}>Near me</Text>
+              </TouchableOpacity>
+              <TouchableOpacity>
+                <LinearGradient
+                  colors={['#2563eb', '#6366f1']}
+                  style={styles.searchActionButton}
+                >
+                  <Search width={18} height={18} color="#ffffff" strokeWidth={2} />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* Type Filters */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.typeFiltersScroll}
+        >
+          <TouchableOpacity style={styles.filtersMainButton}>
+            <LinearGradient
+              colors={['#2563eb', '#6366f1']}
+              style={styles.filtersMainButtonGradient}
+            >
+              <Filter width={18} height={18} color="#ffffff" strokeWidth={2} />
+              <Text style={styles.filtersMainButtonText}>Filters</Text>
+              {hasActiveFilters && <View style={styles.activeFilterDot} />}
+            </LinearGradient>
+          </TouchableOpacity>
+          
+          {propertyTypes.map((type) => (
+            <TouchableOpacity
+              key={type}
+              onPress={() => setSelectedType(type)}
+              style={[
+                styles.typeFilterButton,
+                selectedType === type && styles.typeFilterButtonActive
+              ]}
+            >
+              <Text style={[
+                styles.typeFilterText,
+                selectedType === type && styles.typeFilterTextActive
+              ]}>
+                {type}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        {/* Status Filters & View Mode */}
+        <View style={styles.statusFiltersContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.statusFiltersScroll}
+            contentContainerStyle={styles.statusFiltersContent}
+          >
+            {statusOptions.map((status) => {
+              const config = getStatusConfig(status);
+              const StatusIcon = config.icon;
+              const isActive = selectedStatus === status;
+              
+              return (
+                <TouchableOpacity
+                  key={status}
+                  onPress={() => setSelectedStatus(status)}
+                  style={styles.statusFilterButton}
+                >
+                  {isActive ? (
+                    <LinearGradient
+                      colors={config.colors}
+                      style={styles.statusFilterActive}
+                    >
+                      <StatusIcon width={14} height={14} color="#ffffff" strokeWidth={2} />
+                      <Text style={styles.statusFilterTextActive}>{status}</Text>
+                    </LinearGradient>
+                  ) : (
+                    <View style={styles.statusFilterInactive}>
+                      <Text style={styles.statusFilterTextInactive}>{status}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+          
+          <View style={styles.viewModeButtons}>
+            <TouchableOpacity
+              onPress={() => setViewMode('grid')}
+              style={[
+                styles.viewModeButton,
+                viewMode === 'grid' && styles.viewModeButtonActive
+              ]}
+            >
+              <Grid3x3 
+                width={18} 
+                height={18} 
+                color={viewMode === 'grid' ? '#ffffff' : '#6b7280'} 
+                strokeWidth={2} 
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setViewMode('list')}
+              style={[
+                styles.viewModeButton,
+                viewMode === 'list' && styles.viewModeButtonActive
+              ]}
+            >
+              <List 
+                width={18} 
+                height={18} 
+                color={viewMode === 'list' ? '#ffffff' : '#6b7280'} 
+                strokeWidth={2} 
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Summary */}
+        <View style={styles.summaryContainer}>
+          <View style={styles.summaryLeft}>
+            <LinearGradient
+              colors={['#3b82f6', '#6366f1']}
+              style={styles.summaryIcon}
+            >
+              <TrendingUp width={18} height={18} color="#ffffff" strokeWidth={2} />
+            </LinearGradient>
+            <View>
+              <Text style={styles.summaryLabel}>Found Properties</Text>
+              <Text style={styles.summaryValue}>{filteredProperties.length} listings</Text>
+            </View>
+          </View>
+          
+          {hasActiveFilters && (
+            <TouchableOpacity
+              onPress={clearFilters}
+              style={styles.clearButton}
+            >
+              <Text style={styles.clearButtonText}>Clear All</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
       {/* Property Grid */}
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-32">
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
         {filteredProperties.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <View style={styles.propertyGrid}>
             {filteredProperties.map((property) => {
               const statusConfig = getStatusConfig(property.status);
               const StatusIcon = statusConfig.icon;
+              const isFavorite = favorites.includes(property.id);
               
               return (
-                <div
+                <TouchableOpacity
                   key={property.id}
-                  className="group bg-white rounded-3xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 cursor-pointer"
+                  style={styles.propertyCard}
+                  activeOpacity={0.9}
                 >
                   {/* Image */}
-                  <div className="relative h-64 overflow-hidden">
-                    <img
-                      src={property.image}
-                      alt={property.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                  <View style={styles.propertyImageContainer}>
+                    <Image
+                      source={{ uri: property.image }}
+                      style={styles.propertyImage}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black from-opacity-60 via-transparent to-transparent"></div>
+                    <LinearGradient
+                      colors={['transparent', 'rgba(0,0,0,0.6)']}
+                      style={styles.propertyImageGradient}
+                    />
                     
-                    {/* Status */}
-                    <div className={`absolute top-4 left-4 flex items-center gap-2 px-3 py-2 bg-gradient-to-r ${statusConfig.bg} rounded-xl shadow-lg backdrop-blur-sm`}>
-                      <StatusIcon size={14} className="text-white" strokeWidth={2} />
-                      <span className="text-white text-xs font-bold">{property.status}</span>
-                    </div>
+                    {/* Status Badge */}
+                    <View style={styles.statusBadgeContainer}>
+                      <LinearGradient
+                        colors={statusConfig.colors}
+                        style={styles.statusBadge}
+                      >
+                        <StatusIcon width={14} height={14} color="#ffffff" strokeWidth={2} />
+                        <Text style={styles.statusBadgeText}>{property.status}</Text>
+                      </LinearGradient>
+                    </View>
 
-                    {/* Favorite */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavorite(property.id);
-                      }}
-                      className="absolute top-4 right-4 w-11 h-11 bg-white bg-opacity-95 backdrop-blur-sm rounded-xl flex items-center justify-center hover:bg-white transition-all hover:scale-110 shadow-lg"
+                    {/* Favorite Button */}
+                    <TouchableOpacity
+                      onPress={() => toggleFavorite(property.id)}
+                      style={styles.favoriteButton}
                     >
                       <Heart
-                        size={20}
-                        className={favorites.includes(property.id) ? 'text-red-500' : 'text-gray-700'}
-                        fill={favorites.includes(property.id) ? '#EF4444' : 'none'}
+                        width={20}
+                        height={20}
+                        color={isFavorite ? '#ef4444' : '#374151'}
+                        fill={isFavorite ? '#ef4444' : 'none'}
                         strokeWidth={2}
                       />
-                    </button>
+                    </TouchableOpacity>
 
                     {/* Rating */}
-                    <div className="absolute bottom-4 left-4 flex items-center gap-1.5 px-3 py-1.5 bg-white bg-opacity-95 backdrop-blur-sm rounded-xl shadow-lg">
-                      <Star size={14} className="text-yellow-500" fill="#EAB308" strokeWidth={2} />
-                      <span className="text-sm font-bold text-gray-900">{property.rating}</span>
-                    </div>
+                    <View style={styles.ratingBadge}>
+                      <Star width={14} height={14} color="#eab308" fill="#eab308" strokeWidth={2} />
+                      <Text style={styles.ratingText}>{property.rating}</Text>
+                    </View>
 
                     {/* Views */}
-                    <div className="absolute bottom-4 right-4 flex items-center gap-1.5 px-3 py-1.5 bg-white bg-opacity-95 backdrop-blur-sm rounded-xl shadow-lg">
-                      <Eye size={14} className="text-gray-600" strokeWidth={2} />
-                      <span className="text-xs font-semibold text-gray-700">{property.views}</span>
-                    </div>
-                  </div>
+                    <View style={styles.viewsBadge}>
+                      <Eye width={14} height={14} color="#6b7280" strokeWidth={2} />
+                      <Text style={styles.viewsText}>{property.views}</Text>
+                    </View>
+                  </View>
 
                   {/* Content */}
-                  <div className="p-5">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                  <View style={styles.propertyContent}>
+                    <Text style={styles.propertyName} numberOfLines={1}>
                       {property.name}
-                    </h3>
-                    <div className="flex items-center gap-2 mb-4">
-                      <MapPin size={16} className="text-gray-500" strokeWidth={2} />
-                      <span className="text-sm text-gray-600">{property.location}</span>
-                    </div>
+                    </Text>
+                    
+                    <View style={styles.propertyLocation}>
+                      <MapPin width={16} height={16} color="#9ca3af" strokeWidth={2} />
+                      <Text style={styles.propertyLocationText} numberOfLines={1}>
+                        {property.location}
+                      </Text>
+                    </View>
 
                     {/* Stats */}
-                    <div className="grid grid-cols-3 gap-3 mb-4 pb-4 border-b border-gray-100">
-                      <div className="text-center">
-                        <div className="w-10 h-10 mx-auto mb-1 bg-blue-50 rounded-xl flex items-center justify-center">
-                          <Home size={18} className="text-blue-600" strokeWidth={2} />
-                        </div>
-                        <p className="text-xs font-semibold text-gray-900">{property.bhk}</p>
-                      </div>
-                      <div className="text-center">
-                        <div className="w-10 h-10 mx-auto mb-1 bg-indigo-50 rounded-xl flex items-center justify-center">
-                          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" className="text-indigo-600">
-                            <path stroke="currentColor" strokeWidth="2" d="M12 21C16.9706 21 21 16.9706 21 12C21 7.02944 16.9706 3 12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21Z"/>
-                            <path stroke="currentColor" strokeWidth="2" d="M12 7V12L15 15"/>
-                          </svg>
-                        </div>
-                        <p className="text-xs font-semibold text-gray-900">{property.bathrooms} Bath</p>
-                      </div>
-                      <div className="text-center">
-                        <div className="w-10 h-10 mx-auto mb-1 bg-purple-50 rounded-xl flex items-center justify-center">
-                          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" className="text-purple-600">
-                            <path stroke="currentColor" strokeWidth="2" d="M19 17H5M19 17C20.1046 17 21 16.1046 21 15V7C21 5.89543 20.1046 5 19 5H5C3.89543 5 3 5.89543 3 7V15C3 16.1046 3.89543 17 5 17M19 17V20M5 17V20"/>
-                          </svg>
-                        </div>
-                        <p className="text-xs font-semibold text-gray-900">{property.parking} Park</p>
-                      </div>
-                    </div>
+                    <View style={styles.propertyStats}>
+                      <View style={styles.propertyStat}>
+                        <View style={styles.propertyStatIconBlue}>
+                          <Home width={18} height={18} color="#2563eb" strokeWidth={2} />
+                        </View>
+                        <Text style={styles.propertyStatText}>{property.bhk}</Text>
+                      </View>
+                      
+                      <View style={styles.propertyStat}>
+                        <View style={styles.propertyStatIconIndigo}>
+                          <Text style={styles.bathIcon}>🚿</Text>
+                        </View>
+                        <Text style={styles.propertyStatText}>{property.bathrooms} Bath</Text>
+                      </View>
+                      
+                      <View style={styles.propertyStat}>
+                        <View style={styles.propertyStatIconPurple}>
+                          <Text style={styles.parkIcon}>🚗</Text>
+                        </View>
+                        <Text style={styles.propertyStatText}>{property.parking} Park</Text>
+                      </View>
+                    </View>
 
                     {/* Size & Year */}
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <Maximize2 size={16} className="text-gray-500" strokeWidth={2} />
-                        <span className="text-sm font-medium text-gray-700">{property.size}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Calendar size={16} className="text-gray-500" strokeWidth={2} />
-                        <span className="text-sm font-medium text-gray-700">{property.yearBuilt}</span>
-                      </div>
-                    </div>
+                    <View style={styles.propertyDetails}>
+                      <View style={styles.propertyDetail}>
+                        <Maximize2 width={16} height={16} color="#9ca3af" strokeWidth={2} />
+                        <Text style={styles.propertyDetailText}>{property.size}</Text>
+                      </View>
+                      <View style={styles.propertyDetail}>
+                        <Calendar width={16} height={16} color="#9ca3af" strokeWidth={2} />
+                        <Text style={styles.propertyDetailText}>{property.yearBuilt}</Text>
+                      </View>
+                    </View>
 
                     {/* Price & CTA */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Starting from</p>
-                        <p className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 text-transparent bg-clip-text">
-                          {formatPrice(property.price)}
-                        </p>
-                      </div>
-                      <button className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-lg transition-all hover:scale-105">
-                        <span>View</span>
-                        <ChevronRight size={18} strokeWidth={2} />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                    <View style={styles.propertyFooter}>
+                      <View>
+                        <Text style={styles.priceLabel}>Starting from</Text>
+                        <Text style={styles.priceValue}>{formatPrice(property.price)}</Text>
+                      </View>
+                      
+                      <TouchableOpacity>
+                        <LinearGradient
+                          colors={['#2563eb', '#6366f1']}
+                          style={styles.viewButton}
+                        >
+                          <Text style={styles.viewButtonText}>View</Text>
+                          <ChevronRight width={18} height={18} color="#ffffff" strokeWidth={2} />
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableOpacity>
               );
             })}
-          </div>
+          </View>
         ) : (
           /* Empty State */
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="relative mb-6">
-              <div className="w-32 h-32 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center">
-                <Search size={64} className="text-blue-600" strokeWidth={1.5} />
-              </div>
-              <div className="absolute -top-2 -right-2 w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-full flex items-center justify-center shadow-xl">
-                <Heart size={24} className="text-white" strokeWidth={2} />
-              </div>
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-3">No Properties Found</h3>
-            <p className="text-gray-600 mb-6 text-center max-w-md">
+          <View style={styles.emptyState}>
+            <View style={styles.emptyStateIconContainer}>
+              <View style={styles.emptyStateIconBg}>
+                <Search width={64} height={64} color="#2563eb" strokeWidth={1.5} />
+              </View>
+              <View style={styles.emptyStateIconBadge}>
+                <LinearGradient
+                  colors={['#2563eb', '#6366f1']}
+                  style={styles.emptyStateIconBadgeGradient}
+                >
+                  <Heart width={24} height={24} color="#ffffff" strokeWidth={2} />
+                </LinearGradient>
+              </View>
+            </View>
+            
+            <Text style={styles.emptyStateTitle}>No Properties Found</Text>
+            <Text style={styles.emptyStateText}>
               We couldn't find any properties matching your criteria. Try adjusting your filters.
-            </p>
-            <button
-              onClick={clearFilters}
-              className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-semibold shadow-xl transition-all hover:scale-105"
-            >
-              Clear All Filters
-            </button>
-          </div>
+            </Text>
+            
+            <TouchableOpacity onPress={clearFilters}>
+              <LinearGradient
+                colors={['#2563eb', '#6366f1']}
+                style={styles.emptyStateButton}
+              >
+                <Text style={styles.emptyStateButtonText}>Clear All Filters</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         )}
-      </div>
+      </ScrollView>
 
       {/* FAB */}
-      <button className="fixed bottom-28 right-6 w-16 h-16 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-2xl transition-all hover:scale-110 z-40">
-        <Plus size={28} className="text-white" strokeWidth={2.5} />
-      </button>
+      <TouchableOpacity style={styles.fab}>
+        <LinearGradient
+          colors={['#2563eb', '#6366f1']}
+          style={styles.fabGradient}
+        >
+          <Plus width={28} height={28} color="#ffffff" strokeWidth={2.5} />
+        </LinearGradient>
+      </TouchableOpacity>
 
       {/* Bottom Nav */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white bg-opacity-80 backdrop-blur-xl border-t border-white border-opacity-20 shadow-2xl">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex justify-around items-center">
-            <button className="flex flex-col items-center gap-1.5 transition-all hover:scale-110">
-              <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <Home size={24} className="text-white" strokeWidth={2} />
-              </div>
-              <span className="text-xs font-bold text-blue-600">Explore</span>
-            </button>
-            <button className="flex flex-col items-center gap-1.5 transition-all hover:scale-110">
-              <div className="relative w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center">
-                <Heart size={24} className="text-gray-500" strokeWidth={2} />
-                {favorites.length > 0 && (
-                  <span className="absolute -top-2 -right-2 min-w-[20px] h-5 bg-gradient-to-r from-red-500 to-pink-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5 shadow-lg">
-                    {favorites.length}
-                  </span>
-                )}
-              </div>
-              <span className="text-xs font-medium text-gray-500">Saved</span>
-            </button>
-            <button className="flex flex-col items-center gap-1.5 transition-all hover:scale-110">
-              <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center">
-                <Bell size={24} className="text-gray-500" strokeWidth={2} />
-              </div>
-              <span className="text-xs font-medium text-gray-500">Alerts</span>
-            </button>
-            <button className="flex flex-col items-center gap-1.5 transition-all hover:scale-110">
-              <div className="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center">
-                <User size={24} className="text-gray-500" strokeWidth={2} />
-              </div>
-              <span className="text-xs font-medium text-gray-500">Profile</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <style>{`
-        .no-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
-    </div>
+      <View style={styles.bottomNav}>
+        <TouchableOpacity style={styles.navItem}>
+          <LinearGradient
+            colors={['#2563eb', '#6366f1']}
+            style={styles.navItemActive}
+          >
+            <Home width={24} height={24} color="#ffffff" strokeWidth={2} />
+          </LinearGradient>
+          <Text style={styles.navItemTextActive}>Explore</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.navItem}>
+          <View style={styles.navItemInactive}>
+            <Heart width={24} height={24} color="#9ca3af" strokeWidth={2} />
+            {favorites.length > 0 && (
+              <LinearGradient
+                colors={['#ef4444', '#ec4899']}
+                style={styles.navBadge}
+              >
+                <Text style={styles.navBadgeText}>{favorites.length}</Text>
+              </LinearGradient>
+            )}
+          </View>
+          <Text style={styles.navItemTextInactive}>Saved</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.navItem}>
+          <View style={styles.navItemInactive}>
+            <Bell width={24} height={24} color="#9ca3af" strokeWidth={2} />
+          </View>
+          <Text style={styles.navItemTextInactive}>Alerts</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.navItem}>
+          <View style={styles.navItemInactive}>
+            <User width={24} height={24} color="#9ca3af" strokeWidth={2} />
+          </View>
+          <Text style={styles.navItemTextInactive}>Profile</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
-}
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc'
+  },
+  
+  // Background
+  backgroundContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden'
+  },
+  backgroundBlob: {
+    position: 'absolute',
+    borderRadius: 9999,
+    opacity: 0.3
+  },
+  backgroundBlob1: {
+    top: 80,
+    left: 40,
+    width: 288,
+    height: 288,
+    backgroundColor: '#bfdbfe'
+  },
+  backgroundBlob2: {
+    bottom: 80,
+    right: 40,
+    width: 384,
+    height: 384,
+    backgroundColor: '#c7d2fe'
+  },
+  
+  // Header
+  header: {
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 12
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12
+  },
+  logoContainer: {
+    position: 'relative'
+  },
+  logoGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    width: 16,
+    height: 16,
+    backgroundColor: '#10b981',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#ffffff'
+  },
+  appName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2563eb'
+  },
+  appTagline: {
+    fontSize: 12,
+    color: '#9ca3af'
+  },
+  favoritesButton: {
+    position: 'relative',
+    width: 44,
+    height: 44,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  favoritesBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4
+  },
+  favoritesBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: 'bold'
+  },
+  
+  // Hero
+  heroSection: {
+    marginBottom: 24
+  },
+  heroTitle: {
+    fontSize: 30,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 8
+  },
+  heroTitleGradient: {
+    color: '#2563eb'
+  },
+  heroSubtitle: {
+    fontSize: 16,
+    color: '#6b7280'
+  },
+  
+  // Search
+  searchContainer: {
+    marginBottom: 20
+  },
+  searchWrapper: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5
+  },
+  searchIcon: {
+    marginRight: 12
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#111827'
+  },
+  searchActions: {
+    flexDirection: 'row',
+    gap: 8
+  },
+  nearMeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12
+  },
+  nearMeText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151'
+  },
+  searchActionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  
+  // Type Filters
+  typeFiltersScroll: {
+    paddingVertical: 8,
+    paddingRight: 16,
+    gap: 12
+  },
+  filtersMainButton: {
+    marginRight: 12
+  },
+  filtersMainButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  filtersMainButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '500'
+  },
+  activeFilterDot: {
+    width: 8,
+    height: 8,
+    backgroundColor: '#fbbf24',
+    borderRadius: 4
+  },
+  typeFilterButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: 12,
+    marginRight: 8
+  },
+  typeFilterButtonActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  typeFilterText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#374151'
+  },
+  typeFilterTextActive: {
+    color: '#2563eb'
+  },
+  
+  // Status Filters & View Mode
+  statusFiltersContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 16,
+    marginVertical: 16
+  },
+  statusFiltersScroll: {
+    flex: 1
+  },
+  statusFiltersContent: {
+    paddingRight: 16,
+    gap: 8
+  },
+  statusFilterButton: {
+    marginRight: 8
+  },
+  statusFilterActive: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  statusFilterTextActive: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '500'
+  },
+  statusFilterInactive: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: 12
+  },
+  statusFilterTextInactive: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151'
+  },
+  viewModeButtons: {
+    flexDirection: 'row',
+    gap: 8
+  },
+  viewModeButton: {
+    width: 36,
+    height: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  viewModeButtonActive: {
+    backgroundColor: '#2563eb',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  
+  // Summary
+  summaryContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12
+  },
+  summaryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12
+  },
+  summaryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#6b7280'
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827'
+  },
+  clearButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2
+  },
+  clearButtonText: {
+    color: '#2563eb',
+    fontSize: 14,
+    fontWeight: '500'
+  },
+  
+  // Scroll View
+  scrollView: {
+    flex: 1
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 120
+  },
+  
+  // Property Grid
+  propertyGrid: {
+    gap: 24
+  },
+  propertyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5
+  },
+  propertyImageContainer: {
+    height: 256,
+    position: 'relative'
+  },
+  propertyImage: {
+    width: '100%',
+    height: '100%'
+  },
+  propertyImageGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '50%'
+  },
+  statusBadgeContainer: {
+    position: 'absolute',
+    top: 16,
+    left: 16
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  statusBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: 'bold'
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  ratingBadge: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  ratingText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#111827'
+  },
+  viewsBadge: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  viewsText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151'
+  },
+  
+  // Property Content
+  propertyContent: {
+    padding: 20
+  },
+  propertyName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 8
+  },
+  propertyLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16
+  },
+  propertyLocationText: {
+    fontSize: 14,
+    color: '#6b7280',
+    flex: 1
+  },
+  propertyStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6'
+  },
+  propertyStat: {
+    alignItems: 'center',
+    flex: 1
+  },
+  propertyStatIconBlue: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+    backgroundColor: '#eff6ff'
+  },
+  propertyStatIconIndigo: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+    backgroundColor: '#eef2ff'
+  },
+  propertyStatIconPurple: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+    backgroundColor: '#faf5ff'
+  },
+  bathIcon: {
+    fontSize: 18
+  },
+  parkIcon: {
+    fontSize: 18
+  },
+  propertyStatText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#111827'
+  },
+  propertyDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16
+  },
+  propertyDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
+  },
+  propertyDetailText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151'
+  },
+  propertyFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  priceLabel: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginBottom: 4
+  },
+  priceValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2563eb'
+  },
+  viewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  viewButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600'
+  },
+  
+  // Empty State
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 80
+  },
+  emptyStateIconContainer: {
+    position: 'relative',
+    marginBottom: 24
+  },
+  emptyStateIconBg: {
+    width: 128,
+    height: 128,
+    backgroundColor: '#eff6ff',
+    borderRadius: 64,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  emptyStateIconBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8
+  },
+  emptyStateIconBadgeGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8
+  },
+  emptyStateTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 12
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 32,
+    lineHeight: 24
+  },
+  emptyStateButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8
+  },
+  emptyStateButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600'
+  },
+  
+  // FAB
+  fab: {
+    position: 'absolute',
+    bottom: 112,
+    right: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8
+  },
+  fabGradient: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  
+  // Bottom Nav
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8
+  },
+  navItem: {
+    alignItems: 'center',
+    gap: 6
+  },
+  navItemActive: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  navItemInactive: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative'
+  },
+  navBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4
+  },
+  navBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: 'bold'
+  },
+  navItemTextActive: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#2563eb'
+  },
+  navItemTextInactive: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#9ca3af'
+  }
+});
+
+export default ExploreProperties;
