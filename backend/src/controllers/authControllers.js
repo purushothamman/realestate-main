@@ -1044,7 +1044,7 @@ module.exports.getProfile = async (req, res) => {
 
         // Fetch basic user info
         const [users] = await pool.query(
-            "SELECT id, name, email, phone, role, is_verified, profile_image FROM users WHERE id = ?",
+            "SELECT id, name, email, phone, role, is_verified FROM users WHERE id = ?",
             [userId]
         );
 
@@ -1074,7 +1074,7 @@ module.exports.getProfile = async (req, res) => {
             phone: user.phone,
             role: user.role,
             isVerified: user.is_verified,
-            profileImage: user.profile_image
+            // profileImage: user.profile_image
         };
 
         // Add builder specific fields
@@ -1121,7 +1121,7 @@ module.exports.verifyOtp = async (req, res) => {
 
         // Find the most recent OTP for this email and purpose
         const [otpRecords] = await pool.query(
-            `SELECT ov.*, u.id as user_id, u.name, u.email, u.phone, u.role, u.profile_image, u.is_verified
+            `SELECT ov.*, u.id as user_id, u.name, u.email, u.phone, u.role, u.is_verified
              FROM otp_verifications ov
              JOIN users u ON ov.user_id = u.id
              WHERE ov.email = ? AND ov.purpose = ? AND ov.is_used = false
@@ -1193,7 +1193,7 @@ module.exports.verifyOtp = async (req, res) => {
                 email: otpRecord.email,
                 phone: otpRecord.phone,
                 role: otpRecord.role,
-                profileImage: otpRecord.profile_image,
+                // profileImage: otpRecord.profile_image,
                 isVerified: true
             }
         });

@@ -204,3 +204,65 @@ select * from users;
 UPDATE builders
 SET verification_status = 'verified'
 WHERE id = 4;
+
+CREATE TABLE property_types (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+
+  name VARCHAR(50) NOT NULL UNIQUE,
+  category ENUM('residential','commercial','land') NOT NULL,
+
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE properties (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+
+  title VARCHAR(150) NOT NULL,
+  description TEXT NOT NULL,
+
+  price DECIMAL(12,2) NOT NULL,
+  listing_type ENUM('sale','rent') NOT NULL,
+
+  property_type_id INT NOT NULL,
+
+  address TEXT NOT NULL,
+  city VARCHAR(100) NOT NULL,
+  state VARCHAR(100) NOT NULL,
+  pincode VARCHAR(10),
+
+  latitude DECIMAL(10,7),
+  longitude DECIMAL(10,7),
+
+  uploaded_by INT NOT NULL,
+  uploaded_by_role ENUM('builder','agent') NOT NULL,
+
+  is_verified BOOLEAN DEFAULT FALSE,
+  status ENUM('active','blocked','sold') DEFAULT 'active',
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    ON UPDATE CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (property_type_id)
+    REFERENCES property_types(id),
+
+  FOREIGN KEY (uploaded_by)
+    REFERENCES users(id)
+    ON DELETE CASCADE
+);
+CREATE TABLE property_images (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+
+  property_id INT NOT NULL,
+  image_url TEXT NOT NULL,
+
+  is_primary BOOLEAN DEFAULT FALSE,
+  sort_order INT DEFAULT 0,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (property_id)
+    REFERENCES properties(id)
+    ON DELETE CASCADE
+);

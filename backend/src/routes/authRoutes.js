@@ -38,58 +38,40 @@ console.log('');
 
 // PUBLIC ROUTES (No authentication required)
 
-// Registration - with rate limiting
+// Registration - rate limiting disabled for development
 router.post('/register',
-    checkBlockedIP,
-    rateLimitByIP({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
     createSafeHandler('register', 'Registration failed')
 );
 
-// Regular Login - with strict rate limiting and suspicious activity detection
+// Regular Login - rate limiting disabled for development
 router.post('/login',
-    checkBlockedIP,
-    detectSuspiciousActivity,
-    rateLimitByIP({ maxAttempts: 5, windowMs: 15 * 60 * 1000, activityType: 'failed_login' }),
     createSafeHandler('login', 'Login failed')
 );
 
-// OAuth Login Routes - with rate limiting
+// OAuth Login Routes - rate limiting disabled for development
 router.post('/google-login',
-    checkBlockedIP,
-    rateLimitByIP({ maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
     createSafeHandler('googleLogin', 'Google login failed')
 );
 
 router.post('/microsoft-login',
-    checkBlockedIP,
-    rateLimitByIP({ maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
     createSafeHandler('microsoftLogin', 'Microsoft login failed')
 );
 
-// OTP Routes - with rate limiting
+// OTP Routes - rate limiting disabled for development
 router.post('/verify-otp',
-    checkBlockedIP,
-    rateLimitByIP({ maxAttempts: 10, windowMs: 15 * 60 * 1000 }),
     createSafeHandler('verifyOtp', 'OTP verification failed')
 );
 
 router.post('/resend-otp',
-    checkBlockedIP,
-    rateLimitByIP({ maxAttempts: 3, windowMs: 5 * 60 * 1000 }), // Stricter for OTP resend
     createSafeHandler('resendOtp', 'OTP resend failed')
 );
 
-// Password Reset Routes - with rate limiting and suspicious activity detection
+// Password Reset Routes - rate limiting disabled for development
 router.post('/forgot-password',
-    checkBlockedIP,
-    detectSuspiciousActivity,
-    rateLimitByIP({ maxAttempts: 3, windowMs: 15 * 60 * 1000 }),
     createSafeHandler('forgotPassword', 'Forgot password request failed')
 );
 
 router.post('/reset-password',
-    checkBlockedIP,
-    rateLimitByIP({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
     createSafeHandler('resetPassword', 'Password reset failed')
 );
 
@@ -113,7 +95,7 @@ router.get('/me',
     async (req, res) => {
         try {
             const [users] = await require('../config/db').query(
-                "SELECT id, name, email, phone, role, profile_image, is_verified, created_at, last_login FROM users WHERE id = ?",
+                "SELECT id, name, email, phone, role, is_verified, created_at, last_login FROM users WHERE id = ?",
                 [req.user.id]
             );
 
