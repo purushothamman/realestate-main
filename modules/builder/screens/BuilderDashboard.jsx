@@ -870,3 +870,6 @@ const styles = StyleSheet.create({
     color: '#2D6A4F',
   },
 });
+
+
+

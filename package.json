@@ -36,6 +36,7 @@
     "lucide-react": "^0.562.0",
     "lucide-react-native": "^0.562.0",
     "motion": "^12.23.26",
+    "multer": "^2.0.2",
     "mysql2": "^3.16.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",

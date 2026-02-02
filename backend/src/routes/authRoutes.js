@@ -38,6 +38,7 @@ console.log('');
 
 // PUBLIC ROUTES (No authentication required)
 
+<<<<<<< HEAD
 // Registration - with rate limiting
 router.post('/register', 
     checkBlockedIP, 
@@ -90,6 +91,42 @@ router.post('/forgot-password',
 router.post('/reset-password', 
     checkBlockedIP,
     rateLimitByIP({ maxAttempts: 5, windowMs: 15 * 60 * 1000 }),
+=======
+// Registration - rate limiting disabled for development
+router.post('/register',
+    createSafeHandler('register', 'Registration failed')
+);
+
+// Regular Login - rate limiting disabled for development
+router.post('/login',
+    createSafeHandler('login', 'Login failed')
+);
+
+// OAuth Login Routes - rate limiting disabled for development
+router.post('/google-login',
+    createSafeHandler('googleLogin', 'Google login failed')
+);
+
+router.post('/microsoft-login',
+    createSafeHandler('microsoftLogin', 'Microsoft login failed')
+);
+
+// OTP Routes - rate limiting disabled for development
+router.post('/verify-otp',
+    createSafeHandler('verifyOtp', 'OTP verification failed')
+);
+
+router.post('/resend-otp',
+    createSafeHandler('resendOtp', 'OTP resend failed')
+);
+
+// Password Reset Routes - rate limiting disabled for development
+router.post('/forgot-password',
+    createSafeHandler('forgotPassword', 'Forgot password request failed')
+);
+
+router.post('/reset-password',
+>>>>>>> f70ee9b0c572b72c7f98cd41ec1e8fd985e4d9d3
     createSafeHandler('resetPassword', 'Password reset failed')
 );
 
@@ -107,7 +144,7 @@ router.get('/me',
     async (req, res) => {
         try {
             const [users] = await require('../config/db').query(
-                "SELECT id, name, email, phone, role, profile_image, is_verified, created_at, last_login FROM users WHERE id = ?",
+                "SELECT id, name, email, phone, role, is_verified, created_at, last_login FROM users WHERE id = ?",
                 [req.user.id]
             );
             
