@@ -29,10 +29,11 @@ import {
 
 const { width } = Dimensions.get('window');
 
-const FavoritesScreen = ({ onBack }) => {
+const FavoritesScreen = ({ onBack, navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('favorites');
-
+  const [messages, setMessages] = useState([]);
+  
   const favoriteProperties = [
     {
       id: '1',
@@ -96,7 +97,7 @@ const FavoritesScreen = ({ onBack }) => {
     },
   ];
 
-  // Animation values - Initialize with proper dependencies
+  // Animation values
   const fadeAnims = useRef(
     favoriteProperties.map(() => new Animated.Value(0))
   ).current;
@@ -163,7 +164,7 @@ const FavoritesScreen = ({ onBack }) => {
       ]).start(() => pulseFab());
     };
     pulseFab();
-  }, []);
+  }, [fadeAnims, slideAnims, scaleAnim, headerOpacity, fabScale]);
 
   const filteredProperties = favoriteProperties.filter(
     (property) =>
@@ -199,6 +200,13 @@ const FavoritesScreen = ({ onBack }) => {
         useNativeDriver: true,
       }),
     ]).start();
+  };
+
+  // Handle tab press function
+  const handleTabPress = (tab) => {
+    setActiveTab(tab);
+    // Add navigation logic here if needed
+    // Example: navigation.navigate(tab);
   };
 
   return (
@@ -402,21 +410,88 @@ const FavoritesScreen = ({ onBack }) => {
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <Home color="#9CA3AF" size={24} />
-          <Text style={styles.navText}>Home</Text>
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => handleTabPress('home')}
+          activeOpacity={0.7}
+        >
+          <Home
+            color={activeTab === 'home' ? '#2D6A4F' : '#9CA3AF'}
+            size={24}
+          />
+          <Text
+            style={[
+              styles.navText,
+              activeTab === 'home' && styles.navTextActive,
+            ]}
+          >
+            Home
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <Heart color="#2D6A4F" size={24} fill="#2D6A4F" />
-          <Text style={[styles.navText, styles.navTextActive]}>Favorites</Text>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => handleTabPress('favorites')}
+          activeOpacity={0.7}
+        >
+          <Heart
+            color={activeTab === 'favorites' ? '#2D6A4F' : '#9CA3AF'}
+            size={24}
+            fill={activeTab === 'favorites' ? '#2D6A4F' : 'none'}
+          />
+          <Text
+            style={[
+              styles.navText,
+              activeTab === 'favorites' && styles.navTextActive,
+            ]}
+          >
+            Favorites
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <MessageCircle color="#9CA3AF" size={24} />
-          <Text style={styles.navText}>Messages</Text>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => handleTabPress('messages')}
+          activeOpacity={0.7}
+        >
+          <View>
+            <MessageCircle
+              color={activeTab === 'messages' ? '#2D6A4F' : '#9CA3AF'}
+              size={24}
+            />
+            {messages.length > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{messages.length}</Text>
+              </View>
+            )}
+          </View>
+          <Text
+            style={[
+              styles.navText,
+              activeTab === 'messages' && styles.navTextActive,
+            ]}
+          >
+            Messages
+          </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <User color="#9CA3AF" size={24} />
-          <Text style={styles.navText}>Profile</Text>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => handleTabPress('profile')}
+          activeOpacity={0.7}
+        >
+          <User
+            color={activeTab === 'profile' ? '#2D6A4F' : '#9CA3AF'}
+            size={24}
+          />
+          <Text
+            style={[
+              styles.navText,
+              activeTab === 'profile' && styles.navTextActive,
+            ]}
+          >
+            Profile
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -730,6 +805,23 @@ const styles = StyleSheet.create({
   },
   navTextActive: {
     color: '#2D6A4F',
+    fontWeight: '600',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
     fontWeight: '600',
   },
 });

@@ -44,6 +44,9 @@ exports.rateLimitByIP = (options = {}) => {
     };
 };
 
+/**
+ * Check if IP address is blocked
+ */
 exports.checkBlockedIP = async (req, res, next) => {
     try {
         const ipAddress = getClientIp(req);
@@ -77,7 +80,6 @@ exports.checkBlockedIP = async (req, res, next) => {
 exports.detectSuspiciousActivity = async (req, res, next) => {
     try {
         const { email } = req.body;
-        const ipAddress = getClientIp(req);
 
         if (!email) {
             return next();
@@ -101,8 +103,6 @@ exports.detectSuspiciousActivity = async (req, res, next) => {
         // - More than 10 total attempts in 1 hour
         if (unique_ips > 3 || total_attempts > 10) {
             console.warn(`Suspicious activity detected for email: ${email}, IPs: ${unique_ips}, Attempts: ${total_attempts}`);
-            
-            // Optionally: Send alert email, block temporarily, etc.
             req.suspiciousActivity = true;
         }
 
@@ -139,15 +139,15 @@ exports.logFailedLogin = async (email, ipAddress, userAgent, reason = 'invalid_c
 /**
  * Block IP address temporarily
  */
-exports.blockIP = async (ipAddress, durationMs = 30 * 60 * 1000) => {
+exports.blockIP = async (ipAddress, durationMs = 30 * 60 * 1000, reason = 'Too many failed attempts') => {
     try {
         const expiresAt = new Date(Date.now() + durationMs);
         
         await pool.query(
             `INSERT INTO blocked_ips (ip_address, blocked_until, reason, created_at) 
-             VALUES (?, ?, 'Too many failed attempts', NOW())
-             ON DUPLICATE KEY UPDATE blocked_until = ?, updated_at = NOW()`,
-            [ipAddress, expiresAt, expiresAt]
+             VALUES (?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE blocked_until = ?, reason = ?, updated_at = NOW()`,
+            [ipAddress, expiresAt, reason, expiresAt, reason]
         );
     } catch (err) {
         console.error("IP blocking error:", err);
@@ -155,33 +155,8 @@ exports.blockIP = async (ipAddress, durationMs = 30 * 60 * 1000) => {
 };
 
 /**
- * Check if IP is blocked
+ * Check and lock account if too many failed attempts
  */
-exports.checkBlockedIP = async (req, res, next) => {
-    try {
-        const ipAddress = getClientIp(req);
-        
-        const [blocked] = await pool.query(
-            `SELECT * FROM blocked_ips 
-             WHERE ip_address = ? 
-             AND blocked_until > NOW()`,
-            [ipAddress]
-        );
-
-        if (blocked.length > 0) {
-            return res.status(403).json({
-                message: "This IP address has been temporarily blocked due to suspicious activity.",
-                blockedUntil: blocked[0].blocked_until
-            });
-        }
-
-        next();
-    } catch (err) {
-        console.error("IP block check error:", err);
-        next();
-    }
-};
-
 exports.checkAndLockAccount = async (userId) => {
     try {
         // Count recent failed login attempts
@@ -229,6 +204,7 @@ exports.checkAndLockAccount = async (userId) => {
         return false;
     }
 };
+
 /**
  * Unlock account manually (admin function)
  */
@@ -250,6 +226,41 @@ exports.unlockAccount = async (userId, adminId = null) => {
     } catch (err) {
         console.error("Account unlock error:", err);
     }
+};
+
+/**
+ * Helper function to detect device type from user agent
+ */
+const getDeviceType = (userAgent) => {
+    if (!userAgent) return 'unknown';
+    if (/mobile/i.test(userAgent)) return 'mobile';
+    if (/tablet/i.test(userAgent)) return 'tablet';
+    return 'desktop';
+};
+
+/**
+ * Helper function to detect browser from user agent
+ */
+const getBrowser = (userAgent) => {
+    if (!userAgent) return 'unknown';
+    if (userAgent.includes('Chrome')) return 'Chrome';
+    if (userAgent.includes('Firefox')) return 'Firefox';
+    if (userAgent.includes('Safari')) return 'Safari';
+    if (userAgent.includes('Edge')) return 'Edge';
+    return 'other';
+};
+
+/**
+ * Helper function to detect OS from user agent
+ */
+const getOS = (userAgent) => {
+    if (!userAgent) return 'unknown';
+    if (userAgent.includes('Windows')) return 'Windows';
+    if (userAgent.includes('Mac')) return 'MacOS';
+    if (userAgent.includes('Linux')) return 'Linux';
+    if (userAgent.includes('Android')) return 'Android';
+    if (userAgent.includes('iOS')) return 'iOS';
+    return 'other';
 };
 
 /**
@@ -377,4 +388,16 @@ exports.cleanupExpiredData = async () => {
     } catch (err) {
         console.error("Cleanup error:", err);
     }
+};
+
+/**
+ * Security headers middleware
+ */
+exports.securityHeaders = (req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    
+    next();
 };

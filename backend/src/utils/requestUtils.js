@@ -92,11 +92,62 @@ const getOS = (userAgent) => {
     return 'Unknown';
 };
 
+
+/**
+ * Format phone number
+ */
+function formatPhoneNumber(phone) {
+    if (!phone) return null;
+    // Remove all non-numeric characters
+    return phone.replace(/\D/g, '');
+}
+
+/**
+ * Validate Indian GST number
+ */
+function validateGSTNumber(gstNo) {
+    const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+    return gstRegex.test(gstNo?.trim());
+}
+
+/**
+ * Validate Indian PAN number
+ */
+function validatePANNumber(panNo) {
+    const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+    return panRegex.test(panNo?.trim());
+}
+
+/**
+ * Generate random verification code
+ */
+function generateVerificationCode(length = 6) {
+    const digits = '0123456789';
+    let code = '';
+    for (let i = 0; i < length; i++) {
+        code += digits.charAt(Math.floor(Math.random() * digits.length));
+    }
+    return code;
+}
+
+/**
+ * Sanitize string input
+ */
+function sanitizeString(str) {
+    if (!str) return null;
+    return str.trim().replace(/[<>]/g, '');
+}
+
 module.exports = {
     getClientIp,
     getUserAgent,
     getRequestMetadata,
     getDeviceType,
     getBrowser,
-    getOS
+    getOS,
+    formatPhoneNumber,
+    validateGSTNumber,
+    validatePANNumber,
+    generateVerificationCode,
+    sanitizeString
 };

@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import {
   ArrowLeft,
-  Building2,
   MapPin,
   DollarSign,
   Image as ImageIcon,
@@ -31,6 +30,36 @@ import {
   Droplets,
   Sparkles,
   CheckCircle2,
+  Bed,
+  Bath,
+  ArrowUpDown,
+  Wind,
+  Zap,
+  Gamepad2,
+  Building,
+  Building2,
+  Store,
+  Briefcase,
+  Package,
+  Sprout,
+  Users,
+  Tent,
+  Layers,
+  ShoppingBag,
+  Laptop,
+  Factory,
+  Hotel,
+  BookOpen,
+  Film,
+  Shirt,
+  Phone,
+  Flame,
+  Droplet,
+  Wrench,
+  Dog,
+  Utensils,
+  Sofa,
+  Square,
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
@@ -39,18 +68,25 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
   const [propertyData, setPropertyData] = useState({
     title: '',
     propertyType: '',
+    purpose: 'sale',
     status: 'sale',
     city: '',
+    state: '',
     address: '',
+    pincode: '',
     price: '',
     area: '',
+    bedrooms: '',
+    bathrooms: '',
     description: '',
+    features: [],
     amenities: [],
     images: [],
   });
 
   const [uploadedImages, setUploadedImages] = useState([]);
   const [focusedInput, setFocusedInput] = useState(null);
+  const [isAnimated, setIsAnimated] = useState(false);
 
   // Animation values
   const headerAnim = useRef(new Animated.Value(0)).current;
@@ -122,15 +158,50 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
     { id: 'villa', label: 'Villa', icon: Home },
     { id: 'plot', label: 'Plot', icon: Trees },
     { id: 'commercial', label: 'Commercial', icon: Building2 },
+    { id: 'house', label: 'Independent House', icon: Home },
+    { id: 'penthouse', label: 'Penthouse', icon: Building },
+    { id: 'studio', label: 'Studio Apartment', icon: Square },
+    { id: 'farmhouse', label: 'Farmhouse', icon: Trees },
+    { id: 'office', label: 'Office Space', icon: Briefcase },
+    { id: 'shop', label: 'Shop/Showroom', icon: Store },
+    { id: 'warehouse', label: 'Warehouse', icon: Package },
+    { id: 'land', label: 'Agricultural Land', icon: Sprout },
+    { id: 'pgHostel', label: 'PG/Hostel', icon: Users },
+    { id: 'cottage', label: 'Cottage', icon: Tent },
+    { id: 'duplex', label: 'Duplex', icon: Layers },
+    { id: 'rowhouse', label: 'Row House', icon: Home },
+    { id: 'retail', label: 'Retail Space', icon: ShoppingBag },
+    { id: 'coworking', label: 'Co-working Space', icon: Laptop },
+    { id: 'industrial', label: 'Industrial Building', icon: Factory },
+    { id: 'hotel', label: 'Hotel/Resort', icon: Hotel },
   ];
 
-  const amenitiesList = [
+  const featuresList = [
     { id: 'wifi', label: 'WiFi', icon: Wifi },
     { id: 'parking', label: 'Parking', icon: Car },
     { id: 'gym', label: 'Gym', icon: Dumbbell },
     { id: 'garden', label: 'Garden', icon: Trees },
     { id: 'security', label: '24/7 Security', icon: ShieldCheck },
     { id: 'pool', label: 'Swimming Pool', icon: Droplets },
+    { id: 'elevator', label: 'Elevator', icon: ArrowUpDown },
+    { id: 'ac', label: 'Air Conditioning', icon: Wind },
+    { id: 'powerBackup', label: 'Power Backup', icon: Zap },
+    { id: 'cctv', label: 'CCTV', icon: Camera },
+    { id: 'clubhouse', label: 'Clubhouse', icon: Home },
+    { id: 'playground', label: 'Playground', icon: Gamepad2 },
+    { id: 'balcony', label: 'Balcony', icon: Building },
+    { id: 'modularKitchen', label: 'Modular Kitchen', icon: Utensils },
+    { id: 'furnished', label: 'Furnished', icon: Sofa },
+    { id: 'intercom', label: 'Intercom', icon: Phone },
+    { id: 'fireSystem', label: 'Fire Safety', icon: Flame },
+    { id: 'waterSupply', label: 'Water Supply 24/7', icon: Droplet },
+    { id: 'maintenance', label: 'Maintenance Staff', icon: Wrench },
+    { id: 'petFriendly', label: 'Pet Friendly', icon: Dog },
+    { id: 'visitor', label: 'Visitor Parking', icon: Car },
+    { id: 'library', label: 'Library', icon: BookOpen },
+    { id: 'spa', label: 'Spa', icon: Sparkles },
+    { id: 'cinema', label: 'Mini Theatre', icon: Film },
+    { id: 'laundry', label: 'Laundry Service', icon: Shirt },
   ];
 
   const handleImageUpload = async () => {
@@ -183,6 +254,29 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
   };
 
   const handlePublish = () => {
+    // Validate first before showing success
+    if (!propertyData.title) {
+      Alert.alert('Validation Error', 'Please enter a property title');
+      return;
+    }
+    if (!propertyData.propertyType) {
+      Alert.alert('Validation Error', 'Please select a property type');
+      return;
+    }
+    if (!propertyData.city || !propertyData.address || !propertyData.state || !propertyData.pincode) {
+      Alert.alert('Validation Error', 'Please fill in all location details');
+      return;
+    }
+    if (!propertyData.price || !propertyData.area) {
+      Alert.alert('Validation Error', 'Please fill in all pricing and size details');
+      return;
+    }
+    if (!propertyData.description) {
+      Alert.alert('Validation Error', 'Please add a property description');
+      return;
+    }
+
+    // Animate button then show success
     Animated.sequence([
       Animated.spring(buttonScale, {
         toValue: 0.92,
@@ -204,6 +298,8 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
         'Your property has been published successfully!',
         [{ text: 'Great!', style: 'default' }]
       );
+      console.log('Property Data:', propertyData);
+      console.log('Uploaded Images:', uploadedImages);
     }, 200);
   };
 
@@ -216,12 +312,35 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
       'Cancel',
       'Are you sure you want to cancel? All changes will be lost.',
       [
-        { text: 'No', style: 'cancel' },
+        {
+          text: 'No',
+          style: 'cancel',
+        },
         {
           text: 'Yes',
           onPress: () => {
             if (onShowEditProperty) {
               onShowEditProperty();
+            } else {
+              setPropertyData({
+                title: '',
+                propertyType: '',
+                purpose: 'sale',
+                status: 'sale',
+                city: '',
+                state: '',
+                address: '',
+                pincode: '',
+                price: '',
+                area: '',
+                bedrooms: '',
+                bathrooms: '',
+                description: '',
+                features: [],
+                amenities: [],
+                images: [],
+              });
+              setUploadedImages([]);
             }
           },
         },
@@ -327,10 +446,10 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
         >
           {/* Progress Indicator */}
           <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
+            {/* <View style={styles.progressBar}>
               <Animated.View style={[styles.progressFill, { width: '20%' }]} />
             </View>
-            <Text style={styles.progressText}>Step 1 of 5</Text>
+            <Text style={styles.progressText}>Step 1 of 5</Text> */}
           </View>
 
           {/* Basic Property Details */}
@@ -416,45 +535,45 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Property Status *</Text>
+              <Text style={styles.label}>Property Purpose *</Text>
               <View style={styles.optionsGrid}>
                 <TouchableOpacity
-                  onPress={() => handleInputChange('status', 'sale')}
+                  onPress={() => handleInputChange('purpose', 'sale')}
                   style={[
                     styles.statusButton,
-                    propertyData.status === 'sale' && styles.optionButtonActive,
+                    propertyData.purpose === 'sale' && styles.optionButtonActive,
                   ]}
                   activeOpacity={0.7}
                 >
                   <DollarSign
-                    color={propertyData.status === 'sale' ? '#2D6A4F' : '#6B7280'}
+                    color={propertyData.purpose === 'sale' ? '#2D6A4F' : '#6B7280'}
                     size={18}
                   />
                   <Text
                     style={[
                       styles.optionText,
-                      propertyData.status === 'sale' && styles.optionTextActive,
+                      propertyData.purpose === 'sale' && styles.optionTextActive,
                     ]}
                   >
                     For Sale
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => handleInputChange('status', 'rent')}
+                  onPress={() => handleInputChange('purpose', 'rent')}
                   style={[
                     styles.statusButton,
-                    propertyData.status === 'rent' && styles.optionButtonActive,
+                    propertyData.purpose === 'rent' && styles.optionButtonActive,
                   ]}
                   activeOpacity={0.7}
                 >
                   <Home
-                    color={propertyData.status === 'rent' ? '#2D6A4F' : '#6B7280'}
+                    color={propertyData.purpose === 'rent' ? '#2D6A4F' : '#6B7280'}
                     size={18}
                   />
                   <Text
                     style={[
                       styles.optionText,
-                      propertyData.status === 'rent' && styles.optionTextActive,
+                      propertyData.purpose === 'rent' && styles.optionTextActive,
                     ]}
                   >
                     For Rent
@@ -489,24 +608,45 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
               <Text style={styles.sectionTitle}>Location Details</Text>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>City / Area *</Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  focusedInput === 'city' && styles.inputWrapperFocused,
-                ]}
-              >
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Beverly Hills, CA"
-                  placeholderTextColor="#9CA3AF"
-                  value={propertyData.city}
-                  onChangeText={(value) => handleInputChange('city', value)}
-                  onFocus={() => setFocusedInput('city')}
-                  onBlur={() => setFocusedInput(null)}
-                />
-                <MapPin color="#9CA3AF" size={18} />
+            <View style={styles.rowInputs}>
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>City *</Text>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    focusedInput === 'city' && styles.inputWrapperFocused,
+                  ]}
+                >
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., Mumbai"
+                    placeholderTextColor="#9CA3AF"
+                    value={propertyData.city}
+                    onChangeText={(value) => handleInputChange('city', value)}
+                    onFocus={() => setFocusedInput('city')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>State *</Text>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    focusedInput === 'state' && styles.inputWrapperFocused,
+                  ]}
+                >
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., Maharashtra"
+                    placeholderTextColor="#9CA3AF"
+                    value={propertyData.state}
+                    onChangeText={(value) => handleInputChange('state', value)}
+                    onFocus={() => setFocusedInput('state')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                </View>
               </View>
             </View>
 
@@ -520,11 +660,34 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
               >
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g., 123 Main Street"
+                  placeholder="e.g., 123 Main Street, Bandra West"
                   placeholderTextColor="#9CA3AF"
                   value={propertyData.address}
                   onChangeText={(value) => handleInputChange('address', value)}
                   onFocus={() => setFocusedInput('address')}
+                  onBlur={() => setFocusedInput(null)}
+                />
+                <MapPin color="#9CA3AF" size={18} />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Pincode *</Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  focusedInput === 'pincode' && styles.inputWrapperFocused,
+                ]}
+              >
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., 400050"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="numeric"
+                  maxLength={6}
+                  value={propertyData.pincode}
+                  onChangeText={(value) => handleInputChange('pincode', value)}
+                  onFocus={() => setFocusedInput('pincode')}
                   onBlur={() => setFocusedInput(null)}
                 />
               </View>
@@ -559,7 +722,7 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
             <View style={styles.rowInputs}>
               <View style={styles.halfInput}>
                 <Text style={styles.label}>
-                  Price * {propertyData.status === 'rent' ? '(per month)' : ''}
+                  Price * {propertyData.purpose === 'rent' ? '(per month)' : ''}
                 </Text>
                 <View
                   style={[
@@ -567,7 +730,7 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
                     focusedInput === 'price' && styles.inputWrapperFocused,
                   ]}
                 >
-                  <Text style={styles.priceSymbol}>$</Text>
+                  <Text style={styles.priceSymbol}>₹</Text>
                   <TextInput
                     style={styles.priceInputField}
                     placeholder="2,450,000"
@@ -597,6 +760,52 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
                     value={propertyData.area}
                     onChangeText={(value) => handleInputChange('area', value)}
                     onFocus={() => setFocusedInput('area')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.rowInputs}>
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>Bedrooms</Text>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    focusedInput === 'bedrooms' && styles.inputWrapperFocused,
+                  ]}
+                >
+                  <Bed color="#9CA3AF" size={18} />
+                  <TextInput
+                    style={[styles.input, { marginLeft: 8 }]}
+                    placeholder="e.g., 3"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="numeric"
+                    value={propertyData.bedrooms}
+                    onChangeText={(value) => handleInputChange('bedrooms', value)}
+                    onFocus={() => setFocusedInput('bedrooms')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.halfInput}>
+                <Text style={styles.label}>Bathrooms</Text>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    focusedInput === 'bathrooms' && styles.inputWrapperFocused,
+                  ]}
+                >
+                  <Bath color="#9CA3AF" size={18} />
+                  <TextInput
+                    style={[styles.input, { marginLeft: 8 }]}
+                    placeholder="e.g., 2"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="numeric"
+                    value={propertyData.bathrooms}
+                    onChangeText={(value) => handleInputChange('bathrooms', value)}
+                    onFocus={() => setFocusedInput('bathrooms')}
                     onBlur={() => setFocusedInput(null)}
                   />
                 </View>
@@ -691,10 +900,15 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
               },
             ]}
           >
-            <Text style={styles.sectionTitle}>Additional Information</Text>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIconBox, { backgroundColor: '#FEE2E2' }]}>
+                <Sparkles color="#EF4444" size={20} />
+              </View>
+              <Text style={styles.sectionTitle}>Additional Information</Text>
+            </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Description (Optional)</Text>
+              <Text style={styles.label}>Description *</Text>
               <View
                 style={[
                   styles.textAreaWrapper,
@@ -719,7 +933,7 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Amenities (Optional)</Text>
               <View style={styles.amenitiesGrid}>
-                {amenitiesList.map((amenity) => {
+                {featuresList.map((amenity) => {
                   const Icon = amenity.icon;
                   const isSelected = propertyData.amenities.includes(amenity.id);
                   return (
@@ -918,24 +1132,24 @@ const styles = StyleSheet.create({
   progressContainer: {
     marginBottom: 28,
   },
-  progressBar: {
-    height: 6,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#2D6A4F',
-    borderRadius: 3,
-  },
-  progressText: {
-    fontSize: 13,
-    color: '#6B7280',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
+  // progressBar: {
+  //   height: 6,
+  //   backgroundColor: '#E5E7EB',
+  //   borderRadius: 3,
+  //   overflow: 'hidden',
+  //   marginBottom: 8,
+  // },
+  // progressFill: {
+  //   height: '100%',
+  //   backgroundColor: '#2D6A4F',
+  //   borderRadius: 3,
+  // },
+  // progressText: {
+  //   fontSize: 13,
+  //   color: '#6B7280',
+  //   fontWeight: '600',
+  //   textAlign: 'center',
+  // },
   section: {
     marginBottom: 28,
   },
@@ -949,7 +1163,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  ssectionIconBox: {
+  sectionIconBox: {
     width: 40,
     height: 40,
     borderRadius: 12,
@@ -1042,6 +1256,7 @@ const styles = StyleSheet.create({
   rowInputs: {
     flexDirection: 'row',
     gap: 16,
+    marginBottom: 18,
   },
   halfInput: {
     flex: 1,

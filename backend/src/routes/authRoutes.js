@@ -10,7 +10,7 @@ const createSafeHandler = (handlerName, fallbackMessage) => {
     if (typeof auth[handlerName] === 'function') {
         return auth[handlerName];
     } else {
-        console.error(`⚠️  ERROR: auth.${handlerName} is not a function. Using fallback handler.`);
+        console.error(`ERROR: auth.${handlerName} is not a function. Using fallback handler.`);
         return (req, res) => {
             res.status(501).json({
                 message: `${fallbackMessage} - Handler not implemented`,
@@ -26,12 +26,12 @@ const requiredAuthMethods = [
     'verifyOtp', 'resendOtp', 'forgotPassword', 'resetPassword', 'logout'
 ];
 
-console.log('\n🔍 Validating auth controller methods...');
+console.log('\n Validating auth controller methods...');
 requiredAuthMethods.forEach(method => {
     if (typeof auth[method] !== 'function') {
-        console.error(`❌ auth.${method} is NOT a function`);
+        console.error(`auth.${method} is NOT a function`);
     } else {
-        console.log(`✅ auth.${method} is available`);
+        console.log(`auth.${method} is available`);
     }
 });
 console.log('');
@@ -81,12 +81,6 @@ router.post('/reset-password',
 router.post('/logout',
     authenticate,
     createSafeHandler('logout', 'Logout failed')
-);
-
-// Get Profile - requires authentication
-router.get('/profile',
-    authenticate,
-    createSafeHandler('getProfile', 'Get profile failed')
 );
 
 // Get current user profile

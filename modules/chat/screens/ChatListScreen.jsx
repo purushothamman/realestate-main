@@ -20,8 +20,9 @@ import {
   User,
   Plus,
   House,
+  ArrowLeft,
 } from 'lucide-react-native';
-
+import UserNavigator from '../../../navigation/UserNavigator';
 const { width, height } = Dimensions.get('window');
 
 // ImageWithFallback Component
@@ -97,74 +98,8 @@ const ChatListItem = ({ chat, onPress }) => {
   );
 };
 
-// NavItem Component
-const NavItem = ({ icon: Icon, label, active = false, onPress, badge = 0 }) => {
-  return (
-    <TouchableOpacity
-      style={styles.navItem}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      <View style={styles.navIconContainer}>
-        <Icon 
-          color={active ? '#2D6A4F' : '#6B7280'} 
-          size={24}
-          strokeWidth={active ? 2.5 : 2}
-        />
-        {badge > 0 && (
-          <View style={styles.navBadge}>
-            <Text style={styles.navBadgeText}>{badge > 9 ? '9+' : badge}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={[styles.navLabel, active && styles.navLabelActive]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-};
-
-// BottomNav Component
-const BottomNav = ({ activeTab, onTabChange }) => {
-  return (
-    <View style={styles.bottomNav}>
-      <NavItem
-        icon={Home}
-        label="Home"
-        active={activeTab === 'home'}
-        onPress={() => onTabChange('home')}
-      />
-      <NavItem
-        icon={Search}
-        label="Search"
-        active={activeTab === 'search'}
-        onPress={() => onTabChange('search')}
-      />
-      <NavItem
-        icon={MessageCircle}
-        label="Messages"
-        active={activeTab === 'messages'}
-        onPress={() => onTabChange('messages')}
-        badge={7}
-      />
-      <NavItem
-        icon={Heart}
-        label="Saved"
-        active={activeTab === 'saved'}
-        onPress={() => onTabChange('saved')}
-      />
-      <NavItem
-        icon={User}
-        label="Profile"
-        active={activeTab === 'profile'}
-        onPress={() => onTabChange('profile')}
-      />
-    </View>
-  );
-};
-
-// Main MessagesScreen Component
-export default function MessagesScreen() {
+// Main ChatListScreen Component
+export default function ChatListScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('messages');
   
@@ -270,11 +205,47 @@ export default function MessagesScreen() {
   const handleChatPress = (chatId) => {
     console.log('Chat pressed:', chatId);
     // Navigate to chat details screen
+    // if (navigation) {
+    //   navigation.navigate('ChatDetail', { chatId });
+    // }
   };
 
   const handleNewMessage = () => {
     console.log('Start new conversation');
     // Navigate to new conversation screen
+    // if (navigation) {
+    //   navigation.navigate('NewConversation');
+    // }
+  };
+
+  const handleBackPress = () => {
+    // Navigate back to HomeScreen
+    if (navigation) {
+      navigation.goBack();
+    }
+  };
+
+  const handleTabPress = (tab) => {
+    setActiveTab(tab);
+    // Add navigation logic here based on the tab
+    if (tab === 'home' && navigation) {
+      navigation.goBack();
+    } else if (navigation) {
+      // Add navigation for other tabs if needed
+      switch(tab) {
+        case 'search':
+          // navigation.navigate('Search');
+          break;
+        case 'favorites':
+          // navigation.navigate('Favorites');
+          break;
+        case 'profile':
+          // navigation.navigate('Profile');
+          break;
+        default:
+          break;
+      }
+    }
   };
 
   const totalUnread = chatData.reduce((sum, chat) => sum + chat.unreadCount, 0);
@@ -297,6 +268,15 @@ export default function MessagesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
+          {/* Back Button */}
+          <TouchableOpacity 
+            style={styles.backButton}
+            onPress={handleBackPress}
+            activeOpacity={0.7}
+          >
+            <ArrowLeft color="#FFFFFF" size={24} strokeWidth={2.5} />
+          </TouchableOpacity>
+
           <View style={styles.logoContainer}>
             <House color="#FFFFFF" size={28} strokeWidth={2.5} />
           </View>
@@ -375,7 +355,11 @@ export default function MessagesScreen() {
       </TouchableOpacity>
 
       {/* Bottom Navigation */}
-      <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <UserNavigator 
+        activeTab={activeTab}
+        onTabPress={handleTabPress}
+        messageCount={totalUnread}
+      />
     </SafeAreaView>
   );
 }
@@ -412,6 +396,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
+  backButton: {
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
   logoContainer: {
     width: 56,
     height: 56,
@@ -420,7 +415,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   headerTextContainer: {
     flex: 1,
@@ -482,7 +481,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
   },
   searchInput: {
     flex: 1,
@@ -510,7 +513,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#F3F4F6',
-    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   chatContent: {
     flexDirection: 'row',
@@ -529,8 +536,8 @@ const styles = StyleSheet.create({
   },
   onlineIndicator: {
     position: 'absolute',
-    bottom: 14,
-    right: 4,
+    bottom: 2,
+    right: 2,
     width: 14,
     height: 14,
     backgroundColor: '#10B981',
@@ -625,55 +632,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 20,
-    boxShadow: '0px 4px 16px rgba(45, 106, 79, 0.4)',
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    boxShadow: '0px -2px 8px rgba(0, 0, 0, 0.05)',
-  },
-  navItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  navIconContainer: {
-    position: 'relative',
-  },
-  navBadge: {
-    position: 'absolute',
-    top: -6,
-    right: -8,
-    backgroundColor: '#2D6A4F',
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
-    paddingHorizontal: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  navBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  navLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  navLabelActive: {
-    color: '#2D6A4F',
+    shadowColor: '#2D6A4F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
   },
 });

@@ -1,19 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
-
 import { SplashScreen } from './modules/user/screens/SplashScreen';
 import { WelcomeScreen } from './modules/user/screens/WelcomeScreen';
 import LoginScreen from './modules/auth/screens/LoginScreen';
 import RegisterScreen from './modules/auth/screens/RegisterScreen';
 import OTPVerificationScreen from './modules/auth/screens/OTPVerificationScreen';
 import ForgotPassword from './modules/auth/screens/ForgotPassword';
-
 import HomeScreen from './modules/user/screens/HomeScreen';
 import ProfileScreen from './modules/user/screens/ProfileScreen';
-
 import PropertyDetailScreen from './modules/property/screens/PropertyDetailScreen';
 import SearchResultsScreen from './modules/property/screens/SearchResultsScreen';
-
 import ExploreProperties from './modules/property/screens/ExploreProperties';
 import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
 import ReportPropertyScreen from './modules/property/screens/ReportPropertyScreen';
@@ -22,7 +18,6 @@ import PaymentScreen from './store/PaymentScreen';
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
   const [screenStack, setScreenStack] = useState([]);
-
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [reportPropertyData, setReportPropertyData] = useState(null);
