@@ -48,10 +48,10 @@ export default function App() {
 
     // Handle property selection
     if (params.property) setSelectedProperty(params.property);
-    
+
     // Handle search query
     if (params.query !== undefined) setSearchQuery(params.query);
-    
+
     // Handle Report Property data
     if (params.propertyId || params.propertyName || params.propertyAddress || params.propertyPrice || params.propertyImage) {
       setReportPropertyData({
@@ -75,7 +75,11 @@ export default function App() {
 
   const goBack = () => {
     setScreenStack(prev => {
-      if (prev.length === 0) return prev;
+      if (prev.length === 0) {
+        // Fallback to home when stack is empty
+        setCurrentScreen('home');
+        return prev;
+      }
       const last = prev[prev.length - 1];
       setCurrentScreen(last);
       return prev.slice(0, -1);
@@ -98,7 +102,7 @@ export default function App() {
   // 🔹 Render Screens
   const renderScreen = () => {
     console.log('🎬 Rendering screen:', currentScreen);
-    
+
     switch (currentScreen) {
 
       case 'splash':
@@ -116,6 +120,7 @@ export default function App() {
       case 'login':
         return (
           <LoginScreen
+            navigation={navigation}
             onBack={goBack}
             onNavigateToLoginSuccess={(user) => {
               if (user) setUserData(user);
@@ -129,6 +134,7 @@ export default function App() {
       case 'register':
         return (
           <RegisterScreen
+            navigation={navigation}
             onBack={goBack}
             onRegisterSuccess={(user) => {
               if (user) setUserData(user);
@@ -141,6 +147,7 @@ export default function App() {
       case 'otp':
         return (
           <OTPVerificationScreen
+            navigation={navigation}
             onBack={goBack}
             onVerifySuccess={() => navigateTo('home')}
           />
@@ -149,6 +156,7 @@ export default function App() {
       case 'forgotPassword':
         return (
           <ForgotPassword
+            navigation={navigation}
             onBack={goBack}
             onResetSuccess={() => navigateTo('login')}
           />
@@ -186,13 +194,13 @@ export default function App() {
             navigation={navigation}
             property={selectedProperty}
             onBack={goBack}
-            route={{ 
-              params: { 
+            route={{
+              params: {
                 propertyId: selectedProperty?.id || 'property-001',
                 propertyName: selectedProperty?.name || 'Modern Luxury Villa',
                 propertyAddress: selectedProperty?.address || '1245 Sunset Boulevard, Beverly Hills, CA 90210',
                 propertyPrice: selectedProperty?.price || '$789,000',
-              } 
+              }
             }}
           />
         );

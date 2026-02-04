@@ -22,13 +22,12 @@ import {
   House,
   ArrowLeft,
 } from 'lucide-react-native';
-import UserNavigator from '../../../navigation/UserNavigator';
 const { width, height } = Dimensions.get('window');
 
 // ImageWithFallback Component
 const ImageWithFallback = ({ src, alt, style }) => {
   const [imgError, setImgError] = useState(false);
-  
+
   if (imgError || !src) {
     return (
       <View style={[style, styles.fallbackAvatar]}>
@@ -38,7 +37,7 @@ const ImageWithFallback = ({ src, alt, style }) => {
       </View>
     );
   }
-  
+
   return (
     <Image
       source={{ uri: src }}
@@ -66,7 +65,7 @@ const ChatListItem = ({ chat, onPress }) => {
           />
           {chat.online && <View style={styles.onlineIndicator} />}
         </View>
-        
+
         {/* Content */}
         <View style={styles.chatTextContainer}>
           <View style={styles.chatHeader}>
@@ -87,7 +86,7 @@ const ChatListItem = ({ chat, onPress }) => {
               )}
             </View>
           </View>
-          
+
           {/* Last Message */}
           <Text style={styles.lastMessage} numberOfLines={2}>
             {chat.lastMessage}
@@ -99,10 +98,9 @@ const ChatListItem = ({ chat, onPress }) => {
 };
 
 // Main ChatListScreen Component
-export default function ChatListScreen({ navigation }) {
+export default function ChatListScreen({ navigation, onBack }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('messages');
-  
+
   // Mock chat data
   const chatData = [
     {
@@ -219,8 +217,10 @@ export default function ChatListScreen({ navigation }) {
   };
 
   const handleBackPress = () => {
-    // Navigate back to HomeScreen
-    if (navigation) {
+    // Use onBack callback first, then fallback to navigation.goBack
+    if (onBack) {
+      onBack();
+    } else if (navigation && navigation.goBack) {
       navigation.goBack();
     }
   };
@@ -232,7 +232,7 @@ export default function ChatListScreen({ navigation }) {
       navigation.goBack();
     } else if (navigation) {
       // Add navigation for other tabs if needed
-      switch(tab) {
+      switch (tab) {
         case 'search':
           // navigation.navigate('Search');
           break;
@@ -253,7 +253,7 @@ export default function ChatListScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
-      
+
       {/* Background Image with Overlay */}
       <View style={styles.backgroundContainer}>
         <Image
@@ -269,7 +269,7 @@ export default function ChatListScreen({ navigation }) {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           {/* Back Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.backButton}
             onPress={handleBackPress}
             activeOpacity={0.7}
@@ -353,13 +353,6 @@ export default function ChatListScreen({ navigation }) {
       >
         <Plus color="#FFFFFF" size={28} strokeWidth={2.5} />
       </TouchableOpacity>
-
-      {/* Bottom Navigation */}
-      <UserNavigator 
-        activeTab={activeTab}
-        onTabPress={handleTabPress}
-        messageCount={totalUnread}
-      />
     </SafeAreaView>
   );
 }

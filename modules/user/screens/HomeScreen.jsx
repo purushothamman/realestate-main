@@ -226,7 +226,7 @@ export default function HomeScreen({ navigation }) {
   // Handle Pull to Refresh
   const onRefresh = useCallback(async () => {
     if (!authToken || !user) return;
-    
+
     setIsRefreshing(true);
     try {
       await Promise.all([
@@ -393,40 +393,6 @@ export default function HomeScreen({ navigation }) {
     { id: 'agents', label: 'Agents', icon: Users, color: '#9B59B6' },
   ];
 
-  // Screen Routing
-  if (screen === 'profile') {
-    return <ProfileScreen onBack={() => setScreen('home')} navigation={navigation} />;
-  }
-
-  if (screen === 'messages') {
-    return <ChatListScreen onBack={() => setScreen('home')} navigation={navigation} />;
-  }
-
-  if (screen === 'search') {
-    return <SearchResultsScreen onBack={() => setScreen('home')} navigation={navigation} />;
-  }
-
-  if (screen === 'favorites') {
-    return <FavoritesScreen onBack={() => setScreen('home')} navigation={navigation} />;
-  }
-
-  if (screen === 'notifications') {
-    return <NotificationsScreen onBack={() => setScreen('home')} navigation={navigation} />;
-  }
-
-  if (screen === 'propertyDetail' && selectedProperty) {
-    return (
-      <PropertyDetailScreen
-        property={selectedProperty}
-        onBack={() => {
-          setScreen('home');
-          setSelectedProperty(null);
-        }}
-        navigation={navigation}
-      />
-    );
-  }
-
   // Loading State
   if (isLoading) {
     return (
@@ -450,6 +416,63 @@ export default function HomeScreen({ navigation }) {
     );
   }
 
+  // Render different screens based on state but keep UserNavigator always visible
+  const renderScreen = () => {
+    if (screen === 'profile') {
+      return <ProfileScreen onBack={() => setScreen('home')} navigation={navigation} />;
+    }
+
+    if (screen === 'messages') {
+      return <ChatListScreen onBack={() => setScreen('home')} navigation={navigation} />;
+    }
+
+    if (screen === 'search') {
+      return <SearchResultsScreen onBack={() => setScreen('home')} navigation={navigation} />;
+    }
+
+    if (screen === 'favorites') {
+      return <FavoritesScreen onBack={() => setScreen('home')} navigation={navigation} />;
+    }
+
+    if (screen === 'notifications') {
+      return <NotificationsScreen onBack={() => setScreen('home')} navigation={navigation} />;
+    }
+
+    if (screen === 'propertyDetail' && selectedProperty) {
+      return (
+        <PropertyDetailScreen
+          property={selectedProperty}
+          onBack={() => {
+            setScreen('home');
+            setSelectedProperty(null);
+          }}
+          navigation={navigation}
+        />
+      );
+    }
+
+    // Default: render home screen content
+    return null;
+  };
+
+  const screenContent = renderScreen();
+
+  // If we're showing a different screen, render it with UserNavigator at bottom
+  if (screenContent) {
+    return (
+      <View style={styles.container}>
+        {screenContent}
+        {/* Bottom Navigation - Always visible */}
+        <UserNavigator
+          activeTab={activeTab}
+          onTabPress={handleTabPress}
+          messageCount={messages.length}
+        />
+      </View>
+    );
+  }
+
+  // Otherwise render the home screen
   return (
     <View style={styles.container}>
       {/* Fixed Header */}
@@ -766,7 +789,7 @@ export default function HomeScreen({ navigation }) {
       </ScrollView>
 
       {/* Bottom Navigation */}
-      <UserNavigator 
+      <UserNavigator
         activeTab={activeTab}
         onTabPress={handleTabPress}
         messageCount={messages.length}

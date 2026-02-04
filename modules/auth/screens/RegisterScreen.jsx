@@ -465,11 +465,11 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         if (data.token && navigation) {
           // If registration includes auto-login, go directly to Home
           console.log('🏠 Auto-login: Navigating to Home');
-          navigation.navigate('Home');
+          navigation.navigate('home');
         } else if (navigation) {
           // Otherwise navigate to Login
           console.log('🔐 Navigating to Login');
-          navigation.navigate('Login');
+          navigation.navigate('login');
         } else if (onNavigateToLogin) {
           onNavigateToLogin();
         }
@@ -848,552 +848,508 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
 
 
 
-<<<<<<< HEAD
-  {/* Divider */ }
-  <View style={styles.divider}>
-    <View style={styles.dividerLine} />
-    <Text style={styles.dividerText}>or continue with</Text>
-    <View style={styles.dividerLine} />
-  </View>
+            {/* Builder Specific Fields */}
+            {formData.role === 'builder' && (
+              <View style={styles.builderFieldsContainer}>
+                <Text style={styles.sectionHeader}>Builder Details</Text>
 
-  {/* Social Buttons
-        <View style={styles.socialButtons}>
-          <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
-            <View style={styles.googleIcon}>
-              <Text style={styles.googleIconText}>G</Text>
-            </View>
-            <Text style={styles.socialButtonText}>Google</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
-            <Text style={styles.socialButtonText}>🍎 Apple</Text>
-          </TouchableOpacity>
-        </View> */}
+                {/* Company Name */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Company Name <Text style={styles.required}>*</Text>
+                  </Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'companyName' && styles.inputWrapperFocused, errors.companyName && styles.inputWrapperError]}>
+                    <Building2
+                      color={focusedInput === 'companyName' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter company name"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.companyName}
+                      onChangeText={(value) => handleInputChange('companyName', value)}
+                      onFocus={() => setFocusedInput('companyName')}
+                      onBlur={() => setFocusedInput(null)}
+                    />
+                  </View>
+                  {errors.companyName && (
+                    <View style={styles.errorContainer}>
+                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                      <Text style={styles.errorText}>{errors.companyName}</Text>
+                    </View>
+                  )}
+                </View>
 
-  {/* Login Link */ }
-  <View style={styles.loginLinkContainer}>
-    <Text style={styles.loginLinkText}>Already have an account? </Text>
-    <TouchableOpacity
-      onPress={() => {
-        if (navigation) {
-          navigation.navigate('Login');
-        } else if (onNavigateToLogin) {
-          onNavigateToLogin();
-        }
-      }}
-    >
-      <Text style={styles.loginLink}>Login</Text>
-    </TouchableOpacity>
-=======
-          {/* Builder Specific Fields */}
-    {formData.role === 'builder' && (
-      <View style={styles.builderFieldsContainer}>
-        <Text style={styles.sectionHeader}>Builder Details</Text>
-
-        {/* Company Name */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Company Name <Text style={styles.required}>*</Text>
-          </Text>
-          <View style={[styles.inputWrapper, focusedInput === 'companyName' && styles.inputWrapperFocused, errors.companyName && styles.inputWrapperError]}>
-            <Building2
-              color={focusedInput === 'companyName' ? '#2D6A4F' : '#9CA3AF'}
-              size={20}
-              strokeWidth={2}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Enter company name"
-              placeholderTextColor="#9CA3AF"
-              value={formData.companyName}
-              onChangeText={(value) => handleInputChange('companyName', value)}
-              onFocus={() => setFocusedInput('companyName')}
-              onBlur={() => setFocusedInput(null)}
-            />
-          </View>
-          {errors.companyName && (
-            <View style={styles.errorContainer}>
-              <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-              <Text style={styles.errorText}>{errors.companyName}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Description */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Company Description <Text style={styles.labelOptional}>(Optional)</Text>
-          </Text>
-          <View style={[styles.textAreaWrapper, focusedInput === 'description' && styles.inputWrapperFocused]}>
-            <MessageSquare
-              color={focusedInput === 'description' ? '#2D6A4F' : '#9CA3AF'}
-              size={20}
-              strokeWidth={2}
-              style={styles.textAreaIcon}
-            />
-            <TextInput
-              style={styles.textArea}
-              placeholder="Brief description about your company and projects..."
-              placeholderTextColor="#9CA3AF"
-              value={formData.description}
-              onChangeText={(value) => handleInputChange('description', value)}
-              onFocus={() => setFocusedInput('description')}
-              onBlur={() => setFocusedInput(null)}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-            />
-          </View>
-        </View>
-
-        {/* GST Number (Optional) */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            GST Number <Text style={styles.labelOptional}>(Optional)</Text>
-          </Text>
-          <View style={[styles.inputWrapper, focusedInput === 'gstNo' && styles.inputWrapperFocused, errors.gstNo && styles.inputWrapperError]}>
-            <Shield
-              color={focusedInput === 'gstNo' ? '#2D6A4F' : '#9CA3AF'}
-              size={20}
-              strokeWidth={2}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Enter GST number"
-              placeholderTextColor="#9CA3AF"
-              value={formData.gstNo}
-              onChangeText={(value) => handleInputChange('gstNo', value)}
-              onFocus={() => setFocusedInput('gstNo')}
-              onBlur={() => setFocusedInput(null)}
-              autoCapitalize="characters"
-            />
-          </View>
-          {errors.gstNo && (
-            <View style={styles.errorContainer}>
-              <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-              <Text style={styles.errorText}>{errors.gstNo}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* PAN Number (Required for builders) */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            PAN Number <Text style={styles.required}>*</Text>
-          </Text>
-          <View style={[styles.inputWrapper, focusedInput === 'panNo' && styles.inputWrapperFocused, errors.panNo && styles.inputWrapperError]}>
-            <Shield
-              color={focusedInput === 'panNo' ? '#2D6A4F' : '#9CA3AF'}
-              size={20}
-              strokeWidth={2}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Enter PAN number (e.g. AAAAA1111A)"
-              placeholderTextColor="#9CA3AF"
-              value={formData.panNo}
-              onChangeText={(value) => handleInputChange('panNo', value)}
-              onFocus={() => setFocusedInput('panNo')}
-              onBlur={() => setFocusedInput(null)}
-              autoCapitalize="characters"
-            />
-          </View>
-          {errors.panNo && (
-            <View style={styles.errorContainer}>
-              <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-              <Text style={styles.errorText}>{errors.panNo}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Registration Certificate Upload */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Registration Certificate <Text style={styles.labelOptional}>(Optional)</Text>
-          </Text>
-          <View style={styles.documentUploadContainer}>
-            {formData.registrationCertificate ? (
-              <View style={styles.documentPreview}>
-                <View style={styles.documentInfo}>
-                  <FileText color="#2D6A4F" size={24} strokeWidth={2} />
-                  <View style={styles.documentDetails}>
-                    <Text style={styles.documentName} numberOfLines={1}>
-                      {formData.registrationCertificate.name}
-                    </Text>
-                    <Text style={styles.documentSize}>
-                      {formatFileSize(formData.registrationCertificate.size || 0)}
-                    </Text>
+                {/* Description */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Company Description <Text style={styles.labelOptional}>(Optional)</Text>
+                  </Text>
+                  <View style={[styles.textAreaWrapper, focusedInput === 'description' && styles.inputWrapperFocused]}>
+                    <MessageSquare
+                      color={focusedInput === 'description' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.textAreaIcon}
+                    />
+                    <TextInput
+                      style={styles.textArea}
+                      placeholder="Brief description about your company and projects..."
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.description}
+                      onChangeText={(value) => handleInputChange('description', value)}
+                      onFocus={() => setFocusedInput('description')}
+                      onBlur={() => setFocusedInput(null)}
+                      multiline
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                    />
                   </View>
                 </View>
-                <TouchableOpacity
-                  onPress={handleRemoveDocument}
-                  style={styles.documentRemoveButton}
-                  activeOpacity={0.8}
-                >
-                  <X color="#DC2626" size={18} strokeWidth={2} />
-                </TouchableOpacity>
+
+                {/* GST Number (Optional) */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    GST Number <Text style={styles.labelOptional}>(Optional)</Text>
+                  </Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'gstNo' && styles.inputWrapperFocused, errors.gstNo && styles.inputWrapperError]}>
+                    <Shield
+                      color={focusedInput === 'gstNo' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter GST number"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.gstNo}
+                      onChangeText={(value) => handleInputChange('gstNo', value)}
+                      onFocus={() => setFocusedInput('gstNo')}
+                      onBlur={() => setFocusedInput(null)}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                  {errors.gstNo && (
+                    <View style={styles.errorContainer}>
+                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                      <Text style={styles.errorText}>{errors.gstNo}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* PAN Number (Required for builders) */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    PAN Number <Text style={styles.required}>*</Text>
+                  </Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'panNo' && styles.inputWrapperFocused, errors.panNo && styles.inputWrapperError]}>
+                    <Shield
+                      color={focusedInput === 'panNo' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter PAN number (e.g. AAAAA1111A)"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.panNo}
+                      onChangeText={(value) => handleInputChange('panNo', value)}
+                      onFocus={() => setFocusedInput('panNo')}
+                      onBlur={() => setFocusedInput(null)}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                  {errors.panNo && (
+                    <View style={styles.errorContainer}>
+                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                      <Text style={styles.errorText}>{errors.panNo}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Registration Certificate Upload */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Registration Certificate <Text style={styles.labelOptional}>(Optional)</Text>
+                  </Text>
+                  <View style={styles.documentUploadContainer}>
+                    {formData.registrationCertificate ? (
+                      <View style={styles.documentPreview}>
+                        <View style={styles.documentInfo}>
+                          <FileText color="#2D6A4F" size={24} strokeWidth={2} />
+                          <View style={styles.documentDetails}>
+                            <Text style={styles.documentName} numberOfLines={1}>
+                              {formData.registrationCertificate.name}
+                            </Text>
+                            <Text style={styles.documentSize}>
+                              {formatFileSize(formData.registrationCertificate.size || 0)}
+                            </Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          onPress={handleRemoveDocument}
+                          style={styles.documentRemoveButton}
+                          activeOpacity={0.8}
+                        >
+                          <X color="#DC2626" size={18} strokeWidth={2} />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={handleDocumentUpload}
+                        disabled={uploadingDocument}
+                        style={styles.documentUploadButton}
+                        activeOpacity={0.8}
+                      >
+                        {uploadingDocument ? (
+                          <ActivityIndicator color="#2D6A4F" size="small" />
+                        ) : (
+                          <>
+                            <Upload color="#2D6A4F" size={20} strokeWidth={2} />
+                            <Text style={styles.documentUploadText}>
+                              Upload Certificate (PDF or Image)
+                            </Text>
+                            <Text style={styles.documentUploadSubtext}>
+                              Max 10MB
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    {errors.registrationCertificate && (
+                      <View style={styles.errorContainer}>
+                        <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                        <Text style={styles.errorText}>{errors.registrationCertificate}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                {/* Website */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Website <Text style={styles.labelOptional}>(Optional)</Text>
+                  </Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'website' && styles.inputWrapperFocused]}>
+                    <TrendingUp
+                      color={focusedInput === 'website' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="https://example.com"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.website}
+                      onChangeText={(value) => handleInputChange('website', value)}
+                      onFocus={() => setFocusedInput('website')}
+                      onBlur={() => setFocusedInput(null)}
+                      keyboardType="url"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
+
+                {/* Experience Years and Total Projects in a row */}
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>Experience (Years) <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                    <View style={[styles.inputWrapper, focusedInput === 'experienceYears' && styles.inputWrapperFocused]}>
+                      <Briefcase
+                        color={focusedInput === 'experienceYears' ? '#2D6A4F' : '#9CA3AF'}
+                        size={20}
+                        strokeWidth={2}
+                        style={styles.inputIcon}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 5"
+                        placeholderTextColor="#9CA3AF"
+                        value={formData.experienceYears}
+                        onChangeText={(value) => handleInputChange('experienceYears', value)}
+                        onFocus={() => setFocusedInput('experienceYears')}
+                        onBlur={() => setFocusedInput(null)}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>Total Projects <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                    <View style={[styles.inputWrapper, focusedInput === 'totalProjects' && styles.inputWrapperFocused]}>
+                      <Building2
+                        color={focusedInput === 'totalProjects' ? '#2D6A4F' : '#9CA3AF'}
+                        size={20}
+                        strokeWidth={2}
+                        style={styles.inputIcon}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 10"
+                        placeholderTextColor="#9CA3AF"
+                        value={formData.totalProjects}
+                        onChangeText={(value) => handleInputChange('totalProjects', value)}
+                        onFocus={() => setFocusedInput('totalProjects')}
+                        onBlur={() => setFocusedInput(null)}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Address Section */}
+                <Text style={[styles.label, { marginTop: 8 }]}>Street Address / Building <Text style={styles.labelOptional}>(Optional)</Text></Text>
+
+                <View style={styles.inputGroup}>
+                  <View style={[styles.inputWrapper, focusedInput === 'address' && styles.inputWrapperFocused]}>
+                    <MapPin
+                      color={focusedInput === 'address' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Floor, Building Name, Street"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.address}
+                      onChangeText={(value) => handleInputChange('address', value)}
+                      onFocus={() => setFocusedInput('address')}
+                      onBlur={() => setFocusedInput(null)}
+                    />
+                  </View>
+                </View>
+
+                {/* City and State in a row */}
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>City <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                    <View style={[styles.inputWrapper, focusedInput === 'city' && styles.inputWrapperFocused]}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="City"
+                        placeholderTextColor="#9CA3AF"
+                        value={formData.city}
+                        onChangeText={(value) => handleInputChange('city', value)}
+                        onFocus={() => setFocusedInput('city')}
+                        onBlur={() => setFocusedInput(null)}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>State <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                    <View style={[styles.inputWrapper, focusedInput === 'state' && styles.inputWrapperFocused]}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="State"
+                        placeholderTextColor="#9CA3AF"
+                        value={formData.state}
+                        onChangeText={(value) => handleInputChange('state', value)}
+                        onFocus={() => setFocusedInput('state')}
+                        onBlur={() => setFocusedInput(null)}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Pincode */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Pincode <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'pincode' && styles.inputWrapperFocused]}>
+                    <MapPin
+                      color={focusedInput === 'pincode' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Pincode"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.pincode}
+                      onChangeText={(value) => handleInputChange('pincode', value)}
+                      onFocus={() => setFocusedInput('pincode')}
+                      onBlur={() => setFocusedInput(null)}
+                      keyboardType="numeric"
+                      maxLength={6}
+                    />
+                  </View>
+                </View>
               </View>
-            ) : (
+            )}
+
+            {/* Terms and Conditions */}
+            <View style={styles.inputGroup}>
               <TouchableOpacity
-                onPress={handleDocumentUpload}
-                disabled={uploadingDocument}
-                style={styles.documentUploadButton}
-                activeOpacity={0.8}
+                onPress={() => {
+                  setTermsAccepted(!termsAccepted);
+                  if (errors.terms) {
+                    setErrors((prev) => ({ ...prev, terms: '' }));
+                  }
+                }}
+                style={styles.termsButton}
+                activeOpacity={0.7}
               >
-                {uploadingDocument ? (
-                  <ActivityIndicator color="#2D6A4F" size="small" />
-                ) : (
-                  <>
-                    <Upload color="#2D6A4F" size={20} strokeWidth={2} />
-                    <Text style={styles.documentUploadText}>
-                      Upload Certificate (PDF or Image)
-                    </Text>
-                    <Text style={styles.documentUploadSubtext}>
-                      Max 10MB
-                    </Text>
-                  </>
-                )}
+                <View
+                  style={[
+                    styles.checkbox,
+                    termsAccepted && styles.checkboxChecked,
+                  ]}
+                >
+                  {termsAccepted && (
+                    <Check color="#FFFFFF" size={12} strokeWidth={3} />
+                  )}
+                </View>
+                <Text style={styles.termsText}>
+                  I agree to the{' '}
+                  <Text style={styles.termsLink}>Terms & Conditions</Text> and{' '}
+                  <Text style={styles.termsLink}>Privacy Policy</Text>
+                </Text>
               </TouchableOpacity>
-            )}
-            {errors.registrationCertificate && (
-              <View style={styles.errorContainer}>
-                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                <Text style={styles.errorText}>{errors.registrationCertificate}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Website */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Website <Text style={styles.labelOptional}>(Optional)</Text>
-          </Text>
-          <View style={[styles.inputWrapper, focusedInput === 'website' && styles.inputWrapperFocused]}>
-            <TrendingUp
-              color={focusedInput === 'website' ? '#2D6A4F' : '#9CA3AF'}
-              size={20}
-              strokeWidth={2}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="https://example.com"
-              placeholderTextColor="#9CA3AF"
-              value={formData.website}
-              onChangeText={(value) => handleInputChange('website', value)}
-              onFocus={() => setFocusedInput('website')}
-              onBlur={() => setFocusedInput(null)}
-              keyboardType="url"
-              autoCapitalize="none"
-            />
-          </View>
-        </View>
-
-        {/* Experience Years and Total Projects in a row */}
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>Experience (Years) <Text style={styles.labelOptional}>(Optional)</Text></Text>
-            <View style={[styles.inputWrapper, focusedInput === 'experienceYears' && styles.inputWrapperFocused]}>
-              <Briefcase
-                color={focusedInput === 'experienceYears' ? '#2D6A4F' : '#9CA3AF'}
-                size={20}
-                strokeWidth={2}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 5"
-                placeholderTextColor="#9CA3AF"
-                value={formData.experienceYears}
-                onChangeText={(value) => handleInputChange('experienceYears', value)}
-                onFocus={() => setFocusedInput('experienceYears')}
-                onBlur={() => setFocusedInput(null)}
-                keyboardType="numeric"
-              />
+              {errors.terms && (
+                <View style={[styles.errorContainer, styles.errorContainerIndent]}>
+                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                  <Text style={styles.errorText}>{errors.terms}</Text>
+                </View>
+              )}
             </View>
-          </View>
 
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>Total Projects <Text style={styles.labelOptional}>(Optional)</Text></Text>
-            <View style={[styles.inputWrapper, focusedInput === 'totalProjects' && styles.inputWrapperFocused]}>
-              <Building2
-                color={focusedInput === 'totalProjects' ? '#2D6A4F' : '#9CA3AF'}
-                size={20}
-                strokeWidth={2}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 10"
-                placeholderTextColor="#9CA3AF"
-                value={formData.totalProjects}
-                onChangeText={(value) => handleInputChange('totalProjects', value)}
-                onFocus={() => setFocusedInput('totalProjects')}
-                onBlur={() => setFocusedInput(null)}
-                keyboardType="numeric"
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Address Section */}
-        <Text style={[styles.label, { marginTop: 8 }]}>Street Address / Building <Text style={styles.labelOptional}>(Optional)</Text></Text>
-
-        <View style={styles.inputGroup}>
-          <View style={[styles.inputWrapper, focusedInput === 'address' && styles.inputWrapperFocused]}>
-            <MapPin
-              color={focusedInput === 'address' ? '#2D6A4F' : '#9CA3AF'}
-              size={20}
-              strokeWidth={2}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Floor, Building Name, Street"
-              placeholderTextColor="#9CA3AF"
-              value={formData.address}
-              onChangeText={(value) => handleInputChange('address', value)}
-              onFocus={() => setFocusedInput('address')}
-              onBlur={() => setFocusedInput(null)}
-            />
-          </View>
-        </View>
-
-        {/* City and State in a row */}
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>City <Text style={styles.labelOptional}>(Optional)</Text></Text>
-            <View style={[styles.inputWrapper, focusedInput === 'city' && styles.inputWrapperFocused]}>
-              <TextInput
-                style={styles.input}
-                placeholder="City"
-                placeholderTextColor="#9CA3AF"
-                value={formData.city}
-                onChangeText={(value) => handleInputChange('city', value)}
-                onFocus={() => setFocusedInput('city')}
-                onBlur={() => setFocusedInput(null)}
-              />
-            </View>
-          </View>
-
-          <View style={[styles.inputGroup, { flex: 1 }]}>
-            <Text style={styles.label}>State <Text style={styles.labelOptional}>(Optional)</Text></Text>
-            <View style={[styles.inputWrapper, focusedInput === 'state' && styles.inputWrapperFocused]}>
-              <TextInput
-                style={styles.input}
-                placeholder="State"
-                placeholderTextColor="#9CA3AF"
-                value={formData.state}
-                onChangeText={(value) => handleInputChange('state', value)}
-                onFocus={() => setFocusedInput('state')}
-                onBlur={() => setFocusedInput(null)}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Pincode */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Pincode <Text style={styles.labelOptional}>(Optional)</Text></Text>
-          <View style={[styles.inputWrapper, focusedInput === 'pincode' && styles.inputWrapperFocused]}>
-            <MapPin
-              color={focusedInput === 'pincode' ? '#2D6A4F' : '#9CA3AF'}
-              size={20}
-              strokeWidth={2}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Pincode"
-              placeholderTextColor="#9CA3AF"
-              value={formData.pincode}
-              onChangeText={(value) => handleInputChange('pincode', value)}
-              onFocus={() => setFocusedInput('pincode')}
-              onBlur={() => setFocusedInput(null)}
-              keyboardType="numeric"
-              maxLength={6}
-            />
-          </View>
-        </View>
-      </View>
-    )}
-
-    {/* Terms and Conditions */}
-    <View style={styles.inputGroup}>
-      <TouchableOpacity
-        onPress={() => {
-          setTermsAccepted(!termsAccepted);
-          if (errors.terms) {
-            setErrors((prev) => ({ ...prev, terms: '' }));
-          }
-        }}
-        style={styles.termsButton}
-        activeOpacity={0.7}
-      >
-        <View
-          style={[
-            styles.checkbox,
-            termsAccepted && styles.checkboxChecked,
-          ]}
-        >
-          {termsAccepted && (
-            <Check color="#FFFFFF" size={12} strokeWidth={3} />
-          )}
-        </View>
-        <Text style={styles.termsText}>
-          I agree to the{' '}
-          <Text style={styles.termsLink}>Terms & Conditions</Text> and{' '}
-          <Text style={styles.termsLink}>Privacy Policy</Text>
-        </Text>
-      </TouchableOpacity>
-      {errors.terms && (
-        <View style={[styles.errorContainer, styles.errorContainerIndent]}>
-          <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-          <Text style={styles.errorText}>{errors.terms}</Text>
-        </View>
-      )}
-    </View>
-
-    {/* Register Button */}
-    <TouchableOpacity
-      onPress={handleRegister}
-      disabled={!termsAccepted || isLoading}
-      style={[
-        styles.registerButton,
-        (!termsAccepted || isLoading) && styles.registerButtonDisabled,
-      ]}
-      activeOpacity={0.8}
-    >
-      {isLoading ? (
-        <View style={styles.registerButtonContent}>
-          <ActivityIndicator color="#FFFFFF" size="small" />
-          <Text style={styles.registerButtonText}>Creating Account...</Text>
-        </View>
-      ) : (
-        <Text style={styles.registerButtonText}>Create Account</Text>
-      )}
-    </TouchableOpacity>
-  </View>
-
-  {/* Divider */ }
-  <View style={styles.divider}>
-    <View style={styles.dividerLine} />
-    <Text style={styles.dividerText}>or continue with</Text>
-    <View style={styles.dividerLine} />
-  </View>
-
-  {/* Login Link */ }
-  <View style={styles.loginLinkContainer}>
-    <Text style={styles.loginLinkText}>Already have an account? </Text>
-    <TouchableOpacity
-      onPress={() => {
-        if (navigation) {
-          navigation.navigate('Login');
-        } else if (onNavigateToLogin) {
-          onNavigateToLogin();
-        }
-      }}
-    >
-      <Text style={styles.loginLink}>Login</Text>
-    </TouchableOpacity>
-  </View>
-
-  {/* Trust Badge */ }
-  <View style={styles.trustBadge}>
-    <View style={styles.trustIcon}>
-      <Shield color="#FFFFFF" size={12} strokeWidth={2} />
->>>>>>> e3ab940b9338bb6a073cf8cc6689ce76ce3e485d
-    </View>
-
-    {/* Trust Badge */}
-    <View style={styles.trustBadge}>
-      <View style={styles.trustIcon}>
-        <Shield color="#FFFFFF" size={12} strokeWidth={2} />
-      </View>
-      <Text style={styles.trustText}>
-        Secure registration • Your data is protected
-      </Text>
-    </View>
-  </ScrollView>
-      </KeyboardAvoidingView >
-
-    {/* User Type Modal */ }
-    < Modal
-  visible = { showroleModal }
-  transparent
-  animationType = "slide"
-  onRequestClose = {() => setShowroleModal(false)
-}
-      >
-  <TouchableOpacity
-    style={styles.modalOverlay}
-    activeOpacity={1}
-    onPress={() => setShowroleModal(false)}
-  >
-    <View style={styles.modalContent}>
-      <View style={styles.modalHeader}>
-        <View>
-          <Text style={styles.modalTitle}>Select Your Role</Text>
-          <Text style={styles.modalSubtitle}>
-            Choose how you want to use EstateHub
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => setShowroleModal(false)}
-          style={styles.modalCloseButton}
-        >
-          <X color="#6B7280" size={20} strokeWidth={2} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.modalBody}>
-        {USER_TYPES.map((type) => {
-          const IconComponent = type.icon;
-          return (
+            {/* Register Button */}
             <TouchableOpacity
-              key={type.value}
-              onPress={() => handleSelectrole(type.value)}
+              onPress={handleRegister}
+              disabled={!termsAccepted || isLoading}
               style={[
-                styles.roleOption,
-                formData.role === type.value &&
-                styles.roleOptionSelected,
+                styles.registerButton,
+                (!termsAccepted || isLoading) && styles.registerButtonDisabled,
               ]}
               activeOpacity={0.8}
             >
-              <View
-                style={[
-                  styles.roleOptionIcon,
-                  { backgroundColor: `${type.color}15` },
-                ]}
-              >
-                <IconComponent
-                  color={type.color}
-                  size={24}
-                  strokeWidth={2}
-                />
-              </View>
-              <View style={styles.roleOptionText}>
-                <Text style={styles.roleOptionLabel}>{type.label}</Text>
-                <Text style={styles.roleOptionDescription}>
-                  {type.description}
-                </Text>
-              </View>
-              {formData.role === type.value && (
-                <View style={styles.roleOptionCheck}>
-                  <Check color="#FFFFFF" size={14} strokeWidth={3} />
+              {isLoading ? (
+                <View style={styles.registerButtonContent}>
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <Text style={styles.registerButtonText}>Creating Account...</Text>
                 </View>
+              ) : (
+                <Text style={styles.registerButtonText}>Create Account</Text>
               )}
             </TouchableOpacity>
-          );
-        })}
-      </View>
+
+            {/* Divider */}
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or continue with</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Login Link */}
+            <View style={styles.loginLinkContainer}>
+              <Text style={styles.loginLinkText}>Already have an account? </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (navigation) {
+                    navigation.navigate('login');
+                  } else if (onNavigateToLogin) {
+                    onNavigateToLogin();
+                  }
+                }}
+              >
+                <Text style={styles.loginLink}>Login</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Trust Badge */}
+            <View style={styles.trustBadge}>
+              <View style={styles.trustIcon}>
+                <Shield color="#FFFFFF" size={12} strokeWidth={2} />
+              </View>
+              <Text style={styles.trustText}>
+                Secure registration • Your data is protected
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* User Type Modal */}
+      <Modal
+        visible={showroleModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowroleModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowroleModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Select Your Role</Text>
+                <Text style={styles.modalSubtitle}>
+                  Choose how you want to use EstateHub
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowroleModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <X color="#6B7280" size={20} strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              {USER_TYPES.map((type) => {
+                const IconComponent = type.icon;
+                return (
+                  <TouchableOpacity
+                    key={type.value}
+                    onPress={() => handleSelectrole(type.value)}
+                    style={[
+                      styles.roleOption,
+                      formData.role === type.value &&
+                      styles.roleOptionSelected,
+                    ]}
+                    activeOpacity={0.8}
+                  >
+                    <View
+                      style={[
+                        styles.roleOptionIcon,
+                        { backgroundColor: `${type.color}15` },
+                      ]}
+                    >
+                      <IconComponent
+                        color={type.color}
+                        size={24}
+                        strokeWidth={2}
+                      />
+                    </View>
+                    <View style={styles.roleOptionText}>
+                      <Text style={styles.roleOptionLabel}>{type.label}</Text>
+                      <Text style={styles.roleOptionDescription}>
+                        {type.description}
+                      </Text>
+                    </View>
+                    {formData.role === type.value && (
+                      <View style={styles.roleOptionCheck}>
+                        <Check color="#FFFFFF" size={14} strokeWidth={3} />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
-  </TouchableOpacity>
-      </Modal >
-    </View >
   );
 }
 

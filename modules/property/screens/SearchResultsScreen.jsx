@@ -12,22 +12,22 @@ import {
   Animated,
   Platform,
 } from 'react-native';
-import { 
-  Search, 
-  Home, 
-  Heart, 
-  MessageCircle, 
-  User, 
-  ArrowLeft, 
-  SlidersHorizontal, 
-  Map, 
-  MapPin, 
-  Bed, 
-  Bath, 
-  Maximize2, 
-  Camera, 
-  Star, 
-  X, 
+import {
+  Search,
+  Home,
+  Heart,
+  MessageCircle,
+  User,
+  ArrowLeft,
+  SlidersHorizontal,
+  Map,
+  MapPin,
+  Bed,
+  Bath,
+  Maximize2,
+  Camera,
+  Star,
+  X,
   ChevronDown,
   TrendingUp,
   Sparkles
@@ -136,14 +136,14 @@ const PropertyResultCard = ({
         useNativeDriver: true,
       }),
     ]).start();
-    
+
     // Rotation effect
     Animated.timing(rotateAnim, {
       toValue: 1,
       duration: 600,
       useNativeDriver: true,
     }).start(() => rotateAnim.setValue(0));
-    
+
     onToggleSave();
   };
 
@@ -174,47 +174,47 @@ const PropertyResultCard = ({
       <TouchableOpacity activeOpacity={0.95} onPress={onQuickView}>
         <View style={styles.imageContainer}>
           <Image source={{ uri: image }} style={styles.propertyImage} resizeMode="cover" />
-          
+
           {/* Animated gradient overlay */}
           <View style={styles.imageGradient} />
-          
+
           {/* Shimmer effect for featured */}
           {featured && (
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.shimmerOverlay,
                 {
                   transform: [{ translateX: shimmerTranslate }],
                 }
-              ]} 
+              ]}
             />
           )}
-          
+
           {featured && (
             <View style={styles.featuredBadge}>
               <Sparkles size={14} color="#FFF" />
               <Text style={styles.featuredText}>Featured</Text>
             </View>
           )}
-          
+
           {imageCount > 1 && (
             <View style={styles.imageCountBadge}>
               <Camera size={12} color="#FFF" />
               <Text style={styles.imageCountText}>{imageCount}</Text>
             </View>
           )}
-          
+
           <Animated.View style={{ transform: [{ scale: heartScale }, { rotate: cardRotate }] }}>
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Heart 
-                size={20} 
-                color={saved ? "#EF4444" : "#6B7280"} 
+              <Heart
+                size={20}
+                color={saved ? "#EF4444" : "#6B7280"}
                 fill={saved ? "#EF4444" : "transparent"}
               />
             </TouchableOpacity>
           </Animated.View>
         </View>
-        
+
         <View style={styles.cardContent}>
           <View style={styles.cardHeader}>
             <View style={styles.priceContainer}>
@@ -228,14 +228,14 @@ const PropertyResultCard = ({
               <ArrowLeft size={14} color="#2D6A4F" style={{ transform: [{ rotate: '180deg' }] }} />
             </TouchableOpacity>
           </View>
-          
+
           <Text style={styles.titleText} numberOfLines={2}>{title}</Text>
-          
+
           <View style={styles.locationRow}>
             <MapPin size={14} color="#6B7280" />
             <Text style={styles.locationText} numberOfLines={1}>{location}</Text>
           </View>
-          
+
           <View style={styles.specsRow}>
             <View style={styles.specItem}>
               <Bed size={16} color="#6B7280" />
@@ -252,7 +252,7 @@ const PropertyResultCard = ({
               <Text style={styles.specText}>{sqft}</Text>
             </View>
           </View>
-          
+
           <Text style={styles.highlightsText} numberOfLines={2}>{highlights}</Text>
         </View>
       </TouchableOpacity>
@@ -315,7 +315,7 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
   const [scrollY, setScrollY] = useState(0);
   const [messages, setMessages] = useState([]);
   const [activeTab, setActiveTab] = useState('search');
-  
+
   const headerOpacity = useRef(new Animated.Value(1)).current;
   const headerHeight = useRef(new Animated.Value(0)).current;
   const fabScale = useRef(new Animated.Value(0)).current;
@@ -361,10 +361,10 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
   const handleScroll = (event) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     setScrollY(offsetY);
-    
+
     const newOpacity = offsetY > 20 ? 0.98 : 1;
     const newHeight = offsetY > 100 ? -20 : 0;
-    
+
     Animated.parallel([
       Animated.timing(headerOpacity, {
         toValue: newOpacity,
@@ -405,14 +405,14 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
     // First try onBack callback (for non-navigation scenarios)
     if (onBack) {
       onBack();
-    } 
+    }
     // Then try navigation.goBack() (for React Navigation)
     else if (navigation && navigation.goBack) {
       navigation.goBack();
     }
     // Fallback: try to navigate to home
     else if (navigation && navigation.navigate) {
-      navigation.navigate('Home');
+      navigation.navigate('home');
     }
   };
 
@@ -501,10 +501,10 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Animated Header */}
-      <Animated.View 
+      <Animated.View
         style={[
-          styles.header, 
-          { 
+          styles.header,
+          {
             opacity: headerOpacity,
             transform: [{ translateY: headerHeight }],
           }
@@ -520,7 +520,7 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
               <ArrowLeft size={20} color="#111827" />
             </TouchableOpacity>
             <View style={styles.logoContainer}>
-              <Animated.View 
+              <Animated.View
                 style={[
                   styles.logoBox,
                   { transform: [{ rotate: logoRotation }] }
@@ -611,10 +611,10 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
       </ScrollView>
 
       {/* Floating Refine Button with glow */}
-      <Animated.View 
+      <Animated.View
         style={[
-          styles.refineButton, 
-          { 
+          styles.refineButton,
+          {
             transform: [{ scale: fabScale }],
             bottom: isWeb ? 120 : 100,
           }
@@ -627,7 +627,7 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
       </Animated.View>
 
       {/* Bottom Navigation */}
-      <UserNavigator 
+      <UserNavigator
         activeTab={activeTab}
         onTabPress={handleTabPress}
         messageCount={messages.length}
