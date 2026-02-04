@@ -34,6 +34,7 @@ app.use(helmet());
 // Routes
 console.log(" Registering /api/auth routes");
 app.use("/api/auth", authRoutes);
+
 console.log(" Registering /api/properties routes with protect middleware");
 app.use("/api/properties", protect, propertyRoutes);
 app.use("/api/booking", bookingRoutes);
