@@ -101,14 +101,7 @@ const checkAccountLockout = async (userId) => {
     }
 };
 
-
 // GOOGLE OAUTH LOGIN
-// controllers/authController.js - Google Login Method
-
-// ==================== GOOGLE LOGIN FUNCTION ====================
-// Add this to your existing authControllers.js file
-// Replace the existing googleLogin function if you have one
-
 module.exports.googleLogin = async (req, res) => {
     console.log('\n' + '='.repeat(70));
     console.log('🔐 GOOGLE LOGIN REQUEST RECEIVED');
@@ -492,34 +485,6 @@ module.exports.googleLogin = async (req, res) => {
     }
 };
 
-// ==================== HELPER FUNCTIONS ====================
-
-// function getRequestMetadata(req) {
-//     const ipAddress = req.headers['x-forwarded-for']?.split(',')[0] || 
-//                      req.connection?.remoteAddress || 
-//                      req.socket?.remoteAddress || 
-//                      'Unknown';
-
-//     const userAgent = req.headers['user-agent'] || 'Unknown';
-
-//     return { ipAddress, userAgent };
-// }
-
-// function getDeviceType(userAgent) {
-//     if (/mobile/i.test(userAgent)) return 'Mobile Device';
-//     if (/tablet/i.test(userAgent)) return 'Tablet';
-//     return 'Desktop';
-// }
-
-// function getBrowser(userAgent) {
-//     if (/chrome/i.test(userAgent)) return 'Chrome';
-//     if (/firefox/i.test(userAgent)) return 'Firefox';
-//     if (/safari/i.test(userAgent)) return 'Safari';
-//     if (/edge/i.test(userAgent)) return 'Edge';
-//     return 'Unknown Browser';
-// }
-
-
 // MICROSOFT OAUTH LOGIN
 module.exports.microsoftLogin = async (req, res) => {
     try {
@@ -642,10 +607,17 @@ module.exports.microsoftLogin = async (req, res) => {
     }
 };
 
-
+// REGULAR REGISTER 
 module.exports.register = async (req, res) => {
+    // Get a connection from the pool for transaction
+    const connection = await pool.getConnection();
+    
     try {
+        // Start transaction
+        await connection.beginTransaction();
+
         const {
+            // Buyer (User) specific fields
             name,
             email,
             phone,
@@ -656,14 +628,13 @@ module.exports.register = async (req, res) => {
             companyName,
             gstNo,
             panNo,
+            registrationCertificate,
             website,
             description,
             experienceYears,
+            totalProjects,
             address,
-            landmark,
-            area,
             city,
-            district,
             state,
             pincode
         } = req.body;
@@ -672,6 +643,8 @@ module.exports.register = async (req, res) => {
 
         // Validate required fields
         if (!name || !email || !phone || !password || !role) {
+            await connection.rollback();
+            connection.release();
             return res.status(400).json({
                 message: "All fields are required"
             });
@@ -680,6 +653,8 @@ module.exports.register = async (req, res) => {
         // Validate role
         const allowedRoles = ["buyer", "builder", "agent"];
         if (!allowedRoles.includes(role)) {
+            await connection.rollback();
+            connection.release();
             return res.status(400).json({
                 message: "Invalid role selected. Must be buyer, builder, or agent"
             });
@@ -688,13 +663,40 @@ module.exports.register = async (req, res) => {
         // Additional validation for builder
         if (role === "builder") {
             if (!companyName) {
+                await connection.rollback();
+                connection.release();
                 return res.status(400).json({
                     message: "Company name is required for builder registration"
                 });
             }
+            if (!gstNo) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    message: "GST number is required for builder registration"
+                });
+            }
             if (!panNo) {
+                await connection.rollback();
+                connection.release();
                 return res.status(400).json({
                     message: "PAN number is required for builder registration"
+                });
+            }
+            const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+            if (!gstRegex.test(gstNo.trim())) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    message: "Invalid GST number format"
+                });
+            }
+            const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+            if (!panRegex.test(panNo.trim())) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    message: "Invalid PAN number format"
                 });
             }
         }
@@ -702,6 +704,8 @@ module.exports.register = async (req, res) => {
         // Validate email format
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
+            await connection.rollback();
+            connection.release();
             return res.status(400).json({
                 message: "Invalid email format"
             });
@@ -710,40 +714,98 @@ module.exports.register = async (req, res) => {
         // Validate phone format (10-15 digits)
         const phoneRegex = /^[0-9]{10,15}$/;
         if (!phoneRegex.test(phone)) {
+            await connection.rollback();
+            connection.release();
             return res.status(400).json({
                 message: "Phone number must be 10-15 digits"
             });
         }
 
         // Validate password strength
-        if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+        if (password.length < 8) {
+            await connection.rollback();
+            connection.release();
             return res.status(400).json({
-                message: "Password must be at least 8 characters with letters and numbers"
+                message: "Password must be at least 8 characters long"
+            });
+        }
+        if (!/[a-zA-Z]/.test(password)) {
+            await connection.rollback();
+            connection.release();
+            return res.status(400).json({
+                message: "Password must contain at least one letter"
+            });
+        }
+        if (!/[0-9]/.test(password)) {
+            await connection.rollback();
+            connection.release();
+            return res.status(400).json({
+                message: "Password must contain at least one number"
+            });
+        }
+        if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+            await connection.rollback();
+            connection.release();
+            return res.status(400).json({
+                message: "Password must contain at least one special character"
             });
         }
 
         // Check if email already exists in users table
-        const [existing] = await pool.query(
+        const [existing] = await connection.query(
             "SELECT id FROM users WHERE email = ?",
             [email.toLowerCase().trim()]
         );
 
         if (existing.length > 0) {
+            await connection.rollback();
+            connection.release();
             return res.status(409).json({
                 message: "This email is already registered. Please login instead.",
             });
         }
 
         // Check if phone already exists in users table
-        const [existingPhone] = await pool.query(
+        const [existingPhone] = await connection.query(
             "SELECT id FROM users WHERE phone = ?",
             [phone]
         );
 
         if (existingPhone.length > 0) {
+            await connection.rollback();
+            connection.release();
             return res.status(409).json({
                 message: "This phone number is already registered.",
             });
+        }
+
+        // For builders, check if GST or PAN already exists
+        if (role === "builder") {
+            const [existingGst] = await connection.query(
+                "SELECT user_id FROM builder WHERE gst_no = ?",
+                [gstNo.trim()]
+            );
+
+            if (existingGst.length > 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(409).json({
+                    message: "This GST number is already registered."
+                });
+            }
+
+            const [existingPan] = await connection.query(
+                "SELECT user_id FROM builder WHERE pan_no = ?",
+                [panNo.trim()]
+            );
+
+            if (existingPan.length > 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(409).json({
+                    message: "This PAN number is already registered."
+                });
+            }
         }
 
         console.log("Register payload:", {
@@ -751,49 +813,89 @@ module.exports.register = async (req, res) => {
             email,
             phone,
             role,
+            profileImage,
             companyName: role === 'builder' ? companyName : 'N/A',
-            panNo: role === 'builder' ? panNo : 'N/A'
+            website: role === 'builder' ? website : null,
+            registrationCertificate: role === 'builder' ? registrationCertificate : null,
+            experienceYears: role === 'builder' ? experienceYears : null,
+            address: role === 'builder' ? address : null,
+            city: role === 'builder' ? city : null,
+            state: role === 'builder' ? state : null,
+            pincode: role === 'builder' ? pincode : null,
+            description: role === 'builder' ? description : null,
+            gstNo: role === 'builder' ? gstNo : 'N/A',
+            panNo: role === 'builder' ? panNo : 'N/A',
+            totalProjects: role === 'builder' ? totalProjects : null
         });
 
         // Hash password
-        const hashed = await bcrypt.hash(password, 10);
+        const hashed = await bcrypt.hash(password, 12);
 
         let userId;
 
         // Insert into users table first
-        const [result] = await pool.query(
+        const [result] = await connection.query(
             "INSERT INTO users (name, email, phone, password, role, is_verified, created_at) VALUES (?,?,?,?,?, false, NOW())",
             [name.trim(), email.toLowerCase().trim(), phone, hashed, role]
         );
         userId = result.insertId;
 
-        // If builder role, also insert into builders table
-        // If builder role, also insert into builders table
+        // If builder role, also insert into builder table
         if (role === "builder") {
-            await pool.query(
-                `INSERT INTO builders (
-                    user_id, company_name, gst_or_pan, pan_no, website, description, experience_years,   
-                    address, landmark, area, city, district, state, pincode, verification_status
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            const parsedExperienceYears = experienceYears ? parseInt(experienceYears, 10) : null;
+            const parsedTotalProjects = totalProjects ? parseInt(totalProjects, 10) : null;
+
+            // Validate parsed numbers
+            if (experienceYears && (isNaN(parsedExperienceYears) || parsedExperienceYears < 0)) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    message: "Experience years must be a valid positive number"
+                });
+            }
+
+            if (totalProjects && (isNaN(parsedTotalProjects) || parsedTotalProjects < 0)) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    message: "Total projects must be a valid positive number"
+                });
+            }
+
+            await connection.query(
+                `INSERT INTO builder (
+                    user_id, name, email, phone, password, profile_image,
+                    company_name, gst_no, pan_no, website,
+                    registration_certificate, description,
+                    experience_years, total_projects,
+                    address, city, state, pincode
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     userId,
+                    name?.trim() || null,
+                    email?.toLowerCase().trim() || null,
+                    phone?.trim() || null,
+                    hashed,
+                    profileImage?.trim() || null,
                     companyName?.trim() || null,
                     gstNo?.trim() || null,
                     panNo?.trim() || null,
                     website?.trim() || null,
+                    registrationCertificate?.trim() || null,
                     description?.trim() || null,
-                    experienceYears || null,
+                    parsedExperienceYears,
+                    parsedTotalProjects,
                     address?.trim() || null,
-                    landmark?.trim() || null,
-                    area?.trim() || null,
                     city?.trim() || null,
-                    district?.trim() || null,
                     state?.trim() || null,
-                    pincode?.trim() || null,
-                    'pending'
+                    pincode?.trim() || null
                 ]
             );
         }
+
+        // Commit transaction
+        await connection.commit();
+        connection.release();
 
         // Generate JWT token
         const token = jwt.sign(
@@ -805,8 +907,13 @@ module.exports.register = async (req, res) => {
             { expiresIn: "7d" }
         );
 
-        // Log registration activity
-        await logUserActivity(userId, 'registration', ipAddress, userAgent, 'User registered successfully', 'email');
+        // Log registration activity (outside transaction)
+        try {
+            await logUserActivity(userId, 'registration', ipAddress, userAgent, 'User registered successfully', 'email');
+        } catch (logError) {
+            console.error('Failed to log user activity:', logError);
+            // Don't fail the registration if logging fails
+        }
 
         // Prepare response based on role
         const userResponse = {
@@ -820,9 +927,13 @@ module.exports.register = async (req, res) => {
         // Add builder-specific fields to response
         if (role === "builder") {
             userResponse.companyName = companyName?.trim() || null;
-            userResponse.gstNo = (typeof gstNo !== 'undefined' && gstNo) ? gstNo?.trim() : (gstOrPan?.trim() || null);
+            userResponse.gstNo = gstNo?.trim() || null;
             userResponse.panNo = panNo?.trim() || null;
             userResponse.website = website?.trim() || null;
+            userResponse.description = description?.trim() || null;
+            userResponse.experienceYears = experienceYears ? parseInt(experienceYears) : null;
+            userResponse.totalProjects = totalProjects ? parseInt(totalProjects) : null;
+            userResponse.address = address?.trim() || null;
             userResponse.verificationStatus = 'pending';
             userResponse.city = city?.trim() || null;
             userResponse.state = state?.trim() || null;
@@ -838,6 +949,14 @@ module.exports.register = async (req, res) => {
         });
 
     } catch (err) {
+        // Rollback transaction on error
+        try {
+            await connection.rollback();
+            connection.release();
+        } catch (rollbackError) {
+            console.error('Rollback error:', rollbackError);
+        }
+
         console.error("\n❌ REGISTRATION ERROR");
         console.error("Error Name:", err.name);
         console.error("Error Message:", err.message);
@@ -868,6 +987,8 @@ module.exports.register = async (req, res) => {
                 errorMessage = "Duplicate entry. Email or phone may already be registered.";
             } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
                 errorMessage = "Database access denied. Check your credentials.";
+            } else if (err.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
+                errorMessage = "Invalid data type. Please check that numeric fields contain only numbers.";
             }
         }
 
@@ -946,12 +1067,12 @@ module.exports.login = async (req, res) => {
         // Fetch builder details if applicable
         let builderDetails = {};
         if (user.role === 'builder') {
-            const [builders] = await pool.query(
-                "SELECT * FROM builders WHERE user_id = ?",
+            const [builder] = await pool.query(
+                "SELECT * FROM builder WHERE user_id = ?",
                 [user.id]
             );
-            if (builders.length > 0) {
-                builderDetails = builders[0];
+            if (builder.length > 0) {
+                builderDetails = builder[0];
             }
         }
 
@@ -963,11 +1084,23 @@ module.exports.login = async (req, res) => {
         );
 
         // Log successful login
-        await logUserActivity(user.id, 'login', ipAddress, userAgent, 'User logged in successfully', 'email');
+        try {
+            await logUserActivity(
+                user.id,
+                'login',
+                ipAddress,
+                userAgent,
+                'User logged in successfully',
+                'email'
+            );
+        } catch (logError) {
+            console.error("Failed to log user activity:", logError);
+            // Continue execution - don't fail registration due to logging error
+        }
 
         // Update last login timestamp
         await pool.query(
-            "UPDATE users SET updated_at = NOW() WHERE id = ?",
+            "UPDATE users SET last_login = NOW() WHERE id = ?",
             [user.id]
         );
 
@@ -985,7 +1118,7 @@ module.exports.login = async (req, res) => {
         // Add builder specific fields
         if (user.role === 'builder' && builderDetails.id) {
             userResponse.companyName = builderDetails.company_name;
-            userResponse.gstNo = builderDetails.gst_or_pan; // Or separates if you prefer
+            userResponse.gstNo = builderDetails.gst_no; // Or separates if you prefer
             userResponse.panNo = builderDetails.pan_no;
             userResponse.website = builderDetails.website;
             userResponse.verificationStatus = builderDetails.verification_status;
@@ -1012,7 +1145,6 @@ module.exports.login = async (req, res) => {
     }
 };
 
-
 // LOGOUT
 module.exports.logout = async (req, res) => {
     try {
@@ -1036,7 +1168,6 @@ module.exports.logout = async (req, res) => {
     }
 };
 
-
 // GET PROFILE
 module.exports.getProfile = async (req, res) => {
     try {
@@ -1057,12 +1188,12 @@ module.exports.getProfile = async (req, res) => {
         // Fetch builder details if applicable
         let builderDetails = {};
         if (user.role === 'builder') {
-            const [builders] = await pool.query(
-                "SELECT * FROM builders WHERE user_id = ?",
+            const [builder] = await pool.query(
+                "SELECT * FROM builder WHERE user_id = ?",
                 [userId]
             );
-            if (builders.length > 0) {
-                builderDetails = builders[0];
+            if (builder.length > 0) {
+                builderDetails = builder[0];
             }
         }
 
@@ -1080,14 +1211,13 @@ module.exports.getProfile = async (req, res) => {
         // Add builder specific fields
         if (user.role === 'builder' && builderDetails.id) {
             userResponse.companyName = builderDetails.company_name;
-            userResponse.gstNo = builderDetails.gst_or_pan;
+            userResponse.gstNo = builderDetails.gst_no;
             userResponse.panNo = builderDetails.pan_no;
             userResponse.website = builderDetails.website;
+            userResponse.description = builderDetails.description;
             userResponse.verificationStatus = builderDetails.verification_status;
-            userResponse.businessAddress = builderDetails.address;
-            userResponse.landmark = builderDetails.landmark;
-            userResponse.area = builderDetails.area;
-            userResponse.district = builderDetails.district;
+            userResponse.address = builderDetails.address;
+            userResponse.totalProjects = builderDetails.total_projects;
             userResponse.city = builderDetails.city;
             userResponse.state = builderDetails.state;
             userResponse.pincode = builderDetails.pincode;
@@ -1104,7 +1234,6 @@ module.exports.getProfile = async (req, res) => {
         });
     }
 };
-
 
 // OTP VERIFICATION
 module.exports.verifyOtp = async (req, res) => {
@@ -1207,7 +1336,6 @@ module.exports.verifyOtp = async (req, res) => {
     }
 };
 
-
 // RESEND OTP
 module.exports.resendOtp = async (req, res) => {
     try {
@@ -1283,7 +1411,6 @@ module.exports.resendOtp = async (req, res) => {
     }
 };
 
-
 // FORGOT PASSWORD
 module.exports.forgotPassword = async (req, res) => {
     try {
@@ -1357,7 +1484,6 @@ module.exports.forgotPassword = async (req, res) => {
         });
     }
 };
-
 
 // RESET PASSWORD
 module.exports.resetPassword = async (req, res) => {

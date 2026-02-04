@@ -12,7 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Home, Mail, Lock, Eye, EyeOff, AlertCircle, X } from 'lucide-react-native';
+import { Home, Mail, Lock, Eye, EyeOff, AlertCircle, X, ArrowLeft } from 'lucide-react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import {
   GOOGLE_CONFIG,
@@ -672,6 +672,14 @@ export default function LoginScreen({
             resizeMode="cover"
           >
             <View style={styles.headerOverlay} />
+            {/* Back Button */}
+            <TouchableOpacity
+              style={styles.backButtonContainer}
+              onPress={() => onBack && onBack()}
+              activeOpacity={0.8}
+            >
+              <ArrowLeft color="#FFFFFF" size={24} strokeWidth={2} />
+            </TouchableOpacity>
             <View style={styles.headerLogoContainer}>
               <View style={styles.headerLogo}>
                 <Home color="#FFFFFF" size={24} strokeWidth={2} />
@@ -913,6 +921,22 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+  },
+  backButtonContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 24,
+    right: 24,
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   contentCard: {
     backgroundColor: '#FFFFFF',

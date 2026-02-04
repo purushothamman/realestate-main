@@ -10,6 +10,8 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -32,8 +34,12 @@ import {
   X,
   TrendingUp,
   MapPin,
+  Briefcase,
+  FileText,
+  MessageSquare,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 
 // Backend API configuration - UPDATE THIS WITH YOUR ACTUAL API URL
 const API_BASE_URL = 'http://localhost:5000/api'; // For local development
@@ -78,11 +84,10 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
     website: '',
     description: '',
     experienceYears: '',
+    totalProjects: '',
+    registrationCertificate: null,
     address: '',
-    landmark: '',
-    area: '',
     city: '',
-    district: '',
     state: '',
     pincode: '',
   });
@@ -96,6 +101,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
   const [apiError, setApiError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
 
   // Validation functions
   const validateEmail = (email) => {
@@ -245,12 +251,101 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
     } catch (error) {
       console.error('Error picking image:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
+      setUploadingImage(false);
     }
   };
 
   const handleRemoveImage = () => {
     setFormData((prev) => ({ ...prev, profileImage: null }));
     setErrors((prev) => ({ ...prev, profileImage: '' }));
+  };
+
+  const handleDocumentUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.type === 'cancel') {
+        return;
+      }
+
+      if (result.assets && result.assets[0]) {
+        const asset = result.assets[0];
+
+        if (asset.size && asset.size > 10 * 1024 * 1024) {
+          setErrors((prev) => ({ ...prev, registrationCertificate: 'Document must be less than 10MB' }));
+          return;
+        }
+
+        setUploadingDocument(true);
+        setErrors((prev) => ({ ...prev, registrationCertificate: '' }));
+
+        try {
+          const formDataUpload = new FormData();
+          formDataUpload.append('registrationCertificate', {
+            uri: asset.uri,
+            type: asset.mimeType || 'application/pdf',
+            name: asset.name || 'certificate.pdf',
+          });
+
+          const response = await fetch(`${API_BASE_URL}/upload/registration-certificate`, {
+            method: 'POST',
+            body: formDataUpload,
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.message || 'Failed to upload document');
+          }
+
+          setFormData((prev) => ({
+            ...prev,
+            registrationCertificate: {
+              uri: data.documentUrl || data.url || asset.uri,
+              name: asset.name,
+              size: asset.size,
+            },
+          }));
+        } catch (error) {
+          console.error('Document upload error:', error);
+          // Fallback: use local data if backend fails
+          setFormData((prev) => ({
+            ...prev,
+            registrationCertificate: {
+              uri: asset.uri,
+              name: asset.name,
+              size: asset.size,
+            },
+          }));
+          Alert.alert('Info', 'Document will be uploaded after registration');
+        } finally {
+          setUploadingDocument(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error picking document:', error);
+      Alert.alert('Error', 'Failed to pick document. Please try again.');
+      setUploadingDocument(false);
+    }
+  };
+
+  const handleRemoveDocument = () => {
+    setFormData((prev) => ({ ...prev, registrationCertificate: null }));
+    setErrors((prev) => ({ ...prev, registrationCertificate: '' }));
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   const handleRegister = async () => {
@@ -281,11 +376,10 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         registrationData.website = formData.website?.trim() || null;
         registrationData.description = formData.description?.trim() || null;
         registrationData.experienceYears = formData.experienceYears || null;
+        registrationData.totalProjects = formData.totalProjects || null;
+        registrationData.registrationCertificate = formData.registrationCertificate?.uri || null;
         registrationData.address = formData.address?.trim() || null;
-        registrationData.landmark = formData.landmark?.trim() || null;
-        registrationData.area = formData.area?.trim() || null;
         registrationData.city = formData.city?.trim() || null;
-        registrationData.district = formData.district?.trim() || null;
         registrationData.state = formData.state?.trim() || null;
         registrationData.pincode = formData.pincode?.trim() || null;
       }
@@ -301,7 +395,20 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         body: JSON.stringify(registrationData),
       });
 
-      const data = await response.json();
+      // Clone response to avoid "Body already read" error
+      const responseClone = response.clone();
+      let data;
+
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('JSON parse error:', jsonError);
+        // Try to get text if JSON parsing fails
+        const text = await responseClone.text();
+        console.log('Response text:', text);
+        throw new Error('Invalid server response');
+      }
+
       console.log('Server response:', data);
 
       if (!response.ok) {
@@ -344,11 +451,10 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         website: '',
         description: '',
         experienceYears: '',
+        totalProjects: '',
+        registrationCertificate: null,
         address: '',
-        landmark: '',
-        area: '',
         city: '',
-        district: '',
         state: '',
         pincode: '',
       });
@@ -359,7 +465,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         if (data.token && navigation) {
           // If registration includes auto-login, go directly to Home
           console.log('🏠 Auto-login: Navigating to Home');
-          navigation.navigate('Home');
+          navigation.navigate('home');
         } else if (navigation) {
           // Otherwise navigate to Login
           console.log('🔐 Navigating to Login');
@@ -402,563 +508,667 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
       </View>
 
       {/* Main Content */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollViewContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoBox}>
-            <Home color="#FFFFFF" size={28} strokeWidth={2.5} />
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Logo */}
+          <View style={styles.logoContainer}>
+            <View style={styles.logoBox}>
+              <Home color="#FFFFFF" size={28} strokeWidth={2.5} />
+            </View>
+            <Text style={styles.logoText}>EstateHub</Text>
           </View>
-          <Text style={styles.logoText}>EstateHub</Text>
-        </View>
 
-        {/* Headline */}
-        <View style={styles.headlineContainer}>
-          <Text style={styles.headline}>Create Your Account</Text>
-          <Text style={styles.subheadline}>
-            Join thousands of users to buy, sell, and rent properties with ease
-          </Text>
-        </View>
-
-        {/* Success Message */}
-        {successMessage ? (
-          <View style={styles.successMessage}>
-            <Check color="#059669" size={20} strokeWidth={2} />
-            <Text style={styles.successMessageText}>{successMessage}</Text>
-          </View>
-        ) : null}
-
-        {/* API Error Message */}
-        {apiError ? (
-          <View style={styles.errorMessage}>
-            <AlertCircle color="#DC2626" size={20} strokeWidth={2} />
-            <Text style={styles.errorMessageText}>{apiError}</Text>
-            <TouchableOpacity onPress={() => setApiError('')}>
-              <X color="#EF4444" size={16} strokeWidth={2} />
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {/* Form */}
-        <View style={styles.form}>
-          {/* Profile Image Upload */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Profile Picture{' '}
-              <Text style={styles.labelOptional}>(Optional)</Text>
+          {/* Headline */}
+          <View style={styles.headlineContainer}>
+            <Text style={styles.headline}>Create Your Account</Text>
+            <Text style={styles.subheadline}>
+              Join thousands of users to buy, sell, and rent properties with ease
             </Text>
-            <View style={styles.profileImageContainer}>
-              <View style={styles.profileImageWrapper}>
-                {formData.profileImage ? (
-                  <Image
-                    source={{ uri: formData.profileImage }}
-                    style={styles.profileImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.profileImagePlaceholder}>
-                    <User color="#9CA3AF" size={32} strokeWidth={2} />
-                  </View>
-                )}
-                <TouchableOpacity
-                  onPress={handleImageUpload}
-                  disabled={uploadingImage}
-                  style={styles.cameraButton}
-                  activeOpacity={0.8}
-                >
-                  {uploadingImage ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <Camera color="#FFFFFF" size={16} strokeWidth={2} />
-                  )}
-                </TouchableOpacity>
-              </View>
+          </View>
 
-              <View style={styles.profileImageInfo}>
-                <Text style={styles.profileImageTitle}>
-                  {formData.profileImage ? 'Change Photo' : 'Upload Photo'}
-                </Text>
-                <Text style={styles.profileImageSubtitle}>
-                  JPG, PNG or GIF • Max 5MB
-                </Text>
-                <View style={styles.profileImageButtons}>
+          {/* Success Message */}
+          {successMessage ? (
+            <View style={styles.successMessage}>
+              <Check color="#059669" size={20} strokeWidth={2} />
+              <Text style={styles.successMessageText}>{successMessage}</Text>
+            </View>
+          ) : null}
+
+          {/* API Error Message */}
+          {apiError ? (
+            <View style={styles.errorMessage}>
+              <AlertCircle color="#DC2626" size={20} strokeWidth={2} />
+              <Text style={styles.errorMessageText}>{apiError}</Text>
+              <TouchableOpacity onPress={() => setApiError('')}>
+                <X color="#EF4444" size={16} strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {/* Form */}
+          <View style={styles.form}>
+            {/* Profile Image Upload */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Profile Picture{' '}
+                <Text style={styles.labelOptional}>(Optional)</Text>
+              </Text>
+              <View style={styles.profileImageContainer}>
+                <View style={styles.profileImageWrapper}>
+                  {formData.profileImage ? (
+                    <Image
+                      source={{ uri: formData.profileImage }}
+                      style={styles.profileImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.profileImagePlaceholder}>
+                      <User color="#9CA3AF" size={32} strokeWidth={2} />
+                    </View>
+                  )}
                   <TouchableOpacity
                     onPress={handleImageUpload}
                     disabled={uploadingImage}
-                    style={styles.chooseFileButton}
+                    style={styles.cameraButton}
                     activeOpacity={0.8}
                   >
-                    <Upload color="#2D6A4F" size={14} strokeWidth={2} />
-                    <Text style={styles.chooseFileButtonText}>
-                      {uploadingImage ? 'Uploading...' : 'Choose File'}
-                    </Text>
+                    {uploadingImage ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Camera color="#FFFFFF" size={16} strokeWidth={2} />
+                    )}
                   </TouchableOpacity>
-                  {formData.profileImage && (
+                </View>
+
+                <View style={styles.profileImageInfo}>
+                  <Text style={styles.profileImageTitle}>
+                    {formData.profileImage ? 'Change Photo' : 'Upload Photo'}
+                  </Text>
+                  <Text style={styles.profileImageSubtitle}>
+                    JPG, PNG or GIF • Max 5MB
+                  </Text>
+                  <View style={styles.profileImageButtons}>
                     <TouchableOpacity
-                      onPress={handleRemoveImage}
-                      style={styles.removeButton}
+                      onPress={handleImageUpload}
+                      disabled={uploadingImage}
+                      style={styles.chooseFileButton}
                       activeOpacity={0.8}
                     >
-                      <Text style={styles.removeButtonText}>Remove</Text>
+                      <Upload color="#2D6A4F" size={14} strokeWidth={2} />
+                      <Text style={styles.chooseFileButtonText}>
+                        {uploadingImage ? 'Uploading...' : 'Choose File'}
+                      </Text>
                     </TouchableOpacity>
+                    {formData.profileImage && (
+                      <TouchableOpacity
+                        onPress={handleRemoveImage}
+                        style={styles.removeButton}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.removeButtonText}>Remove</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {errors.profileImage && (
+                    <View style={styles.errorContainer}>
+                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                      <Text style={styles.errorText}>{errors.profileImage}</Text>
+                    </View>
                   )}
                 </View>
-                {errors.profileImage && (
-                  <View style={styles.errorContainer}>
-                    <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                    <Text style={styles.errorText}>{errors.profileImage}</Text>
-                  </View>
-                )}
               </View>
             </View>
-          </View>
 
-          {/* Full Name */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Full Name <Text style={styles.required}>*</Text>
-            </Text>
-            <View
-              style={[
-                styles.inputWrapper,
-                focusedInput === 'name' && styles.inputWrapperFocused,
-                errors.name && styles.inputWrapperError,
-              ]}
-            >
-              <User
-                color={focusedInput === 'name' ? '#2D6A4F' : '#9CA3AF'}
-                size={20}
-                strokeWidth={2}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your full name"
-                placeholderTextColor="#9CA3AF"
-                value={formData.name}
-                onChangeText={(value) => handleInputChange('name', value)}
-                onFocus={() => setFocusedInput('name')}
-                onBlur={() => setFocusedInput(null)}
-                autoCapitalize="words"
-              />
-            </View>
-            {errors.name && (
-              <View style={styles.errorContainer}>
-                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                <Text style={styles.errorText}>{errors.name}</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Email */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Email Address <Text style={styles.required}>*</Text>
-            </Text>
-            <View
-              style={[
-                styles.inputWrapper,
-                focusedInput === 'email' && styles.inputWrapperFocused,
-                errors.email && styles.inputWrapperError,
-              ]}
-            >
-              <Mail
-                color={focusedInput === 'email' ? '#2D6A4F' : '#9CA3AF'}
-                size={20}
-                strokeWidth={2}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your email"
-                placeholderTextColor="#9CA3AF"
-                value={formData.email}
-                onChangeText={(value) => handleInputChange('email', value)}
-                onFocus={() => setFocusedInput('email')}
-                onBlur={() => setFocusedInput(null)}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-            </View>
-            {errors.email && (
-              <View style={styles.errorContainer}>
-                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                <Text style={styles.errorText}>{errors.email}</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Phone */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Phone Number <Text style={styles.required}>*</Text>
-            </Text>
-            <View
-              style={[
-                styles.inputWrapper,
-                focusedInput === 'phone' && styles.inputWrapperFocused,
-                errors.phone && styles.inputWrapperError,
-              ]}
-            >
-              <Phone
-                color={focusedInput === 'phone' ? '#2D6A4F' : '#9CA3AF'}
-                size={20}
-                strokeWidth={2}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your phone number"
-                placeholderTextColor="#9CA3AF"
-                value={formData.phone}
-                onChangeText={(value) => handleInputChange('phone', value)}
-                onFocus={() => setFocusedInput('phone')}
-                onBlur={() => setFocusedInput(null)}
-                keyboardType="phone-pad"
-              />
-            </View>
-            {errors.phone && (
-              <View style={styles.errorContainer}>
-                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                <Text style={styles.errorText}>{errors.phone}</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Password <Text style={styles.required}>*</Text>
-            </Text>
-            <View
-              style={[
-                styles.inputWrapper,
-                focusedInput === 'password' && styles.inputWrapperFocused,
-                errors.password && styles.inputWrapperError,
-              ]}
-            >
-              <Lock
-                color={focusedInput === 'password' ? '#2D6A4F' : '#9CA3AF'}
-                size={20}
-                strokeWidth={2}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, styles.passwordInput]}
-                placeholder="Create a password"
-                placeholderTextColor="#9CA3AF"
-                value={formData.password}
-                onChangeText={(value) => handleInputChange('password', value)}
-                onFocus={() => setFocusedInput('password')}
-                onBlur={() => setFocusedInput(null)}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-              />
-              <TouchableOpacity
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.eyeButton}
-              >
-                {showPassword ? (
-                  <EyeOff color="#9CA3AF" size={20} strokeWidth={2} />
-                ) : (
-                  <Eye color="#9CA3AF" size={20} strokeWidth={2} />
-                )}
-              </TouchableOpacity>
-            </View>
-            {errors.password ? (
-              <View style={styles.errorContainer}>
-                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                <Text style={styles.errorText}>{errors.password}</Text>
-              </View>
-            ) : (
-              <Text style={styles.passwordHint}>
-                Must be at least 8 characters with letters and numbers
+            {/* Full Name */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Full Name <Text style={styles.required}>*</Text>
               </Text>
-            )}
-          </View>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  focusedInput === 'name' && styles.inputWrapperFocused,
+                  errors.name && styles.inputWrapperError,
+                ]}
+              >
+                <User
+                  color={focusedInput === 'name' ? '#2D6A4F' : '#9CA3AF'}
+                  size={20}
+                  strokeWidth={2}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your full name"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.name}
+                  onChangeText={(value) => handleInputChange('name', value)}
+                  onFocus={() => setFocusedInput('name')}
+                  autoCapitalize="words"
+                  autoComplete="name"
+                  textContentType="name"
+                />
+              </View>
+              {errors.name && (
+                <View style={styles.errorContainer}>
+                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                  <Text style={styles.errorText}>{errors.name}</Text>
+                </View>
+              )}
+            </View>
 
-          {/* User Type */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              I am a... <Text style={styles.required}>*</Text>
-            </Text>
-            <TouchableOpacity
-              onPress={() => setShowroleModal(true)}
-              style={[
-                styles.roleButton,
-                formData.role && styles.roleButtonSelected,
-                errors.role && styles.roleButtonError,
-              ]}
-              activeOpacity={0.8}
-            >
-              {selectedrole ? (
-                <View style={styles.roleSelected}>
-                  <View
-                    style={[
-                      styles.roleIcon,
-                      { backgroundColor: `${selectedrole.color}15` },
-                    ]}
-                  >
-                    <selectedrole.icon
-                      color={selectedrole.color}
-                      size={20}
-                      strokeWidth={2}
-                    />
-                  </View>
-                  <View style={styles.roleText}>
-                    <Text style={styles.roleLabel}>
-                      {selectedrole.label}
-                    </Text>
-                    <Text style={styles.roleDescription}>
-                      {selectedrole.description}
-                    </Text>
-                  </View>
+            {/* Email */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Email Address <Text style={styles.required}>*</Text>
+              </Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  focusedInput === 'email' && styles.inputWrapperFocused,
+                  errors.email && styles.inputWrapperError,
+                ]}
+              >
+                <Mail
+                  color={focusedInput === 'email' ? '#2D6A4F' : '#9CA3AF'}
+                  size={20}
+                  strokeWidth={2}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your email"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.email}
+                  onChangeText={(value) => handleInputChange('email', value)}
+                  onFocus={() => setFocusedInput('email')}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                />
+              </View>
+              {errors.email && (
+                <View style={styles.errorContainer}>
+                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                  <Text style={styles.errorText}>{errors.email}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Phone */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Phone Number <Text style={styles.required}>*</Text>
+              </Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  focusedInput === 'phone' && styles.inputWrapperFocused,
+                  errors.phone && styles.inputWrapperError,
+                ]}
+              >
+                <Phone
+                  color={focusedInput === 'phone' ? '#2D6A4F' : '#9CA3AF'}
+                  size={20}
+                  strokeWidth={2}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter your phone number"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.phone}
+                  onChangeText={(value) => handleInputChange('phone', value)}
+                  onFocus={() => setFocusedInput('phone')}
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                  textContentType="telephoneNumber"
+                />
+              </View>
+              {errors.phone && (
+                <View style={styles.errorContainer}>
+                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                  <Text style={styles.errorText}>{errors.phone}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Password */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Password <Text style={styles.required}>*</Text>
+              </Text>
+              <View
+                style={[
+                  styles.inputWrapper,
+                  focusedInput === 'password' && styles.inputWrapperFocused,
+                  errors.password && styles.inputWrapperError,
+                ]}
+              >
+                <Lock
+                  color={focusedInput === 'password' ? '#2D6A4F' : '#9CA3AF'}
+                  size={20}
+                  strokeWidth={2}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  placeholder="Create a password"
+                  placeholderTextColor="#9CA3AF"
+                  value={formData.password}
+                  onChangeText={(value) => handleInputChange('password', value)}
+                  onFocus={() => setFocusedInput('password')}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoComplete="password-new"
+                  textContentType="newPassword"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeButton}
+                >
+                  {showPassword ? (
+                    <EyeOff color="#9CA3AF" size={20} strokeWidth={2} />
+                  ) : (
+                    <Eye color="#9CA3AF" size={20} strokeWidth={2} />
+                  )}
+                </TouchableOpacity>
+              </View>
+              {errors.password ? (
+                <View style={styles.errorContainer}>
+                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                  <Text style={styles.errorText}>{errors.password}</Text>
                 </View>
               ) : (
-                <Text style={styles.rolePlaceholder}>Select your role</Text>
+                <Text style={styles.passwordHint}>
+                  Must be at least 8 characters with letters and numbers
+                </Text>
               )}
-              <ChevronDown color="#9CA3AF" size={20} strokeWidth={2} />
-            </TouchableOpacity>
-            {errors.role && (
-              <View style={styles.errorContainer}>
-                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                <Text style={styles.errorText}>{errors.role}</Text>
-              </View>
-            )}
-          </View>
+            </View>
 
-          {/* Builder Specific Fields */}
-          {formData.role === 'builder' && (
-            <View style={styles.builderFieldsContainer}>
-              <Text style={styles.sectionHeader}>Builder Details</Text>
-
-              {/* Company Name */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>
-                  Company Name <Text style={styles.required}>*</Text>
-                </Text>
-                <View style={[styles.inputWrapper, focusedInput === 'companyName' && styles.inputWrapperFocused]}>
-                  <Building2
-                    color={focusedInput === 'companyName' ? '#2D6A4F' : '#9CA3AF'}
-                    size={20}
-                    strokeWidth={2}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter company name"
-                    placeholderTextColor="#9CA3AF"
-                    value={formData.companyName}
-                    onChangeText={(value) => handleInputChange('companyName', value)}
-                    onFocus={() => setFocusedInput('companyName')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
+            {/* User Type */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                I am a... <Text style={styles.required}>*</Text>
+              </Text>
+              <TouchableOpacity
+                onPress={() => setShowroleModal(true)}
+                style={[
+                  styles.roleButton,
+                  formData.role && styles.roleButtonSelected,
+                  errors.role && styles.roleButtonError,
+                ]}
+                activeOpacity={0.8}
+              >
+                {selectedrole ? (
+                  <View style={styles.roleSelected}>
+                    <View
+                      style={[
+                        styles.roleIcon,
+                        { backgroundColor: `${selectedrole.color}15` },
+                      ]}
+                    >
+                      <selectedrole.icon
+                        color={selectedrole.color}
+                        size={20}
+                        strokeWidth={2}
+                      />
+                    </View>
+                    <View style={styles.roleText}>
+                      <Text style={styles.roleLabel}>
+                        {selectedrole.label}
+                      </Text>
+                      <Text style={styles.roleDescription}>
+                        {selectedrole.description}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={styles.rolePlaceholder}>Select your role</Text>
+                )}
+                <ChevronDown color="#9CA3AF" size={20} strokeWidth={2} />
+              </TouchableOpacity>
+              {errors.role && (
+                <View style={styles.errorContainer}>
+                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                  <Text style={styles.errorText}>{errors.role}</Text>
                 </View>
-              </View>
+              )}
+            </View>
 
-              {/* GST Number (Optional) */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>
-                  GST Number <Text style={styles.labelOptional}>(Optional)</Text>
-                </Text>
-                <View style={[styles.inputWrapper, focusedInput === 'gstNo' && styles.inputWrapperFocused]}>
-                  <Shield
-                    color={focusedInput === 'gstNo' ? '#2D6A4F' : '#9CA3AF'}
-                    size={20}
-                    strokeWidth={2}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter GST number"
-                    placeholderTextColor="#9CA3AF"
-                    value={formData.gstNo}
-                    onChangeText={(value) => handleInputChange('gstNo', value)}
-                    onFocus={() => setFocusedInput('gstNo')}
-                    onBlur={() => setFocusedInput(null)}
-                    autoCapitalize="characters"
-                  />
-                </View>
-              </View>
 
-              {/* PAN Number (Required for builders) */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>
-                  PAN Number <Text style={styles.required}>*</Text>
-                </Text>
-                <View style={[styles.inputWrapper, focusedInput === 'panNo' && styles.inputWrapperFocused]}>
-                  <Shield
-                    color={focusedInput === 'panNo' ? '#2D6A4F' : '#9CA3AF'}
-                    size={20}
-                    strokeWidth={2}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter PAN number (e.g. AAAAA1111A)"
-                    placeholderTextColor="#9CA3AF"
-                    value={formData.panNo}
-                    onChangeText={(value) => handleInputChange('panNo', value)}
-                    onFocus={() => setFocusedInput('panNo')}
-                    onBlur={() => setFocusedInput(null)}
-                    autoCapitalize="characters"
-                  />
-                </View>
-              </View>
 
-              {/* Website */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>
-                  Website <Text style={styles.labelOptional}>(Optional)</Text>
-                </Text>
-                <View style={[styles.inputWrapper, focusedInput === 'website' && styles.inputWrapperFocused]}>
-                  <TrendingUp
-                    color={focusedInput === 'website' ? '#2D6A4F' : '#9CA3AF'}
-                    size={20}
-                    strokeWidth={2}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="https://example.com"
-                    placeholderTextColor="#9CA3AF"
-                    value={formData.website}
-                    onChangeText={(value) => handleInputChange('website', value)}
-                    onFocus={() => setFocusedInput('website')}
-                    onBlur={() => setFocusedInput(null)}
-                    keyboardType="url"
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
+            {/* Builder Specific Fields */}
+            {formData.role === 'builder' && (
+              <View style={styles.builderFieldsContainer}>
+                <Text style={styles.sectionHeader}>Builder Details</Text>
 
-              {/* Experience Years */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Experience (Years)</Text>
-                <View style={[styles.inputWrapper, focusedInput === 'experienceYears' && styles.inputWrapperFocused]}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 5"
-                    placeholderTextColor="#9CA3AF"
-                    value={formData.experienceYears}
-                    onChangeText={(value) => handleInputChange('experienceYears', value)}
-                    onFocus={() => setFocusedInput('experienceYears')}
-                    onBlur={() => setFocusedInput(null)}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
-
-              {/* Address Section */}
-              <Text style={[styles.label, { marginTop: 8 }]}>Street Address / Building</Text>
-
-              <View style={styles.inputGroup}>
-                <View style={[styles.inputWrapper, focusedInput === 'address' && styles.inputWrapperFocused]}>
-                  <MapPin
-                    color={focusedInput === 'address' ? '#2D6A4F' : '#9CA3AF'}
-                    size={20}
-                    strokeWidth={2}
-                    style={styles.inputIcon}
-                  />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Floor, Building Name, Street"
-                    placeholderTextColor="#9CA3AF"
-                    value={formData.address}
-                    onChangeText={(value) => handleInputChange('address', value)}
-                    onFocus={() => setFocusedInput('address')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                </View>
-              </View>
-
-              {/* Area / Locality */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Area / Locality</Text>
-                <View style={[styles.inputWrapper, focusedInput === 'area' && styles.inputWrapperFocused]}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Indiranagar, Bandra West"
-                    placeholderTextColor="#9CA3AF"
-                    value={formData.area}
-                    onChangeText={(value) => handleInputChange('area', value)}
-                    onFocus={() => setFocusedInput('area')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                </View>
-              </View>
-
-              {/* Landmark */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Landmark <Text style={styles.labelOptional}>(Optional)</Text></Text>
-                <View style={[styles.inputWrapper, focusedInput === 'landmark' && styles.inputWrapperFocused]}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Near City Hospital"
-                    placeholderTextColor="#9CA3AF"
-                    value={formData.landmark}
-                    onChangeText={(value) => handleInputChange('landmark', value)}
-                    onFocus={() => setFocusedInput('landmark')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                </View>
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>City</Text>
-                  <View style={[styles.inputWrapper, focusedInput === 'city' && styles.inputWrapperFocused]}>
+                {/* Company Name */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Company Name <Text style={styles.required}>*</Text>
+                  </Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'companyName' && styles.inputWrapperFocused, errors.companyName && styles.inputWrapperError]}>
+                    <Building2
+                      color={focusedInput === 'companyName' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
                     <TextInput
                       style={styles.input}
-                      placeholder="City"
+                      placeholder="Enter company name"
                       placeholderTextColor="#9CA3AF"
-                      value={formData.city}
-                      onChangeText={(value) => handleInputChange('city', value)}
-                      onFocus={() => setFocusedInput('city')}
+                      value={formData.companyName}
+                      onChangeText={(value) => handleInputChange('companyName', value)}
+                      onFocus={() => setFocusedInput('companyName')}
+                      onBlur={() => setFocusedInput(null)}
+                    />
+                  </View>
+                  {errors.companyName && (
+                    <View style={styles.errorContainer}>
+                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                      <Text style={styles.errorText}>{errors.companyName}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Description */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Company Description <Text style={styles.labelOptional}>(Optional)</Text>
+                  </Text>
+                  <View style={[styles.textAreaWrapper, focusedInput === 'description' && styles.inputWrapperFocused]}>
+                    <MessageSquare
+                      color={focusedInput === 'description' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.textAreaIcon}
+                    />
+                    <TextInput
+                      style={styles.textArea}
+                      placeholder="Brief description about your company and projects..."
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.description}
+                      onChangeText={(value) => handleInputChange('description', value)}
+                      onFocus={() => setFocusedInput('description')}
+                      onBlur={() => setFocusedInput(null)}
+                      multiline
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                    />
+                  </View>
+                </View>
+
+                {/* GST Number (Optional) */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    GST Number <Text style={styles.labelOptional}>(Optional)</Text>
+                  </Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'gstNo' && styles.inputWrapperFocused, errors.gstNo && styles.inputWrapperError]}>
+                    <Shield
+                      color={focusedInput === 'gstNo' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter GST number"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.gstNo}
+                      onChangeText={(value) => handleInputChange('gstNo', value)}
+                      onFocus={() => setFocusedInput('gstNo')}
+                      onBlur={() => setFocusedInput(null)}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                  {errors.gstNo && (
+                    <View style={styles.errorContainer}>
+                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                      <Text style={styles.errorText}>{errors.gstNo}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* PAN Number (Required for builders) */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    PAN Number <Text style={styles.required}>*</Text>
+                  </Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'panNo' && styles.inputWrapperFocused, errors.panNo && styles.inputWrapperError]}>
+                    <Shield
+                      color={focusedInput === 'panNo' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter PAN number (e.g. AAAAA1111A)"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.panNo}
+                      onChangeText={(value) => handleInputChange('panNo', value)}
+                      onFocus={() => setFocusedInput('panNo')}
+                      onBlur={() => setFocusedInput(null)}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                  {errors.panNo && (
+                    <View style={styles.errorContainer}>
+                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                      <Text style={styles.errorText}>{errors.panNo}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Registration Certificate Upload */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Registration Certificate <Text style={styles.labelOptional}>(Optional)</Text>
+                  </Text>
+                  <View style={styles.documentUploadContainer}>
+                    {formData.registrationCertificate ? (
+                      <View style={styles.documentPreview}>
+                        <View style={styles.documentInfo}>
+                          <FileText color="#2D6A4F" size={24} strokeWidth={2} />
+                          <View style={styles.documentDetails}>
+                            <Text style={styles.documentName} numberOfLines={1}>
+                              {formData.registrationCertificate.name}
+                            </Text>
+                            <Text style={styles.documentSize}>
+                              {formatFileSize(formData.registrationCertificate.size || 0)}
+                            </Text>
+                          </View>
+                        </View>
+                        <TouchableOpacity
+                          onPress={handleRemoveDocument}
+                          style={styles.documentRemoveButton}
+                          activeOpacity={0.8}
+                        >
+                          <X color="#DC2626" size={18} strokeWidth={2} />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={handleDocumentUpload}
+                        disabled={uploadingDocument}
+                        style={styles.documentUploadButton}
+                        activeOpacity={0.8}
+                      >
+                        {uploadingDocument ? (
+                          <ActivityIndicator color="#2D6A4F" size="small" />
+                        ) : (
+                          <>
+                            <Upload color="#2D6A4F" size={20} strokeWidth={2} />
+                            <Text style={styles.documentUploadText}>
+                              Upload Certificate (PDF or Image)
+                            </Text>
+                            <Text style={styles.documentUploadSubtext}>
+                              Max 10MB
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
+                    {errors.registrationCertificate && (
+                      <View style={styles.errorContainer}>
+                        <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                        <Text style={styles.errorText}>{errors.registrationCertificate}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+
+                {/* Website */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Website <Text style={styles.labelOptional}>(Optional)</Text>
+                  </Text>
+                  <View style={[styles.inputWrapper, focusedInput === 'website' && styles.inputWrapperFocused]}>
+                    <TrendingUp
+                      color={focusedInput === 'website' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="https://example.com"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.website}
+                      onChangeText={(value) => handleInputChange('website', value)}
+                      onFocus={() => setFocusedInput('website')}
+                      onBlur={() => setFocusedInput(null)}
+                      keyboardType="url"
+                      autoCapitalize="none"
+                    />
+                  </View>
+                </View>
+
+                {/* Experience Years and Total Projects in a row */}
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>Experience (Years) <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                    <View style={[styles.inputWrapper, focusedInput === 'experienceYears' && styles.inputWrapperFocused]}>
+                      <Briefcase
+                        color={focusedInput === 'experienceYears' ? '#2D6A4F' : '#9CA3AF'}
+                        size={20}
+                        strokeWidth={2}
+                        style={styles.inputIcon}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 5"
+                        placeholderTextColor="#9CA3AF"
+                        value={formData.experienceYears}
+                        onChangeText={(value) => handleInputChange('experienceYears', value)}
+                        onFocus={() => setFocusedInput('experienceYears')}
+                        onBlur={() => setFocusedInput(null)}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>Total Projects <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                    <View style={[styles.inputWrapper, focusedInput === 'totalProjects' && styles.inputWrapperFocused]}>
+                      <Building2
+                        color={focusedInput === 'totalProjects' ? '#2D6A4F' : '#9CA3AF'}
+                        size={20}
+                        strokeWidth={2}
+                        style={styles.inputIcon}
+                      />
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 10"
+                        placeholderTextColor="#9CA3AF"
+                        value={formData.totalProjects}
+                        onChangeText={(value) => handleInputChange('totalProjects', value)}
+                        onFocus={() => setFocusedInput('totalProjects')}
+                        onBlur={() => setFocusedInput(null)}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Address Section */}
+                <Text style={[styles.label, { marginTop: 8 }]}>Street Address / Building <Text style={styles.labelOptional}>(Optional)</Text></Text>
+
+                <View style={styles.inputGroup}>
+                  <View style={[styles.inputWrapper, focusedInput === 'address' && styles.inputWrapperFocused]}>
+                    <MapPin
+                      color={focusedInput === 'address' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Floor, Building Name, Street"
+                      placeholderTextColor="#9CA3AF"
+                      value={formData.address}
+                      onChangeText={(value) => handleInputChange('address', value)}
+                      onFocus={() => setFocusedInput('address')}
                       onBlur={() => setFocusedInput(null)}
                     />
                   </View>
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>District</Text>
-                  <View style={[styles.inputWrapper, focusedInput === 'district' && styles.inputWrapperFocused]}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="District"
-                      placeholderTextColor="#9CA3AF"
-                      value={formData.district}
-                      onChangeText={(value) => handleInputChange('district', value)}
-                      onFocus={() => setFocusedInput('district')}
-                      onBlur={() => setFocusedInput(null)}
-                    />
+                {/* City and State in a row */}
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>City <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                    <View style={[styles.inputWrapper, focusedInput === 'city' && styles.inputWrapperFocused]}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="City"
+                        placeholderTextColor="#9CA3AF"
+                        value={formData.city}
+                        onChangeText={(value) => handleInputChange('city', value)}
+                        onFocus={() => setFocusedInput('city')}
+                        onBlur={() => setFocusedInput(null)}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <Text style={styles.label}>State <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                    <View style={[styles.inputWrapper, focusedInput === 'state' && styles.inputWrapperFocused]}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="State"
+                        placeholderTextColor="#9CA3AF"
+                        value={formData.state}
+                        onChangeText={(value) => handleInputChange('state', value)}
+                        onFocus={() => setFocusedInput('state')}
+                        onBlur={() => setFocusedInput(null)}
+                      />
+                    </View>
                   </View>
                 </View>
-              </View>
 
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>State</Text>
-                  <View style={[styles.inputWrapper, focusedInput === 'state' && styles.inputWrapperFocused]}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="State"
-                      placeholderTextColor="#9CA3AF"
-                      value={formData.state}
-                      onChangeText={(value) => handleInputChange('state', value)}
-                      onFocus={() => setFocusedInput('state')}
-                      onBlur={() => setFocusedInput(null)}
-                    />
-                  </View>
-                </View>
-
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Pincode</Text>
+                {/* Pincode */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Pincode <Text style={styles.labelOptional}>(Optional)</Text></Text>
                   <View style={[styles.inputWrapper, focusedInput === 'pincode' && styles.inputWrapperFocused]}>
+                    <MapPin
+                      color={focusedInput === 'pincode' ? '#2D6A4F' : '#9CA3AF'}
+                      size={20}
+                      strokeWidth={2}
+                      style={styles.inputIcon}
+                    />
                     <TextInput
                       style={styles.input}
                       placeholder="Pincode"
@@ -973,112 +1183,99 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                   </View>
                 </View>
               </View>
-            </View>
-          )}
+            )}
 
-          {/* Terms and Conditions */}
-          <View style={styles.inputGroup}>
-            <TouchableOpacity
-              onPress={() => {
-                setTermsAccepted(!termsAccepted);
-                if (errors.terms) {
-                  setErrors((prev) => ({ ...prev, terms: '' }));
-                }
-              }}
-              style={styles.termsButton}
-              activeOpacity={0.7}
-            >
-              <View
-                style={[
-                  styles.checkbox,
-                  termsAccepted && styles.checkboxChecked,
-                ]}
+            {/* Terms and Conditions */}
+            <View style={styles.inputGroup}>
+              <TouchableOpacity
+                onPress={() => {
+                  setTermsAccepted(!termsAccepted);
+                  if (errors.terms) {
+                    setErrors((prev) => ({ ...prev, terms: '' }));
+                  }
+                }}
+                style={styles.termsButton}
+                activeOpacity={0.7}
               >
-                {termsAccepted && (
-                  <Check color="#FFFFFF" size={12} strokeWidth={3} />
-                )}
-              </View>
-              <Text style={styles.termsText}>
-                I agree to the{' '}
-                <Text style={styles.termsLink}>Terms & Conditions</Text> and{' '}
-                <Text style={styles.termsLink}>Privacy Policy</Text>
-              </Text>
-            </TouchableOpacity>
-            {errors.terms && (
-              <View style={[styles.errorContainer, styles.errorContainerIndent]}>
-                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                <Text style={styles.errorText}>{errors.terms}</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Register Button */}
-          <TouchableOpacity
-            onPress={handleRegister}
-            disabled={!termsAccepted || isLoading}
-            style={[
-              styles.registerButton,
-              (!termsAccepted || isLoading) && styles.registerButtonDisabled,
-            ]}
-            activeOpacity={0.8}
-          >
-            {isLoading ? (
-              <View style={styles.registerButtonContent}>
-                <ActivityIndicator color="#FFFFFF" size="small" />
-                <Text style={styles.registerButtonText}>Creating Account...</Text>
-              </View>
-            ) : (
-              <Text style={styles.registerButtonText}>Create Account</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {/* Divider */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or continue with</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Social Buttons
-        <View style={styles.socialButtons}>
-          <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
-            <View style={styles.googleIcon}>
-              <Text style={styles.googleIconText}>G</Text>
+                <View
+                  style={[
+                    styles.checkbox,
+                    termsAccepted && styles.checkboxChecked,
+                  ]}
+                >
+                  {termsAccepted && (
+                    <Check color="#FFFFFF" size={12} strokeWidth={3} />
+                  )}
+                </View>
+                <Text style={styles.termsText}>
+                  I agree to the{' '}
+                  <Text style={styles.termsLink}>Terms & Conditions</Text> and{' '}
+                  <Text style={styles.termsLink}>Privacy Policy</Text>
+                </Text>
+              </TouchableOpacity>
+              {errors.terms && (
+                <View style={[styles.errorContainer, styles.errorContainerIndent]}>
+                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                  <Text style={styles.errorText}>{errors.terms}</Text>
+                </View>
+              )}
             </View>
-            <Text style={styles.socialButtonText}>Google</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialButton} activeOpacity={0.8}>
-            <Text style={styles.socialButtonText}>🍎 Apple</Text>
-          </TouchableOpacity>
-        </View> */}
 
-        {/* Login Link */}
-        <View style={styles.loginLinkContainer}>
-          <Text style={styles.loginLinkText}>Already have an account? </Text>
-          <TouchableOpacity
-            onPress={() => {
-              if (navigation) {
-                navigation.navigate('Login');
-              } else if (onNavigateToLogin) {
-                onNavigateToLogin();
-              }
-            }}
-          >
-            <Text style={styles.loginLink}>Login</Text>
-          </TouchableOpacity>
-        </View>
+            {/* Register Button */}
+            <TouchableOpacity
+              onPress={handleRegister}
+              disabled={!termsAccepted || isLoading}
+              style={[
+                styles.registerButton,
+                (!termsAccepted || isLoading) && styles.registerButtonDisabled,
+              ]}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <View style={styles.registerButtonContent}>
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                  <Text style={styles.registerButtonText}>Creating Account...</Text>
+                </View>
+              ) : (
+                <Text style={styles.registerButtonText}>Create Account</Text>
+              )}
+            </TouchableOpacity>
 
-        {/* Trust Badge */}
-        <View style={styles.trustBadge}>
-          <View style={styles.trustIcon}>
-            <Shield color="#FFFFFF" size={12} strokeWidth={2} />
+            {/* Divider */}
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or continue with</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Login Link */}
+            <View style={styles.loginLinkContainer}>
+              <Text style={styles.loginLinkText}>Already have an account? </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (navigation) {
+                    navigation.navigate('login');
+                  } else if (onNavigateToLogin) {
+                    onNavigateToLogin();
+                  }
+                }}
+              >
+                <Text style={styles.loginLink}>Login</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Trust Badge */}
+            <View style={styles.trustBadge}>
+              <View style={styles.trustIcon}>
+                <Shield color="#FFFFFF" size={12} strokeWidth={2} />
+              </View>
+              <Text style={styles.trustText}>
+                Secure registration • Your data is protected
+              </Text>
+            </View>
           </View>
-          <Text style={styles.trustText}>
-            Secure registration • Your data is protected
-          </Text>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* User Type Modal */}
       <Modal
@@ -1413,6 +1610,80 @@ const styles = StyleSheet.create({
     right: 16,
     padding: 4,
   },
+  textAreaWrapper: {
+    flexDirection: 'row',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 100,
+  },
+  textAreaIcon: {
+    marginRight: 12,
+    marginTop: 2,
+  },
+  textArea: {
+    flex: 1,
+    fontSize: 14,
+    color: '#111827',
+    minHeight: 80,
+  },
+  documentUploadContainer: {
+    marginTop: 4,
+  },
+  documentUploadButton: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    gap: 8,
+  },
+  documentUploadText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2D6A4F',
+    marginTop: 8,
+  },
+  documentUploadSubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  documentPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    padding: 16,
+  },
+  documentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  documentDetails: {
+    flex: 1,
+  },
+  documentName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  documentSize: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  documentRemoveButton: {
+    padding: 8,
+  },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1553,41 +1824,6 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontWeight: '500',
     marginHorizontal: 16,
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
-  },
-  socialButton: {
-    flex: 1,
-    height: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-  },
-  googleIcon: {
-    width: 20,
-    height: 20,
-    backgroundColor: '#3B82F6',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  googleIconText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  socialButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
   },
   loginLinkContainer: {
     flexDirection: 'row',

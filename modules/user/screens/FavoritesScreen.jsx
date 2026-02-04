@@ -29,9 +29,8 @@ import {
 
 const { width } = Dimensions.get('window');
 
-const FavoritesScreen = ({ onBack }) => {
+const FavoritesScreen = ({ onBack, navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('favorites');
 
   const favoriteProperties = [
     {
@@ -96,7 +95,7 @@ const FavoritesScreen = ({ onBack }) => {
     },
   ];
 
-  // Animation values - Initialize with proper dependencies
+  // Animation values
   const fadeAnims = useRef(
     favoriteProperties.map(() => new Animated.Value(0))
   ).current;
@@ -163,7 +162,7 @@ const FavoritesScreen = ({ onBack }) => {
       ]).start(() => pulseFab());
     };
     pulseFab();
-  }, []);
+  }, [fadeAnims, slideAnims, scaleAnim, headerOpacity, fabScale]);
 
   const filteredProperties = favoriteProperties.filter(
     (property) =>
@@ -399,26 +398,6 @@ const FavoritesScreen = ({ onBack }) => {
           <Plus color="#fff" size={24} />
         </TouchableOpacity>
       </Animated.View>
-
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <Home color="#9CA3AF" size={24} />
-          <Text style={styles.navText}>Home</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <Heart color="#2D6A4F" size={24} fill="#2D6A4F" />
-          <Text style={[styles.navText, styles.navTextActive]}>Favorites</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <MessageCircle color="#9CA3AF" size={24} />
-          <Text style={styles.navText}>Messages</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <User color="#9CA3AF" size={24} />
-          <Text style={styles.navText}>Profile</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };
@@ -707,30 +686,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#2D6A4F',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
-  },
-  navItem: {
-    alignItems: 'center',
-    padding: 8,
-  },
-  navText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 4,
-  },
-  navTextActive: {
-    color: '#2D6A4F',
-    fontWeight: '600',
   },
 });
 

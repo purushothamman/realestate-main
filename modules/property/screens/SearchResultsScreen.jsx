@@ -12,26 +12,28 @@ import {
   Animated,
   Platform,
 } from 'react-native';
-import { 
-  Search, 
-  Home, 
-  Heart, 
-  MessageCircle, 
-  User, 
-  ArrowLeft, 
-  SlidersHorizontal, 
-  Map, 
-  MapPin, 
-  Bed, 
-  Bath, 
-  Maximize2, 
-  Camera, 
-  Star, 
-  X, 
+import {
+  Search,
+  Home,
+  Heart,
+  MessageCircle,
+  User,
+  ArrowLeft,
+  SlidersHorizontal,
+  Map,
+  MapPin,
+  Bed,
+  Bath,
+  Maximize2,
+  Camera,
+  Star,
+  X,
   ChevronDown,
   TrendingUp,
   Sparkles
 } from 'lucide-react-native';
+
+import UserNavigator from '../../../navigation/UserNavigator';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isWeb = Platform.OS === 'web';
@@ -134,14 +136,14 @@ const PropertyResultCard = ({
         useNativeDriver: true,
       }),
     ]).start();
-    
+
     // Rotation effect
     Animated.timing(rotateAnim, {
       toValue: 1,
       duration: 600,
       useNativeDriver: true,
     }).start(() => rotateAnim.setValue(0));
-    
+
     onToggleSave();
   };
 
@@ -172,47 +174,47 @@ const PropertyResultCard = ({
       <TouchableOpacity activeOpacity={0.95} onPress={onQuickView}>
         <View style={styles.imageContainer}>
           <Image source={{ uri: image }} style={styles.propertyImage} resizeMode="cover" />
-          
+
           {/* Animated gradient overlay */}
           <View style={styles.imageGradient} />
-          
+
           {/* Shimmer effect for featured */}
           {featured && (
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.shimmerOverlay,
                 {
                   transform: [{ translateX: shimmerTranslate }],
                 }
-              ]} 
+              ]}
             />
           )}
-          
+
           {featured && (
             <View style={styles.featuredBadge}>
               <Sparkles size={14} color="#FFF" />
               <Text style={styles.featuredText}>Featured</Text>
             </View>
           )}
-          
+
           {imageCount > 1 && (
             <View style={styles.imageCountBadge}>
               <Camera size={12} color="#FFF" />
               <Text style={styles.imageCountText}>{imageCount}</Text>
             </View>
           )}
-          
+
           <Animated.View style={{ transform: [{ scale: heartScale }, { rotate: cardRotate }] }}>
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Heart 
-                size={20} 
-                color={saved ? "#EF4444" : "#6B7280"} 
+              <Heart
+                size={20}
+                color={saved ? "#EF4444" : "#6B7280"}
                 fill={saved ? "#EF4444" : "transparent"}
               />
             </TouchableOpacity>
           </Animated.View>
         </View>
-        
+
         <View style={styles.cardContent}>
           <View style={styles.cardHeader}>
             <View style={styles.priceContainer}>
@@ -226,14 +228,14 @@ const PropertyResultCard = ({
               <ArrowLeft size={14} color="#2D6A4F" style={{ transform: [{ rotate: '180deg' }] }} />
             </TouchableOpacity>
           </View>
-          
+
           <Text style={styles.titleText} numberOfLines={2}>{title}</Text>
-          
+
           <View style={styles.locationRow}>
             <MapPin size={14} color="#6B7280" />
             <Text style={styles.locationText} numberOfLines={1}>{location}</Text>
           </View>
-          
+
           <View style={styles.specsRow}>
             <View style={styles.specItem}>
               <Bed size={16} color="#6B7280" />
@@ -250,7 +252,7 @@ const PropertyResultCard = ({
               <Text style={styles.specText}>{sqft}</Text>
             </View>
           </View>
-          
+
           <Text style={styles.highlightsText} numberOfLines={2}>{highlights}</Text>
         </View>
       </TouchableOpacity>
@@ -306,12 +308,14 @@ const FilterChip = ({ label, onRemove, index }) => {
   );
 };
 
-export default function SearchResultsScreen({ navigation, onPropertyClick }) {
+export default function SearchResultsScreen({ navigation, onPropertyClick, onBack }) {
   const [savedProperties, setSavedProperties] = useState([0, 3]);
   const [activeFilters, setActiveFilters] = useState(['$400k - $800k', '3+ Beds', 'Modern']);
   const [sortOption, setSortOption] = useState('Relevance');
   const [scrollY, setScrollY] = useState(0);
-  
+  const [messages, setMessages] = useState([]);
+  const [activeTab, setActiveTab] = useState('search');
+
   const headerOpacity = useRef(new Animated.Value(1)).current;
   const headerHeight = useRef(new Animated.Value(0)).current;
   const fabScale = useRef(new Animated.Value(0)).current;
@@ -357,10 +361,10 @@ export default function SearchResultsScreen({ navigation, onPropertyClick }) {
   const handleScroll = (event) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     setScrollY(offsetY);
-    
+
     const newOpacity = offsetY > 20 ? 0.98 : 1;
     const newHeight = offsetY > 100 ? -20 : 0;
-    
+
     Animated.parallel([
       Animated.timing(headerOpacity, {
         toValue: newOpacity,
@@ -387,6 +391,29 @@ export default function SearchResultsScreen({ navigation, onPropertyClick }) {
 
   const clearAllFilters = () => {
     setActiveFilters([]);
+  };
+
+  const handleTabPress = (tab) => {
+    setActiveTab(tab);
+    // Add navigation logic here based on the tab
+    if (tab === 'home' && onBack) {
+      onBack();
+    }
+  };
+
+  const handleBackPress = () => {
+    // First try onBack callback (for non-navigation scenarios)
+    if (onBack) {
+      onBack();
+    }
+    // Then try navigation.goBack() (for React Navigation)
+    else if (navigation && navigation.goBack) {
+      navigation.goBack();
+    }
+    // Fallback: try to navigate to home
+    else if (navigation && navigation.navigate) {
+      navigation.navigate('home');
+    }
   };
 
   const properties = [
@@ -474,10 +501,10 @@ export default function SearchResultsScreen({ navigation, onPropertyClick }) {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Animated Header */}
-      <Animated.View 
+      <Animated.View
         style={[
-          styles.header, 
-          { 
+          styles.header,
+          {
             opacity: headerOpacity,
             transform: [{ translateY: headerHeight }],
           }
@@ -487,14 +514,13 @@ export default function SearchResultsScreen({ navigation, onPropertyClick }) {
           <View style={styles.topBarLeft}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => navigation && navigation.goBack()}
+              onPress={handleBackPress}
               activeOpacity={0.7}
-              onBack={() => setScreen('home')}
             >
               <ArrowLeft size={20} color="#111827" />
             </TouchableOpacity>
             <View style={styles.logoContainer}>
-              <Animated.View 
+              <Animated.View
                 style={[
                   styles.logoBox,
                   { transform: [{ rotate: logoRotation }] }
@@ -585,10 +611,10 @@ export default function SearchResultsScreen({ navigation, onPropertyClick }) {
       </ScrollView>
 
       {/* Floating Refine Button with glow */}
-      <Animated.View 
+      <Animated.View
         style={[
-          styles.refineButton, 
-          { 
+          styles.refineButton,
+          {
             transform: [{ scale: fabScale }],
             bottom: isWeb ? 120 : 100,
           }
@@ -601,41 +627,11 @@ export default function SearchResultsScreen({ navigation, onPropertyClick }) {
       </Animated.View>
 
       {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <Home size={22} color="#9CA3AF" />
-          <Text style={styles.navLabel}>Home</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItemActive} activeOpacity={0.7}>
-          <Search size={22} color="#2D6A4F" />
-          <Text style={styles.navLabelActive}>Search</Text>
-          <View style={styles.activeIndicator} />
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <Heart size={22} color="#9CA3AF" />
-          <Text style={styles.navLabel}>Favorites</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <View>
-            <MessageCircle size={22} color="#9CA3AF" />
-            <Animated.View 
-              style={[
-                styles.notificationBadge, 
-                { transform: [{ scale: pulseAnim }] }
-              ]} 
-            />
-          </View>
-          <Text style={styles.navLabel}>Messages</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-          <User size={22} color="#9CA3AF" />
-          <Text style={styles.navLabel}>Profile</Text>
-        </TouchableOpacity>
-      </View>
+      <UserNavigator
+        activeTab={activeTab}
+        onTabPress={handleTabPress}
+        messageCount={messages.length}
+      />
     </View>
   );
 }
@@ -1105,68 +1101,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.3,
-  },
-  bottomNav: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    paddingHorizontal: getResponsiveValue(10, 20, 40),
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 10,
-      },
-      web: {
-        boxShadow: '0 -2px 12px rgba(0,0,0,0.1)',
-      },
-    }),
-  },
-  navItem: {
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: getResponsiveValue(8, 12, 16),
-  },
-  navItemActive: {
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: getResponsiveValue(8, 12, 16),
-    position: 'relative',
-  },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    width: 24,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: '#2D6A4F',
-  },
-  navLabel: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontWeight: '700',
-  },
-  navLabelActive: {
-    fontSize: 11,
-    color: '#2D6A4F',
-    fontWeight: '900',
-  },
-  notificationBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
   },
 });

@@ -1,19 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
-
 import { SplashScreen } from './modules/user/screens/SplashScreen';
 import { WelcomeScreen } from './modules/user/screens/WelcomeScreen';
 import LoginScreen from './modules/auth/screens/LoginScreen';
 import RegisterScreen from './modules/auth/screens/RegisterScreen';
 import OTPVerificationScreen from './modules/auth/screens/OTPVerificationScreen';
 import ForgotPassword from './modules/auth/screens/ForgotPassword';
-
 import HomeScreen from './modules/user/screens/HomeScreen';
 import ProfileScreen from './modules/user/screens/ProfileScreen';
-
 import PropertyDetailScreen from './modules/property/screens/PropertyDetailScreen';
 import SearchResultsScreen from './modules/property/screens/SearchResultsScreen';
-
 import ExploreProperties from './modules/property/screens/ExploreProperties';
 import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
 import ReportPropertyScreen from './modules/property/screens/ReportPropertyScreen';
@@ -23,7 +19,6 @@ import PaymentScreen from './store/PaymentScreen';
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
   const [screenStack, setScreenStack] = useState([]);
-
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [reportPropertyData, setReportPropertyData] = useState(null);
@@ -81,7 +76,11 @@ export default function App() {
 
   const goBack = () => {
     setScreenStack(prev => {
-      if (prev.length === 0) return prev;
+      if (prev.length === 0) {
+        // Fallback to home when stack is empty
+        setCurrentScreen('home');
+        return prev;
+      }
       const last = prev[prev.length - 1];
       setCurrentScreen(last);
       return prev.slice(0, -1);
@@ -122,6 +121,7 @@ export default function App() {
       case 'login':
         return (
           <LoginScreen
+            navigation={navigation}
             onBack={goBack}
             onNavigateToLoginSuccess={(user) => {
               if (user) setUserData(user);
@@ -139,6 +139,7 @@ export default function App() {
       case 'register':
         return (
           <RegisterScreen
+            navigation={navigation}
             onBack={goBack}
             onRegisterSuccess={(user) => {
               if (user) setUserData(user);
@@ -151,6 +152,7 @@ export default function App() {
       case 'otp':
         return (
           <OTPVerificationScreen
+            navigation={navigation}
             onBack={goBack}
             onVerifySuccess={() => navigateTo('home')}
           />
@@ -159,6 +161,7 @@ export default function App() {
       case 'forgotPassword':
         return (
           <ForgotPassword
+            navigation={navigation}
             onBack={goBack}
             onResetSuccess={() => navigateTo('login')}
           />
