@@ -5,16 +5,18 @@
  */
 exports.protect = (req, res, next) => {
     try {
+        console.log("🔒 PROTECT middleware triggered");
+        console.log("📍 Request URL:", req.method, req.originalUrl);
+
         // Get authorization header
         const header = req.headers.authorization;
 
-        // Log only in development mode
-        if (process.env.NODE_ENV === 'development') {
-            console.log("Auth header:", header ? "Bearer ***" : "No header");
-        }
+        // Always log in development or if no header
+        console.log("🔑 Auth header:", header ? `Bearer ${header.substring(7, 20)}...` : "❌ NO HEADER");
 
         // Check if authorization header exists and starts with "Bearer "
         if (!header || !header.startsWith("Bearer ")) {
+            console.log("❌ Authorization failed: No Bearer token");
             return res.status(401).json({
                 message: "Not authorized. Please login to access this resource.",
                 error: "NO_TOKEN"
@@ -26,6 +28,7 @@ exports.protect = (req, res, next) => {
 
         // Check if token exists after split
         if (!token) {
+            console.log("❌ Authorization failed: Token missing after split");
             return res.status(401).json({
                 message: "Not authorized. Token missing.",
                 error: "MISSING_TOKEN"
@@ -35,14 +38,17 @@ exports.protect = (req, res, next) => {
         // Verify token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
+        console.log("✅ Token verified - User:", decoded.id, "Role:", decoded.role);
+
         // Attach user info to request object
         req.user = decoded;
 
         // Token is valid, proceed to next middleware
+        console.log("✅ PROTECT passed - proceeding to route handler");
         next();
 
     } catch (err) {
-        console.error("Auth middleware error:", err.message);
+        console.error("❌ Auth middleware error:", err.message);
 
         // Handle specific JWT errors
         if (err.name === 'TokenExpiredError') {
@@ -104,7 +110,7 @@ const jwt = require("jsonwebtoken");
 exports.authenticate = (req, res, next) => {
     try {
         const token = req.headers.authorization?.split(" ")[1];
-        
+
         if (!token) {
             return res.status(401).json({ message: "Authentication required" });
         }
@@ -128,7 +134,7 @@ exports.optionalAuth = (req, res, next) => {
 
         if (header && header.startsWith("Bearer ")) {
             const token = header.split(" ")[1];
-            
+
             if (token) {
                 const decoded = jwt.verify(token, process.env.JWT_SECRET);
                 req.user = decoded;

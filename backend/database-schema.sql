@@ -205,6 +205,7 @@ UPDATE builders
 SET verification_status = 'verified'
 WHERE id = 4;
 
+
 CREATE TABLE property_types (
   id INT AUTO_INCREMENT PRIMARY KEY,
 
@@ -213,7 +214,7 @@ CREATE TABLE property_types (
 
   is_active BOOLEAN DEFAULT TRUE,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
+) ENGINE=InnoDB;
 
 CREATE TABLE properties (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -231,6 +232,10 @@ CREATE TABLE properties (
   state VARCHAR(100) NOT NULL,
   pincode VARCHAR(10),
 
+  area_sqft DECIMAL(10,2),
+  bedrooms INT,
+  bathrooms INT,
+
   latitude DECIMAL(10,7),
   longitude DECIMAL(10,7),
 
@@ -244,13 +249,16 @@ CREATE TABLE properties (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     ON UPDATE CURRENT_TIMESTAMP,
 
-  FOREIGN KEY (property_type_id)
+  CONSTRAINT fk_property_type
+    FOREIGN KEY (property_type_id)
     REFERENCES property_types(id),
 
-  FOREIGN KEY (uploaded_by)
+  CONSTRAINT fk_property_user
+    FOREIGN KEY (uploaded_by)
     REFERENCES users(id)
     ON DELETE CASCADE
-);
+) ENGINE=InnoDB;
+
 CREATE TABLE property_images (
   id INT AUTO_INCREMENT PRIMARY KEY,
 
@@ -262,7 +270,100 @@ CREATE TABLE property_images (
 
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
-  FOREIGN KEY (property_id)
+  CONSTRAINT fk_property_image
+    FOREIGN KEY (property_id)
     REFERENCES properties(id)
     ON DELETE CASCADE
-);
+) ENGINE=InnoDB;
+
+CREATE TABLE property_features (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+
+  property_id INT NOT NULL,
+  feature_name VARCHAR(100) NOT NULL,
+  feature_value VARCHAR(255),
+
+  CONSTRAINT fk_property_feature
+    FOREIGN KEY (property_id)
+    REFERENCES properties(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+
+CREATE TABLE property_documents (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+
+  property_id INT NOT NULL,
+  government_approval VARCHAR(255),
+  property_code VARCHAR(100),
+  supporting_document_url TEXT,
+
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT fk_property_document
+    FOREIGN KEY (property_id)
+    REFERENCES properties(id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS otp_verifications (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT,
+    email VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    otp VARCHAR(6) NOT NULL,
+    purpose VARCHAR(50) DEFAULT 'email_verification',
+    is_used BOOLEAN DEFAULT FALSE,
+    attempts INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
+    verified_at TIMESTAMP NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_email (email),
+    INDEX idx_purpose (purpose)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS user_login_logs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT,
+    login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    logout_time TIMESTAMP NULL,
+    login_method VARCHAR(50) DEFAULT 'email',
+    ip_address VARCHAR(45),
+    user_agent LONGTEXT,
+    device_type VARCHAR(50),
+    browser VARCHAR(100),
+    os VARCHAR(100),
+    activity_type VARCHAR(100),
+    description LONGTEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_login_time (login_time),
+    INDEX idx_activity_type (activity_type)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS security_alerts (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    alert_type VARCHAR(100),
+    severity ENUM('low', 'medium', 'high', 'critical') DEFAULT 'medium',
+    ip_address VARCHAR(45),
+    details LONGTEXT,
+    is_resolved BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    resolved_at TIMESTAMP NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_user_id (user_id),
+    INDEX idx_alert_type (alert_type),
+    INDEX idx_severity (severity)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS blocked_ips (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    ip_address VARCHAR(45) UNIQUE NOT NULL,
+    reason VARCHAR(255),
+    blocked_until TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ip_address (ip_address),
+    INDEX idx_blocked_until (blocked_until)
+) ENGINE=InnoDB;

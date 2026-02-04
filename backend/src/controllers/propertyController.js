@@ -23,10 +23,10 @@ exports.createProperty = async (req, res) => {
 
         const [result] = await pool.query(
             `INSERT INTO properties
-            (title, description, price, purpose, property_type, area_sqft, bedrooms, bathrooms, 
-             address, city, state, pincode, owner_type, owner_id, verification_status, status, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'inactive', true)`,
-            [title, description, price, purpose, property_type, area_sqft, bedrooms, bathrooms,
+            (title, description, price, listing_type, property_type_id, area_sqft, bedrooms, bathrooms, 
+             address, city, state, pincode, uploaded_by_role, uploaded_by, is_verified, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, 'active')`,
+            [title, description, price, purpose || listing_type, property_type, area_sqft, bedrooms, bathrooms,
              address, city, state, pincode, ownerType, ownerId]
         );
 
@@ -52,6 +52,143 @@ exports.getVerifiedProperties = async (req, res) => {
         res.json(rows);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+};
+
+// Add Property (with transaction for multi-table insertion)
+exports.addProperty = async (req, res) => {
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        const {
+            title,
+            description,
+            price,
+            listing_type,
+            property_type_id,
+            address,
+            city,
+            state,
+            pincode,
+            latitude,
+            longitude,
+            area_sqft,
+            bedrooms,
+            bathrooms,
+            images = [],
+            features = [],
+            documents = {}
+        } = req.body;
+
+        // Validation
+        if (!title || !description || !price || !listing_type || !property_type_id || !address || !city || !state) {
+            await connection.rollback();
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: title, description, price, listing_type, property_type_id, address, city, state'
+            });
+        }
+
+        // Get authenticated user
+        const uploaded_by = req.user?.id;
+        const uploaded_by_role = req.user?.role;
+
+        if (!uploaded_by || !uploaded_by_role) {
+            await connection.rollback();
+            return res.status(401).json({
+                success: false,
+                message: 'User authentication required'
+            });
+        }
+
+        // Verify user role is builder or agent
+        if (uploaded_by_role !== 'builder' && uploaded_by_role !== 'agent') {
+            await connection.rollback();
+            return res.status(403).json({
+                success: false,
+                message: 'Only builders and agents can add properties'
+            });
+        }
+
+        // 1. Insert into properties table
+        const [propertyResult] = await connection.query(
+            `INSERT INTO properties 
+       (title, description, price, listing_type, property_type_id, address, city, state, pincode, latitude, longitude, area_sqft, bedrooms, bathrooms, uploaded_by, uploaded_by_role, is_verified, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, 'active')`,
+            [title, description, price, listing_type, property_type_id, address, city, state, pincode || null, latitude || null, longitude || null, area_sqft || null, bedrooms || null, bathrooms || null, uploaded_by, uploaded_by_role]
+        );
+
+        const property_id = propertyResult.insertId;
+
+        // 2. Insert property images
+        if (images && images.length > 0) {
+            for (let i = 0; i < images.length; i++) {
+                const image = images[i];
+                await connection.query(
+                    `INSERT INTO property_images (property_id, image_url, is_primary, sort_order)
+           VALUES (?, ?, ?, ?)`,
+                    [property_id, image.url, i === 0, i]
+                );
+            }
+        }
+
+        // 3. Insert property features
+        if (features && features.length > 0) {
+            for (const feature of features) {
+                if (feature.name) {
+                    await connection.query(
+                        `INSERT INTO property_features (property_id, feature_name, feature_value)
+             VALUES (?, ?, ?)`,
+                        [property_id, feature.name, feature.value || null]
+                    );
+                }
+            }
+        }
+
+        // 4. Insert property documents
+        if (documents && Object.keys(documents).length > 0) {
+            await connection.query(
+                `INSERT INTO property_documents (property_id, government_approval, property_code, supporting_document_url)
+         VALUES (?, ?, ?, ?)`,
+                [
+                    property_id,
+                    documents.government_approval || null,
+                    documents.property_code || null,
+                    documents.supporting_document_url || null
+                ]
+            );
+        }
+
+        // Commit transaction
+        await connection.commit();
+
+        res.status(201).json({
+            success: true,
+            message: 'Property added successfully',
+            property_id,
+            data: {
+                id: property_id,
+                title,
+                price,
+                city,
+                state,
+                status: 'active',
+                is_verified: false
+            }
+        });
+
+    } catch (error) {
+        await connection.rollback();
+        console.error('Add property error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to add property',
+            error: error.message
+        });
+    } finally {
+        connection.release();
     }
 };
 

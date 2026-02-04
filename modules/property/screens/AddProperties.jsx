@@ -13,6 +13,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ArrowLeft,
   Building2,
@@ -34,6 +35,18 @@ import {
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
+
+// ==================== API CONFIGURATION ====================
+const getApiUrl = () => {
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:5000/api';
+  } else {
+    // For iOS and Web
+    return 'http://localhost:5000/api';
+  }
+};
+
+const API_BASE_URL = getApiUrl();
 
 const AddProperty = ({ onBack, onShowEditProperty }) => {
   const [propertyData, setPropertyData] = useState({
@@ -58,7 +71,7 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
   const buttonScale = useRef(new Animated.Value(1)).current;
   const fabAnim = useRef(new Animated.Value(0)).current;
   const shimmerAnim = useRef(new Animated.Value(0)).current;
-  
+
   // Section animations
   const sectionAnims = useRef(
     Array(6).fill(0).map(() => new Animated.Value(0))
@@ -182,29 +195,98 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
     setPropertyData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handlePublish = () => {
-    Animated.sequence([
-      Animated.spring(buttonScale, {
-        toValue: 0.92,
-        tension: 100,
-        friction: 3,
-        useNativeDriver: true,
-      }),
-      Animated.spring(buttonScale, {
-        toValue: 1,
-        tension: 100,
-        friction: 3,
-        useNativeDriver: true,
-      }),
-    ]).start();
+  const handlePublish = async () => {
+    try {
+      // Validate inputs
+      if (!propertyData.title || !propertyData.price || !propertyData.city || !propertyData.address) {
+        Alert.alert('Missing Fields', 'Please fill in all required fields');
+        return;
+      }
 
-    setTimeout(() => {
-      Alert.alert(
-        'Success! 🎉',
-        'Your property has been published successfully!',
-        [{ text: 'Great!', style: 'default' }]
-      );
-    }, 200);
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        Alert.alert('Error', 'You must be logged in to add a property');
+        return;
+      }
+
+      // Map property type to ID (assuming 1=Apartment, 2=Villa, 3=Plot, 4=Commercial)
+      // TODO: Fetch real IDs from backend
+      const propertyTypeMap = {
+        'apartment': 1,
+        'villa': 2,
+        'plot': 3,
+        'commercial': 4
+      };
+
+      const payload = {
+        title: propertyData.title,
+        description: propertyData.description || "No description provided",
+        price: parseFloat(propertyData.price.replace(/,/g, '')),
+        listing_type: propertyData.status, // 'sale' or 'rent'
+        property_type_id: propertyTypeMap[propertyData.propertyType] || 1,
+        address: propertyData.address,
+        city: propertyData.city,
+        state: "CA", // Default or add state input
+        pincode: "90001", // Default or add pincode input
+        area_sqft: parseFloat(propertyData.area.replace(/,/g, '')),
+        bedrooms: 3, // Default or add input
+        bathrooms: 2, // Default or add input
+        features: propertyData.amenities.map(a => ({ name: a, value: 'true' })),
+        images: uploadedImages.map(url => ({ url }))
+      };
+
+      console.log('Sending payload:', payload);
+
+      const response = await fetch(`${API_BASE_URL}/properties/add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to add property');
+      }
+
+      Animated.sequence([
+        Animated.spring(buttonScale, {
+          toValue: 0.92,
+          tension: 100,
+          friction: 3,
+          useNativeDriver: true,
+        }),
+        Animated.spring(buttonScale, {
+          toValue: 1,
+          tension: 100,
+          friction: 3,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      setTimeout(() => {
+        Alert.alert(
+          'Success! 🎉',
+          'Your property has been published successfully!',
+          [
+            {
+              text: 'Great!',
+              onPress: () => {
+                if (onShowEditProperty) onShowEditProperty(); // Close or navigate back
+                else if (onBack) onBack();
+              }
+            }
+          ]
+        );
+      }, 200);
+
+    } catch (error) {
+      console.error('Add property error:', error);
+      Alert.alert('Error', error.message);
+    }
   };
 
   const handleSaveDraft = () => {
@@ -262,7 +344,7 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
           style={styles.headerImage}
         />
         <View style={styles.headerOverlay} />
-        
+
         {/* Animated shimmer overlay */}
         <Animated.View
           style={[

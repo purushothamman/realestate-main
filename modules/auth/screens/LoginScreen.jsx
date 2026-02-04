@@ -14,13 +14,13 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Home, Mail, Lock, Eye, EyeOff, AlertCircle, X } from 'lucide-react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
-import { 
-  GOOGLE_CONFIG, 
-  getGoogleSignInConfig, 
-  validateGoogleConfig, 
+import {
+  GOOGLE_CONFIG,
+  getGoogleSignInConfig,
+  validateGoogleConfig,
   logGoogleConfig,
   getDebugInfo,
-  printSetupInstructions 
+  printSetupInstructions
 } from '../context/GoogleLoginConfig';
 
 // ==================== API CONFIGURATION ====================
@@ -40,12 +40,12 @@ const getApiUrl = () => {
 
 const API_BASE_URL = getApiUrl();
 
-export default function LoginScreen({ 
+export default function LoginScreen({
   navigation,
   onNavigateToLoginSuccess,
   onRegister,
   onForgotPassword,
-  onBack 
+  onBack
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -69,18 +69,18 @@ export default function LoginScreen({
       console.log(`📱 Platform: ${Platform.OS} (v${Platform.Version})`);
       console.log(`🌐 API URL: ${API_BASE_URL}`);
       console.log('');
-      
+
       // Step 1: Validate configuration
       console.log('STEP 1: Validating Configuration...');
       const isValid = validateGoogleConfig();
-      
+
       if (!isValid) {
         console.error('\n❌ Configuration validation FAILED\n');
         setIsConfigured(false);
-        
+
         // Show setup instructions
         printSetupInstructions();
-        
+
         Alert.alert(
           'Configuration Error',
           'Google Sign-In is not properly configured.\n\nCheck the console logs for setup instructions.',
@@ -91,7 +91,7 @@ export default function LoginScreen({
         );
         return;
       }
-      
+
       console.log('✅ Configuration validated\n');
 
       // Step 2: Log configuration
@@ -101,7 +101,7 @@ export default function LoginScreen({
       // Step 3: Configure Google Sign-In SDK
       console.log('STEP 3: Configuring Google Sign-In SDK...');
       const config = getGoogleSignInConfig();
-      
+
       console.log('Configuration object:');
       console.log(`  webClientId: ${config.webClientId.substring(0, 20)}...`);
       console.log(`  offlineAccess: ${config.offlineAccess}`);
@@ -139,9 +139,9 @@ export default function LoginScreen({
       console.error('Error Message:', error.message);
       console.error('Stack Trace:', error.stack);
       console.error('='.repeat(60) + '\n');
-      
+
       setIsConfigured(false);
-      
+
       Alert.alert(
         'Setup Error',
         `Failed to initialize Google Sign-In.\n\nError: ${error.message}\n\nPlease check the console for details.`,
@@ -165,8 +165,8 @@ export default function LoginScreen({
       `Config Valid: ${debugInfo.configValid ? 'Yes' : 'No'}`,
       [
         { text: 'OK' },
-        { 
-          text: 'View Instructions', 
+        {
+          text: 'View Instructions',
           onPress: () => {
             printSetupInstructions();
             Alert.alert('Instructions', 'Check console for detailed setup instructions');
@@ -181,7 +181,7 @@ export default function LoginScreen({
     console.log('\n' + '='.repeat(60));
     console.log('🔐 GOOGLE LOGIN STARTED');
     console.log('='.repeat(60) + '\n');
-    
+
     setApiError('');
     setIsGoogleLoading(true);
 
@@ -195,8 +195,8 @@ export default function LoginScreen({
       if (Platform.OS === 'android') {
         console.log('STEP 1: Checking Google Play Services...');
         try {
-          await GoogleSignin.hasPlayServices({ 
-            showPlayServicesUpdateDialog: true 
+          await GoogleSignin.hasPlayServices({
+            showPlayServicesUpdateDialog: true
           });
           console.log('✅ Play Services available\n');
         } catch (playError) {
@@ -206,7 +206,7 @@ export default function LoginScreen({
       } else {
         console.log('STEP 1: Skipping Play Services check (iOS)\n');
       }
-      
+
       // STEP 2: Clear previous session
       console.log('STEP 2: Clearing Previous Session...');
       try {
@@ -226,9 +226,9 @@ export default function LoginScreen({
       // STEP 3: Initiate Google Sign-In
       console.log('STEP 3: Launching Google Sign-In...');
       console.log('Waiting for user to select account...');
-      
+
       const userInfo = await GoogleSignin.signIn();
-      
+
       console.log('\n✅ User selected account');
       console.log('User data received:', {
         hasUser: !!userInfo?.user,
@@ -252,7 +252,7 @@ export default function LoginScreen({
       // STEP 4: Get ID Token
       console.log('STEP 4: Getting ID Token...');
       const tokens = await GoogleSignin.getTokens();
-      
+
       console.log('Tokens received:');
       console.log(`  ID Token: ${tokens?.idToken ? 'Yes' : 'No'}`);
       console.log(`  Access Token: ${tokens?.accessToken ? 'Yes' : 'No'}`);
@@ -269,7 +269,7 @@ export default function LoginScreen({
       console.log('STEP 5: Authenticating with Backend...');
       console.log(`Backend URL: ${API_BASE_URL}/auth/google-login`);
       console.log('Sending POST request...');
-      
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
@@ -302,7 +302,7 @@ export default function LoginScreen({
       }
 
       const data = await response.json();
-      
+
       console.log('Backend response:');
       console.log(`  Status: ${response.status} ${response.ok ? '(OK)' : '(ERROR)'}`);
       console.log(`  Message: ${data.message}`);
@@ -357,11 +357,11 @@ export default function LoginScreen({
       // STEP 7: Navigate
       console.log('STEP 7: Navigating to app...');
       console.log(`User role: ${data.user.role}`);
-      
+
       console.log('\n' + '='.repeat(60));
       console.log('✅ GOOGLE LOGIN COMPLETED SUCCESSFULLY');
       console.log('='.repeat(60) + '\n');
-      
+
       Alert.alert(
         'Welcome! 🎉',
         `Successfully logged in as ${data.user.name || data.user.email}`,
@@ -384,7 +384,7 @@ export default function LoginScreen({
         console.error('Stack Trace:', error.stack);
       }
       console.error('='.repeat(60) + '\n');
-      
+
       let errorMessage = 'Google login failed. Please try again.';
       let shouldShowAlert = true;
 
@@ -414,7 +414,7 @@ export default function LoginScreen({
       }
 
       setApiError(errorMessage);
-      
+
       if (shouldShowAlert) {
         Alert.alert(
           'Google Login Failed',
@@ -451,7 +451,7 @@ export default function LoginScreen({
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const phoneRegex = /^\d{10,15}$/;
-    
+
     if (!emailRegex.test(email.trim()) && !phoneRegex.test(email.trim())) {
       setApiError('Please enter a valid email address or phone number');
       return;
@@ -533,7 +533,7 @@ export default function LoginScreen({
 
       console.log('✅ About to call navigateByRole with role:', data.user.role);
       console.log('✅ User data:', data.user);
-      
+
       // Navigate immediately without showing alert
       setTimeout(() => {
         navigateByRole(data.user.role, data.user);
@@ -550,7 +550,7 @@ export default function LoginScreen({
 
     } catch (error) {
       console.error('❌ Email login error:', error);
-      
+
       if (error.name === 'AbortError') {
         setApiError('Request timeout. Please check your internet connection.');
       } else if (error.message?.includes('Network request failed')) {
@@ -590,7 +590,7 @@ export default function LoginScreen({
     // Use callback-based navigation from App.jsx
     if (onNavigateToLoginSuccess) {
       console.log('✅ Executing onNavigateToLoginSuccess callback');
-      console.log('→ This should trigger: setUserData(user) + navigateTo("home")');
+      console.log('→ This should trigger: setUserData(user) + navigateTo("home" or "dashboard")');
       onNavigateToLoginSuccess(userData);
       console.log('✅ Callback executed');
       return;
@@ -630,6 +630,7 @@ export default function LoginScreen({
       }
     } else {
       console.error('❌ Navigation callbacks/methods not available');
+      console.log('Please ensure onNavigateToLoginSuccess is passed to LoginScreen');
       Alert.alert('Error', 'Navigation error. Please restart the app.');
     }
   };
@@ -638,7 +639,7 @@ export default function LoginScreen({
   // ==================== NAVIGATE TO REGISTER ====================
   const handleNavigateToRegister = () => {
     console.log('📝 Navigating to Register screen');
-    
+
     // Use callback-based navigation from App.jsx
     if (onRegister) {
       console.log('→ Using onRegister callback');

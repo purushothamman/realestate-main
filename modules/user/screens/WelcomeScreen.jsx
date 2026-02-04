@@ -9,26 +9,15 @@ import {
   Dimensions,
 } from 'react-native';
 import { Home, MapPin, Search, TrendingUp, ArrowLeft, Check } from 'lucide-react-native';
-import LoginScreen from '../../auth/screens/LoginScreen';
-import ExploreProperties from '../../property/screens/ExploreProperties';
+
 const { width, height } = Dimensions.get('window');
 
 
-export function WelcomeScreen({ onGetStarted, onSignUp }) {
-  const [showLogin, setShowLogin] = useState(false);
-  const [showExplore, setShowExplore] = useState(false);
-
-  if (showLogin) {
-    return <LoginScreen onBack={() => setShowLogin(true)} />;
-  }
-
-  if (showExplore) {
-    return <ExploreProperties onBack={() => setShowExplore(true)} />;
-  }
+export function WelcomeScreen({ onGetStarted, onNavigateToLogin, onExploreAsBuilder }) {
 
   return (
     <View style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -130,7 +119,7 @@ export function WelcomeScreen({ onGetStarted, onSignUp }) {
 
             <TouchableOpacity
               style={styles.secondaryButton}
-              onPress={() => setShowExplore(true)}
+              onPress={onExploreAsBuilder}
               activeOpacity={0.8}
             >
               <Search color="#2D6A4F" size={20} style={styles.buttonIcon} />
@@ -144,7 +133,7 @@ export function WelcomeScreen({ onGetStarted, onSignUp }) {
               Already have an account?{' '}
               <Text
                 style={styles.loginLink}
-                onPress={() => setShowLogin(true)}
+                onPress={onNavigateToLogin}
               >
                 Login
               </Text>

@@ -17,6 +17,7 @@ import SearchResultsScreen from './modules/property/screens/SearchResultsScreen'
 import ExploreProperties from './modules/property/screens/ExploreProperties';
 import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
 import ReportPropertyScreen from './modules/property/screens/ReportPropertyScreen';
+import AddProperty from './modules/property/screens/AddProperties';
 import PaymentScreen from './store/PaymentScreen';
 
 export default function App() {
@@ -53,10 +54,10 @@ export default function App() {
 
     // Handle property selection
     if (params.property) setSelectedProperty(params.property);
-    
+
     // Handle search query
     if (params.query !== undefined) setSearchQuery(params.query);
-    
+
     // Handle Report Property data
     if (params.propertyId || params.propertyName || params.propertyAddress || params.propertyPrice || params.propertyImage) {
       setReportPropertyData({
@@ -103,7 +104,7 @@ export default function App() {
   // 🔹 Render Screens
   const renderScreen = () => {
     console.log('🎬 Rendering screen:', currentScreen);
-    
+
     switch (currentScreen) {
 
       case 'splash':
@@ -124,7 +125,11 @@ export default function App() {
             onBack={goBack}
             onNavigateToLoginSuccess={(user) => {
               if (user) setUserData(user);
-              navigateTo('home');
+              if (user?.role === 'builder' || user?.role === 'developer') {
+                navigateTo('builderDashboard');
+              } else {
+                navigateTo('home');
+              }
             }}
             onForgotPassword={() => navigateTo('forgotPassword')}
             onRegister={() => navigateTo('register')}
@@ -191,13 +196,13 @@ export default function App() {
             navigation={navigation}
             property={selectedProperty}
             onBack={goBack}
-            route={{ 
-              params: { 
+            route={{
+              params: {
                 propertyId: selectedProperty?.id || 'property-001',
                 propertyName: selectedProperty?.name || 'Modern Luxury Villa',
                 propertyAddress: selectedProperty?.address || '1245 Sunset Boulevard, Beverly Hills, CA 90210',
                 propertyPrice: selectedProperty?.price || '$789,000',
-              } 
+              }
             }}
           />
         );
@@ -234,6 +239,17 @@ export default function App() {
             onPropertyClick={(property) =>
               navigateTo('propertyDetail', { property })
             }
+            onAddProperty={() => navigateTo('addProperty')}
+          />
+        );
+
+      case 'addProperty':
+        return (
+          <AddProperty
+            onBack={goBack}
+            onPropertyAdded={() => {
+              navigateTo('builderDashboard');
+            }}
           />
         );
 
