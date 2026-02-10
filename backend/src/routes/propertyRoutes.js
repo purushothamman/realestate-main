@@ -14,11 +14,7 @@ router.get("/test", (req, res) => {
 
 // New route for adding properties with images, features, and documents
 console.log("📍 Registering POST /add route");
-router.post("/add",
-    (req, res, next) => {
-        console.log("📍 /add route HIT - Method:", req.method, "URL:", req.url);
-        next();
-    },
+router.post("/add", protect,
     allow("builder", "agent"),
     property.addProperty
 );

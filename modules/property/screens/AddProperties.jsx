@@ -36,7 +36,7 @@ import {
 
 const { width } = Dimensions.get('window');
 
-// ==================== API CONFIGURATION ====================
+//  API CONFIGURATION
 const getApiUrl = () => {
   if (Platform.OS === 'android') {
     return 'http://10.0.2.2:5000/api';

@@ -611,7 +611,7 @@ module.exports.microsoftLogin = async (req, res) => {
 module.exports.register = async (req, res) => {
     // Get a connection from the pool for transaction
     const connection = await pool.getConnection();
-    
+
     try {
         // Start transaction
         await connection.beginTransaction();
@@ -1068,7 +1068,7 @@ module.exports.login = async (req, res) => {
         let builderDetails = {};
         if (user.role === 'builder') {
             const [builder] = await pool.query(
-                "SELECT * FROM builder WHERE user_id = ?",
+                "SELECT * FROM builders WHERE user_id = ?",
                 [user.id]
             );
             if (builder.length > 0) {
@@ -1189,7 +1189,7 @@ module.exports.getProfile = async (req, res) => {
         let builderDetails = {};
         if (user.role === 'builder') {
             const [builder] = await pool.query(
-                "SELECT * FROM builder WHERE user_id = ?",
+                "SELECT * FROM builders WHERE user_id = ?",
                 [userId]
             );
             if (builder.length > 0) {

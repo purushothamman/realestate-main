@@ -1,0 +1,57 @@
+# ftree.yaml - Filter Tree Configuration
+version: "1.0"
+
+defaults:
+  depth: 5
+  output: markdown
+  showSize: true
+  exclude:
+    - "**/node_modules/**"
+    - "**/.git/**"
+    - "**/dist/**"
+
+presets:
+  recent-docs:
+    description: "Documentation modified in the last 7 days"
+    extensions: [md, mdx, txt]
+    modifiedWithin: 7d
+
+  source:
+    description: "Source code files"
+    extensions: [ts, tsx, js, jsx, py, go, rs]
+    exclude: ["**/test/**", "**/*.test.*"]
+
+  large-files:
+    description: "Files larger than 1MB"
+    minSize: 1MB
+    sortBy: size-desc
+
+  configs:
+    description: "Configuration files"
+    patterns:
+      - "**/.*rc"
+      - "**/*.config.*"
+      - "**/tsconfig*.json"
+      - "**/package.json"
+
+  readmes:
+    description: "All README.md files across the project"
+    patterns:
+      - "**/README.md"
+      - "**/README"
+      - "**/readme.md"
+    depth: 10
+
+  ai-docs:
+    description: "AI agent-facing documentation (AGENTS, CLAUDE, GEMINI)"
+    patterns:
+      - "**/AGENTS.md"
+      - "**/CLAUDE.md"
+      - "**/GEMINI.md"
+      - "**/COPILOT.md"
+      - "**/.github/copilot-instructions.md"
+    depth: 10
+
+aliases:
+  ts: { extensions: [ts, tsx] }
+  docs: { extensions: [md, txt] }

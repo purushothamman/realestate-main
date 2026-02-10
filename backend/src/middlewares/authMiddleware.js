@@ -4,6 +4,10 @@
  * Usage: router.get('/protected-route', protect, yourController)
  */
 exports.protect = (req, res, next) => {
+    if (req.method === "OPTIONS") {
+        console.log("OPTIONS request - skipping auth");
+        return next();
+    }
     try {
         console.log("🔒 PROTECT middleware triggered");
         console.log("📍 Request URL:", req.method, req.originalUrl);
