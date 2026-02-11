@@ -38,6 +38,8 @@ import SearchResultsScreen from '../../property/screens/SearchResultsScreen';
 import FavoritesScreen from './FavoritesScreen';
 import PropertyDetailScreen from '../../property/screens/PropertyDetailScreen';
 import NotificationsScreen from './NotificationsScreen';
+import BuilderDashboard from '../../builder/screens/BuilderDashboard';
+import AddProperties from '../../property/screens/AddProperties';
 
 // Import UserNavigator component
 import UserNavigator from '../../../navigation/UserNavigator';
@@ -438,6 +440,31 @@ export default function HomeScreen({ navigation }) {
       return <NotificationsScreen onBack={() => setScreen('home')} navigation={navigation} />;
     }
 
+    if (screen === 'dashboard') {
+      return (
+        <BuilderDashboard
+          onBack={() => setScreen('home')}
+          builderName={user?.name || 'Builder'}
+          navigation={navigation}
+          onPropertyClick={(property) => {
+            // If property click needs to navigate to details
+            handlePropertyClick(property);
+          }}
+          onAddProperty={() => setScreen('addProperty')}
+          onMyProperties={() => setScreen('addProperty')}
+        />
+      );
+    }
+
+    if (screen === 'addProperty') {
+      return (
+        <AddProperties
+          onBack={() => setScreen('dashboard')}
+          navigation={navigation}
+        />
+      );
+    }
+
     if (screen === 'propertyDetail' && selectedProperty) {
       return (
         <PropertyDetailScreen
@@ -467,6 +494,7 @@ export default function HomeScreen({ navigation }) {
           activeTab={activeTab}
           onTabPress={handleTabPress}
           messageCount={messages.length}
+          userRole={user?.role}
         />
       </View>
     );
@@ -793,6 +821,7 @@ export default function HomeScreen({ navigation }) {
         activeTab={activeTab}
         onTabPress={handleTabPress}
         messageCount={messages.length}
+        userRole={user?.role}
       />
     </View>
   );

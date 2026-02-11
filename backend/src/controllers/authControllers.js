@@ -611,7 +611,7 @@ module.exports.microsoftLogin = async (req, res) => {
 module.exports.register = async (req, res) => {
     // Get a connection from the pool for transaction
     const connection = await pool.getConnection();
-    
+
     try {
         // Start transaction
         await connection.beginTransaction();
@@ -782,7 +782,7 @@ module.exports.register = async (req, res) => {
         // For builders, check if GST or PAN already exists
         if (role === "builder") {
             const [existingGst] = await connection.query(
-                "SELECT user_id FROM builder WHERE gst_no = ?",
+                "SELECT user_id FROM builders WHERE gst_no = ?",
                 [gstNo.trim()]
             );
 
@@ -795,7 +795,7 @@ module.exports.register = async (req, res) => {
             }
 
             const [existingPan] = await connection.query(
-                "SELECT user_id FROM builder WHERE pan_no = ?",
+                "SELECT user_id FROM builders WHERE pan_no = ?",
                 [panNo.trim()]
             );
 
@@ -863,7 +863,7 @@ module.exports.register = async (req, res) => {
             }
 
             await connection.query(
-                `INSERT INTO builder (
+                `INSERT INTO builders (
                     user_id, name, email, phone, password, profile_image,
                     company_name, gst_no, pan_no, website,
                     registration_certificate, description,
@@ -1068,7 +1068,7 @@ module.exports.login = async (req, res) => {
         let builderDetails = {};
         if (user.role === 'builder') {
             const [builder] = await pool.query(
-                "SELECT * FROM builder WHERE user_id = ?",
+                "SELECT * FROM builders WHERE user_id = ?",
                 [user.id]
             );
             if (builder.length > 0) {
@@ -1098,11 +1098,7 @@ module.exports.login = async (req, res) => {
             // Continue execution - don't fail registration due to logging error
         }
 
-        // Update last login timestamp
-        await pool.query(
-            "UPDATE users SET last_login = NOW() WHERE id = ?",
-            [user.id]
-        );
+
 
         // Prepare user response object
         const userResponse = {
@@ -1189,7 +1185,7 @@ module.exports.getProfile = async (req, res) => {
         let builderDetails = {};
         if (user.role === 'builder') {
             const [builder] = await pool.query(
-                "SELECT * FROM builder WHERE user_id = ?",
+                "SELECT * FROM builders WHERE user_id = ?",
                 [userId]
             );
             if (builder.length > 0) {

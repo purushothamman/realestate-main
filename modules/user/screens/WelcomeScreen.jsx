@@ -28,7 +28,7 @@ export function WelcomeScreen({ onGetStarted, onSignUp }) {
 
   return (
     <View style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -176,6 +176,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 40,
   },
   heroSection: {
     height: 480,
@@ -261,7 +262,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 40,
-    paddingBottom: 24,
+    paddingBottom: 60,
   },
   headlineContainer: {
     marginBottom: 12,

@@ -11,12 +11,14 @@ import {
   Heart,
   MessageCircle,
   User,
+  LayoutDashboard,
 } from 'lucide-react-native';
 
-export default function UserNavigator({ 
-  activeTab, 
-  onTabPress, 
-  messageCount = 0 
+export default function UserNavigator({
+  activeTab,
+  onTabPress,
+  messageCount = 0,
+  userRole
 }) {
   return (
     <View style={styles.bottomNav}>
@@ -57,6 +59,29 @@ export default function UserNavigator({
           Search
         </Text>
       </TouchableOpacity>
+
+      {userRole === 'builder' && (
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => onTabPress('dashboard')}
+        >
+          <LayoutDashboard
+            color={activeTab === 'dashboard' ? '#2D6A4F' : '#9CA3AF'}
+            size={24}
+            strokeWidth={2}
+          />
+          <Text
+            style={[
+              styles.navLabel,
+              activeTab === 'dashboard' && styles.navLabelActive,
+            ]}
+          >
+            Dashboard
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Only show favorites if NOT a builder, or maybe keep it? Detailed req said conditional dashboard button. I will add Dashboard and keep others unless specified otherwise. */}
 
       <TouchableOpacity
         style={styles.navItem}
