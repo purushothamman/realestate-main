@@ -10,9 +10,10 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Home, Mail, Lock, Eye, EyeOff, AlertCircle, X, ArrowLeft } from 'lucide-react-native';
+import { Home, Mail, Lock, Eye, EyeOff, AlertCircle, X } from 'lucide-react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import {
   GOOGLE_CONFIG,
@@ -40,6 +41,115 @@ const getApiUrl = () => {
 
 const API_BASE_URL = getApiUrl();
 
+// ==================== ROLE VALIDATION ====================
+const VALID_ROLES = ['buyer', 'builder', 'agent', 'admin'];
+
+const validateUserRole = (role) => {
+  if (!role) {
+    console.error('❌ Role is missing');
+    return false;
+  }
+  
+  const normalizedRole = role.toLowerCase().trim();
+  
+  if (!VALID_ROLES.includes(normalizedRole)) {
+    console.error(`❌ Invalid role: ${role}`);
+    console.error(`Valid roles are: ${VALID_ROLES.join(', ')}`);
+    return false;
+  }
+  
+  return true;
+};
+
+// ==================== SECURE STORAGE ====================
+const securelyStoreAuthData = async (token, user) => {
+  try {
+    console.log('💾 Storing authentication data securely...');
+    
+    // Validate required data
+    if (!token) {
+      throw new Error('Token is required');
+    }
+    
+    if (!user || !user.id || !user.email || !user.role) {
+      throw new Error('Complete user data is required');
+    }
+
+    // Validate role
+    if (!validateUserRole(user.role)) {
+      throw new Error(`Invalid user role: ${user.role}`);
+    }
+
+    // Store all data atomically
+    await AsyncStorage.multiSet([
+      ['authToken', token],
+      ['user', JSON.stringify(user)],
+      ['userRole', user.role.toLowerCase()],
+      ['userId', String(user.id)],
+      ['userEmail', user.email],
+      ['loginTimestamp', new Date().toISOString()],
+    ]);
+
+    console.log('✅ Auth data stored successfully');
+    console.log(`   User ID: ${user.id}`);
+    console.log(`   Role: ${user.role}`);
+    console.log(`   Email: ${user.email}`);
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to store auth data:', error);
+    throw new Error(`Storage failed: ${error.message}`);
+  }
+};
+
+// ==================== CLEAR AUTH DATA ====================
+const clearAuthData = async () => {
+  try {
+    console.log('🗑️  Clearing authentication data...');
+    await AsyncStorage.multiRemove([
+      'authToken',
+      'user',
+      'userRole',
+      'userId',
+      'userEmail',
+      'loginTimestamp',
+      'loginMethod',
+      'rememberMe'
+    ]);
+    console.log('✅ Auth data cleared');
+  } catch (error) {
+    console.error('⚠️  Failed to clear auth data:', error);
+  }
+};
+
+// ==================== VALIDATE AUTH STATE ====================
+const validateAuthState = async () => {
+  try {
+    const [token, userStr, role] = await AsyncStorage.multiGet([
+      'authToken',
+      'user',
+      'userRole'
+    ]);
+
+    const authToken = token[1];
+    const userData = userStr[1] ? JSON.parse(userStr[1]) : null;
+    const userRole = role[1];
+
+    if (!authToken || !userData || !userRole) {
+      return { isValid: false, reason: 'Missing auth data' };
+    }
+
+    if (!validateUserRole(userRole)) {
+      return { isValid: false, reason: 'Invalid role' };
+    }
+
+    return { isValid: true, token: authToken, user: userData, role: userRole };
+  } catch (error) {
+    console.error('Auth state validation error:', error);
+    return { isValid: false, reason: error.message };
+  }
+};
+
 export default function LoginScreen({
   navigation,
   onNavigateToLoginSuccess,
@@ -55,10 +165,15 @@ export default function LoginScreen({
   const [apiError, setApiError] = useState('');
   const [focusedInput, setFocusedInput] = useState(null);
   const [isConfigured, setIsConfigured] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   // ==================== INITIALIZE GOOGLE SIGNIN ====================
   useEffect(() => {
     initializeGoogleSignIn();
+    loadRememberedCredentials();
   }, []);
 
   const initializeGoogleSignIn = async () => {
@@ -69,7 +184,7 @@ export default function LoginScreen({
       console.log(`📱 Platform: ${Platform.OS} (v${Platform.Version})`);
       console.log(`🌐 API URL: ${API_BASE_URL}`);
       console.log('');
-
+      
       // Step 1: Validate configuration
       console.log('STEP 1: Validating Configuration...');
       const isValid = validateGoogleConfig();
@@ -77,10 +192,10 @@ export default function LoginScreen({
       if (!isValid) {
         console.error('\n❌ Configuration validation FAILED\n');
         setIsConfigured(false);
-
+        
         // Show setup instructions
         printSetupInstructions();
-
+        
         Alert.alert(
           'Configuration Error',
           'Google Sign-In is not properly configured.\n\nCheck the console logs for setup instructions.',
@@ -93,15 +208,10 @@ export default function LoginScreen({
       }
 
       console.log('✅ Configuration validated\n');
-
-      // Step 2: Log configuration
-      console.log('STEP 2: Logging Configuration...');
       logGoogleConfig();
 
-      // Step 3: Configure Google Sign-In SDK
-      console.log('STEP 3: Configuring Google Sign-In SDK...');
       const config = getGoogleSignInConfig();
-
+      
       console.log('Configuration object:');
       console.log(`  webClientId: ${config.webClientId.substring(0, 20)}...`);
       console.log(`  offlineAccess: ${config.offlineAccess}`);
@@ -112,20 +222,8 @@ export default function LoginScreen({
       GoogleSignin.configure(config);
       console.log('✅ SDK configured successfully\n');
 
-      // Step 4: Check current sign-in status
-      console.log('STEP 4: Checking Sign-In Status...');
       const isSignedIn = await GoogleSignin.isSignedIn();
       console.log(`Status: ${isSignedIn ? '✅ Signed In' : '⭕ Not Signed In'}`);
-
-      if (isSignedIn) {
-        try {
-          const userInfo = await GoogleSignin.getCurrentUser();
-          console.log(`Current user: ${userInfo?.user?.email || 'Unknown'}`);
-        } catch (err) {
-          console.log('Could not get current user info');
-        }
-      }
-      console.log('');
 
       setIsConfigured(true);
       console.log('✅ GOOGLE SIGN-IN INITIALIZATION COMPLETE');
@@ -139,9 +237,9 @@ export default function LoginScreen({
       console.error('Error Message:', error.message);
       console.error('Stack Trace:', error.stack);
       console.error('='.repeat(60) + '\n');
-
+      
       setIsConfigured(false);
-
+      
       Alert.alert(
         'Setup Error',
         `Failed to initialize Google Sign-In.\n\nError: ${error.message}\n\nPlease check the console for details.`,
@@ -165,8 +263,8 @@ export default function LoginScreen({
       `Config Valid: ${debugInfo.configValid ? 'Yes' : 'No'}`,
       [
         { text: 'OK' },
-        {
-          text: 'View Instructions',
+        { 
+          text: 'View Instructions', 
           onPress: () => {
             printSetupInstructions();
             Alert.alert('Instructions', 'Check console for detailed setup instructions');
@@ -176,12 +274,12 @@ export default function LoginScreen({
     );
   };
 
-  // ==================== GOOGLE LOGIN IMPLEMENTATION ====================
-  const handleGoogleLogin = async () => {
+  // ==================== ROLE-BASED NAVIGATION ====================
+  const navigateByRole = async (userRole, userData) => {
     console.log('\n' + '='.repeat(60));
     console.log('🔐 GOOGLE LOGIN STARTED');
     console.log('='.repeat(60) + '\n');
-
+    
     setApiError('');
     setIsGoogleLoading(true);
 
@@ -195,8 +293,8 @@ export default function LoginScreen({
       if (Platform.OS === 'android') {
         console.log('STEP 1: Checking Google Play Services...');
         try {
-          await GoogleSignin.hasPlayServices({
-            showPlayServicesUpdateDialog: true
+          await GoogleSignin.hasPlayServices({ 
+            showPlayServicesUpdateDialog: true 
           });
           console.log('✅ Play Services available\n');
         } catch (playError) {
@@ -206,7 +304,7 @@ export default function LoginScreen({
       } else {
         console.log('STEP 1: Skipping Play Services check (iOS)\n');
       }
-
+      
       // STEP 2: Clear previous session
       console.log('STEP 2: Clearing Previous Session...');
       try {
@@ -226,9 +324,9 @@ export default function LoginScreen({
       // STEP 3: Initiate Google Sign-In
       console.log('STEP 3: Launching Google Sign-In...');
       console.log('Waiting for user to select account...');
-
+      
       const userInfo = await GoogleSignin.signIn();
-
+      
       console.log('\n✅ User selected account');
       console.log('User data received:', {
         hasUser: !!userInfo?.user,
@@ -252,7 +350,7 @@ export default function LoginScreen({
       // STEP 4: Get ID Token
       console.log('STEP 4: Getting ID Token...');
       const tokens = await GoogleSignin.getTokens();
-
+      
       console.log('Tokens received:');
       console.log(`  ID Token: ${tokens?.idToken ? 'Yes' : 'No'}`);
       console.log(`  Access Token: ${tokens?.accessToken ? 'Yes' : 'No'}`);
@@ -269,40 +367,29 @@ export default function LoginScreen({
       console.log('STEP 5: Authenticating with Backend...');
       console.log(`Backend URL: ${API_BASE_URL}/auth/google-login`);
       console.log('Sending POST request...');
-
+      
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch(`${API_BASE_URL}/auth/google-login`, {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify({
-          token: tokens.idToken,
-        }),
+        body: JSON.stringify(loginData),
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
-      console.log(`Response status: ${response.status} ${response.statusText}`);
-      console.log('Response headers:');
-      console.log(`  Content-Type: ${response.headers.get('content-type')}`);
-      console.log('');
-
-      // Check content type
       const contentType = response.headers.get('content-type');
       if (!contentType?.includes('application/json')) {
-        console.error('❌ Invalid content type:', contentType);
-        const textResponse = await response.text();
-        console.error('Response body (first 200 chars):', textResponse.substring(0, 200));
-        throw new Error('Server returned non-JSON response. Backend may be misconfigured or not running.');
+        throw new Error('Server returned invalid response. Please check if backend is running.');
       }
 
       const data = await response.json();
-
+      
       console.log('Backend response:');
       console.log(`  Status: ${response.status} ${response.ok ? '(OK)' : '(ERROR)'}`);
       console.log(`  Message: ${data.message}`);
@@ -318,50 +405,65 @@ export default function LoginScreen({
         throw new Error(data.message || `Backend error (${response.status})`);
       }
 
-      // Validate response
+      // Validate response structure
       if (!data.token) {
-        console.error('❌ Missing token in response');
         throw new Error('Server did not return authentication token');
       }
 
       if (!data.user) {
-        console.error('❌ Missing user data in response');
         throw new Error('Server did not return user information');
       }
 
       if (!data.user.id || !data.user.email || !data.user.role) {
-        console.error('❌ Incomplete user data');
-        console.error('User data:', JSON.stringify(data.user, null, 2));
+        console.error('❌ Incomplete user data:', data.user);
         throw new Error('Incomplete user information from server');
       }
 
-      console.log('✅ Backend authentication successful');
-      console.log('Authenticated user:');
-      console.log(`  ID: ${data.user.id}`);
-      console.log(`  Name: ${data.user.name}`);
-      console.log(`  Email: ${data.user.email}`);
-      console.log(`  Role: ${data.user.role}`);
-      console.log('');
+      // ⚠️ CRITICAL: Validate role from backend
+      console.log('\n🔍 ROLE VALIDATION:');
+      console.log('   Role from backend:', data.user.role);
+      
+      if (!validateUserRole(data.user.role)) {
+        console.error('❌ Invalid role received from backend');
+        throw new Error(`Invalid user role: ${data.user.role}. Valid roles: ${VALID_ROLES.join(', ')}`);
+      }
 
-      // STEP 6: Store authentication data
-      console.log('STEP 6: Storing Authentication Data...');
-      await AsyncStorage.multiSet([
-        ['authToken', data.token],
-        ['user', JSON.stringify(data.user)],
-        ['userRole', data.user.role],
-        ['userId', String(data.user.id)],
-        ['loginMethod', 'google'],
-      ]);
-      console.log('✅ Authentication data stored\n');
+      console.log('✅ Role is valid:', data.user.role);
+      console.log('✅ Email login successful');
+
+      // Store authentication data securely
+      await securelyStoreAuthData(data.token, data.user);
+      await AsyncStorage.setItem('loginMethod', 'email');
+      
+      // Save credentials if remember me is checked
+      await saveCredentials(loginData.email);
+
+      console.log('\n📦 Complete User Data:');
+      console.log(JSON.stringify({
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.name,
+        role: data.user.role,
+      }, null, 2));
+
+      // Show success message
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 2000);
+
+      // Clear form
+      if (!rememberMe) {
+        setEmail('');
+      }
+      setPassword('');
 
       // STEP 7: Navigate
       console.log('STEP 7: Navigating to app...');
       console.log(`User role: ${data.user.role}`);
-
+      
       console.log('\n' + '='.repeat(60));
       console.log('✅ GOOGLE LOGIN COMPLETED SUCCESSFULLY');
       console.log('='.repeat(60) + '\n');
-
+      
       Alert.alert(
         'Welcome! 🎉',
         `Successfully logged in as ${data.user.name || data.user.email}`,
@@ -384,37 +486,21 @@ export default function LoginScreen({
         console.error('Stack Trace:', error.stack);
       }
       console.error('='.repeat(60) + '\n');
-
+      
       let errorMessage = 'Google login failed. Please try again.';
       let shouldShowAlert = true;
 
       // Handle specific errors
       if (error.name === 'AbortError') {
-        errorMessage = 'Request timeout. Please check your internet connection and try again.';
-        console.error('❌ Request timed out');
-      } else if (error.code === statusCodes.SIGN_IN_CANCELLED) {
-        errorMessage = 'Sign-in cancelled';
-        shouldShowAlert = false;
-        console.log('ℹ️  User cancelled sign-in');
-      } else if (error.code === statusCodes.IN_PROGRESS) {
-        errorMessage = 'Sign-in already in progress. Please wait.';
-        console.log('ℹ️  Sign-in already in progress');
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        errorMessage = 'Google Play Services not available or outdated.\n\nPlease update Google Play Services and try again.';
-        console.error('❌ Play Services issue');
+        errorMessage = 'Request timeout. Please check your internet connection.';
       } else if (error.message?.includes('Network request failed')) {
-        errorMessage = 'Cannot connect to server.\n\nPlease check:\n• Internet connection\n• Backend server is running\n• API URL is correct';
-        console.error('❌ Network error - cannot reach backend');
-      } else if (error.message?.includes('12501') || error.message?.includes('DEVELOPER_ERROR')) {
-        errorMessage = 'Google Sign-In configuration error.\n\nPossible causes:\n• SHA-1 fingerprint not added (Android)\n• Wrong OAuth client configuration\n• Client ID mismatch\n\nCheck console for setup instructions.';
-        console.error('❌ Error 12501/DEVELOPER_ERROR - Configuration issue');
-        printSetupInstructions();
+        errorMessage = 'Cannot connect to server. Please ensure backend is running.';
       } else if (error.message) {
         errorMessage = error.message;
       }
-
+      
       setApiError(errorMessage);
-
+      
       if (shouldShowAlert) {
         Alert.alert(
           'Google Login Failed',
@@ -430,12 +516,16 @@ export default function LoginScreen({
       }
 
     } finally {
-      setIsGoogleLoading(false);
+      setIsLoading(false);
     }
   };
 
-  // ==================== EMAIL/PASSWORD LOGIN ====================
-  const handleLogin = async () => {
+  // ==================== GOOGLE LOGIN IMPLEMENTATION ====================
+  const handleGoogleLogin = async () => {
+    console.log('\n' + '='.repeat(60));
+    console.log('🔐 GOOGLE LOGIN STARTED');
+    console.log('='.repeat(60) + '\n');
+    
     setApiError('');
 
     // Validation
@@ -451,7 +541,7 @@ export default function LoginScreen({
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const phoneRegex = /^\d{10,15}$/;
-
+    
     if (!emailRegex.test(email.trim()) && !phoneRegex.test(email.trim())) {
       setApiError('Please enter a valid email address or phone number');
       return;
@@ -475,49 +565,59 @@ export default function LoginScreen({
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(`${API_BASE_URL}/auth/google-login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
-        body: JSON.stringify(loginData),
+        body: JSON.stringify({
+          token: tokens.idToken,
+        }),
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
+      console.log(`📥 Response status: ${response.status}`);
+
       const contentType = response.headers.get('content-type');
       if (!contentType?.includes('application/json')) {
-        throw new Error('Server returned invalid response. Please check if backend is running.');
+        throw new Error('Server returned non-JSON response. Backend may be misconfigured.');
       }
 
       const data = await response.json();
+      
+      console.log('📦 Backend response:', {
+        success: data.success,
+        hasToken: !!data.token,
+        hasUser: !!data.user,
+        userRole: data.user?.role,
+        userId: data.user?.id,
+        userEmail: data.user?.email,
+        isNewUser: data.isNewUser
+      });
 
-      if (!response.ok) {
-        switch (response.status) {
-          case 400:
-            throw new Error(data.message || 'Invalid email or password');
-          case 401:
-            throw new Error(data.message || 'Incorrect email or password');
-          case 403:
-            throw new Error(data.message || 'Account is blocked or locked');
-          case 404:
-            throw new Error(data.message || 'Account not found');
-          case 429:
-            throw new Error(data.message || 'Too many login attempts. Please try again later.');
-          case 500:
-            throw new Error(data.message || 'Server error. Please try again.');
-          default:
-            throw new Error(data.message || `Login failed (${response.status})`);
-        }
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || `Backend error (${response.status})`);
       }
 
-      if (!data.token || !data.user || !data.user.role) {
-        throw new Error('Invalid server response');
+      // Validate response
+      if (!data.token || !data.user || !data.user.id || !data.user.email || !data.user.role) {
+        throw new Error('Incomplete authentication data from server');
       }
 
-      console.log('✅ Email login successful');
+      // ⚠️ CRITICAL: Validate role from backend
+      console.log('\n🔍 ROLE VALIDATION:');
+      console.log('   Role from backend:', data.user.role);
+      
+      if (!validateUserRole(data.user.role)) {
+        console.error('❌ Invalid role received from backend');
+        throw new Error(`Invalid user role: ${data.user.role}. Valid roles: ${VALID_ROLES.join(', ')}`);
+      }
+
+      console.log('✅ Role is valid:', data.user.role);
+      console.log('✅ Backend authentication successful');
 
       // Store authentication data
       await AsyncStorage.multiSet([
@@ -533,33 +633,50 @@ export default function LoginScreen({
 
       console.log('✅ About to call navigateByRole with role:', data.user.role);
       console.log('✅ User data:', data.user);
-
+      
       // Navigate immediately without showing alert
       setTimeout(() => {
         navigateByRole(data.user.role, data.user);
-      }, 500);
+      }, 300);
 
-      // Show alert after navigating
+      // Show welcome message
       setTimeout(() => {
         Alert.alert(
-          'Login Successful',
-          `Welcome back, ${data.user.name || 'User'}!`,
-          [{ text: 'OK' }]
+          data.isNewUser ? 'Welcome! 🎉' : 'Welcome Back! 🎉',
+          `Successfully logged in as ${data.user.name || data.user.email}`,
+          [{ text: 'Continue' }]
         );
-      }, 600);
+      }, 500);
 
     } catch (error) {
       console.error('❌ Email login error:', error);
-
+      
       if (error.name === 'AbortError') {
-        setApiError('Request timeout. Please check your internet connection.');
+        errorMessage = 'Request timeout. Please check your internet connection.';
+      } else if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        errorMessage = 'Sign-in cancelled';
+        shouldShowAlert = false;
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        errorMessage = 'Sign-in already in progress. Please wait.';
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        errorMessage = 'Google Play Services not available. Please update and try again.';
       } else if (error.message?.includes('Network request failed')) {
-        setApiError('Cannot connect to server. Please ensure backend is running.');
-      } else {
-        setApiError(error.message || 'Login failed. Please try again.');
+        errorMessage = 'Cannot connect to server. Please check your internet connection.';
+      } else if (error.message?.includes('12501') || error.message?.includes('DEVELOPER_ERROR')) {
+        errorMessage = 'Google Sign-In configuration error. Check console for details.';
+        printSetupInstructions();
+      } else if (error.message) {
+        errorMessage = error.message;
       }
+
+      setApiError(errorMessage);
+      
+      if (shouldShowAlert) {
+        Alert.alert('Google Login Failed', errorMessage, [{ text: 'OK' }]);
+      }
+
     } finally {
-      setIsLoading(false);
+      setIsGoogleLoading(false);
     }
   };
 
@@ -577,78 +694,33 @@ export default function LoginScreen({
     );
   };
 
-  // ==================== NAVIGATION BY ROLE ====================
-  const navigateByRole = (userRole, userData) => {
-    console.log('\n' + '='.repeat(60));
-    console.log('🧭 NAVIGATE BY ROLE FUNCTION CALLED');
-    console.log('='.repeat(60));
-    console.log('User Role:', userRole);
-    console.log('User Data:', userData);
-    console.log('onNavigateToLoginSuccess available:', !!onNavigateToLoginSuccess);
-    console.log('='.repeat(60) + '\n');
-
-    // Use callback-based navigation from App.jsx
-    if (onNavigateToLoginSuccess) {
-      console.log('✅ Executing onNavigateToLoginSuccess callback');
-      console.log('→ This should trigger: setUserData(user) + navigateTo("home")');
-      onNavigateToLoginSuccess(userData);
-      console.log('✅ Callback executed');
-      return;
-    }
-
-    // Fallback for modern React Navigation
-    if (navigation?.replace) {
-      try {
-        switch (userRole.toLowerCase()) {
-          case 'buyer':
-          case 'user':
-            console.log('→ Navigating to Home');
-            navigation.replace('Home', { user: userData });
-            break;
-          case 'builder':
-          case 'developer':
-            console.log('→ Navigating to BuilderDashboard');
-            navigation.replace('BuilderDashboard', { user: userData });
-            break;
-          case 'agent':
-          case 'realtor':
-            console.log('→ Navigating to AgentDashboard');
-            navigation.replace('AgentDashboard', { user: userData });
-            break;
-          case 'admin':
-            console.log('→ Navigating to AdminDashboard');
-            navigation.replace('AdminDashboard', { user: userData });
-            break;
-          default:
-            console.log('→ Navigating to Home (default)');
-            navigation.replace('Home', { user: userData });
-            break;
-        }
-      } catch (navError) {
-        console.error('❌ Navigation error:', navError);
-        Alert.alert('Navigation Error', 'Failed to navigate. Please restart the app.');
-      }
+  // ==================== FORGOT PASSWORD ====================
+  const handleForgotPassword = () => {
+    console.log('🔑 Navigating to Forgot Password');
+    
+    if (onForgotPassword) {
+      onForgotPassword();
+    } else if (navigation?.navigate) {
+      navigation.navigate('ForgotPassword');
     } else {
-      console.error('❌ Navigation callbacks/methods not available');
-      Alert.alert('Error', 'Navigation error. Please restart the app.');
+      Alert.alert(
+        'Reset Password',
+        'Please contact support to reset your password.',
+        [{ text: 'OK' }]
+      );
     }
   };
-
 
   // ==================== NAVIGATE TO REGISTER ====================
   const handleNavigateToRegister = () => {
     console.log('📝 Navigating to Register screen');
-
+    
     // Use callback-based navigation from App.jsx
     if (onRegister) {
-      console.log('→ Using onRegister callback');
       onRegister();
     } else if (navigation?.navigate) {
-      // Fallback for modern React Navigation
-      console.log('→ Using navigation.navigate');
       navigation.navigate('Register');
     } else {
-      console.error('❌ Navigation not available');
       Alert.alert('Error', 'Navigation not available');
     }
   };
@@ -702,6 +774,14 @@ export default function LoginScreen({
             </Text>
           </View>
 
+          {/* Success Message */}
+          {showSuccessMessage && (
+            <View style={styles.successMessage}>
+              <CheckCircle color="#059669" size={20} strokeWidth={2} />
+              <Text style={styles.successMessageText}>Login successful!</Text>
+            </View>
+          )}
+
           {/* API Error Message */}
           {apiError ? (
             <View style={styles.errorMessage}>
@@ -722,44 +802,62 @@ export default function LoginScreen({
                 style={[
                   styles.inputWrapper,
                   focusedInput === 'email' && styles.inputWrapperFocused,
+                  emailError && styles.inputWrapperError,
                 ]}
               >
                 <Mail
-                  color={focusedInput === 'email' ? '#2D6A4F' : '#9CA3AF'}
+                  color={emailError ? '#DC2626' : (focusedInput === 'email' ? '#2D6A4F' : '#9CA3AF')}
                   size={20}
                   strokeWidth={2}
                   style={styles.inputIcon}
                 />
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter your email"
+                  placeholder="Enter your email or phone"
                   placeholderTextColor="#9CA3AF"
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
                     setApiError('');
+                    setEmailError('');
                   }}
                   onFocus={() => setFocusedInput('email')}
-                  onBlur={() => setFocusedInput(null)}
+                  onBlur={() => {
+                    setFocusedInput(null);
+                    if (email) validateEmail(email);
+                  }}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
                   editable={!isLoading && !isGoogleLoading}
                 />
               </View>
+              {emailError ? (
+                <Text style={styles.errorText}>{emailError}</Text>
+              ) : null}
             </View>
 
             {/* Password Input */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.label}>Password</Text>
+                <TouchableOpacity 
+                  onPress={handleForgotPassword}
+                  activeOpacity={0.7}
+                  disabled={isLoading || isGoogleLoading}
+                >
+                  <Text style={styles.forgotPasswordLink}>Forgot?</Text>
+                </TouchableOpacity>
+              </View>
               <View
                 style={[
                   styles.inputWrapper,
                   focusedInput === 'password' && styles.inputWrapperFocused,
+                  passwordError && styles.inputWrapperError,
                 ]}
               >
                 <Lock
-                  color={focusedInput === 'password' ? '#2D6A4F' : '#9CA3AF'}
+                  color={passwordError ? '#DC2626' : (focusedInput === 'password' ? '#2D6A4F' : '#9CA3AF')}
                   size={20}
                   strokeWidth={2}
                   style={styles.inputIcon}
@@ -772,9 +870,13 @@ export default function LoginScreen({
                   onChangeText={(text) => {
                     setPassword(text);
                     setApiError('');
+                    setPasswordError('');
                   }}
                   onFocus={() => setFocusedInput('password')}
-                  onBlur={() => setFocusedInput(null)}
+                  onBlur={() => {
+                    setFocusedInput(null);
+                    if (password) validatePassword(password);
+                  }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -793,7 +895,25 @@ export default function LoginScreen({
                   )}
                 </TouchableOpacity>
               </View>
+              {passwordError ? (
+                <Text style={styles.errorText}>{passwordError}</Text>
+              ) : null}
             </View>
+
+            {/* Remember Me Checkbox */}
+            <TouchableOpacity
+              style={styles.rememberMeContainer}
+              onPress={() => setRememberMe(!rememberMe)}
+              activeOpacity={0.7}
+              disabled={isLoading || isGoogleLoading}
+            >
+              <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                {rememberMe && (
+                  <CheckCircle color="#FFFFFF" size={16} strokeWidth={3} />
+                )}
+              </View>
+              <Text style={styles.rememberMeText}>Remember me</Text>
+            </TouchableOpacity>
 
             {/* Login Button */}
             <TouchableOpacity
@@ -872,6 +992,20 @@ export default function LoginScreen({
               disabled={isLoading || isGoogleLoading}
             >
               <Text style={styles.signUpLink}>Create Account</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Terms and Privacy */}
+          <View style={styles.termsContainer}>
+            <Text style={styles.termsText}>
+              By continuing, you agree to our{' '}
+            </Text>
+            <TouchableOpacity activeOpacity={0.7}>
+              <Text style={styles.termsLink}>Terms of Service</Text>
+            </TouchableOpacity>
+            <Text style={styles.termsText}> and </Text>
+            <TouchableOpacity activeOpacity={0.7}>
+              <Text style={styles.termsLink}>Privacy Policy</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -962,7 +1096,7 @@ const styles = StyleSheet.create({
   },
   welcomeContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   welcomeTitle: {
     fontSize: 24,
@@ -975,6 +1109,23 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  successMessage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#D1FAE5',
+    borderWidth: 2,
+    borderColor: '#6EE7B7',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  successMessageText: {
+    flex: 1,
+    color: '#065F46',
+    fontSize: 14,
+    fontWeight: '600',
   },
   errorMessage: {
     flexDirection: 'row',
@@ -999,11 +1150,21 @@ const styles = StyleSheet.create({
   inputGroup: {
     marginBottom: 20,
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   label: {
     fontSize: 14,
     fontWeight: '500',
     color: '#374151',
-    marginBottom: 8,
+  },
+  forgotPasswordLink: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2D6A4F',
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -1024,6 +1185,10 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  inputWrapperError: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
   inputIcon: {
     marginRight: 12,
   },
@@ -1040,6 +1205,36 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 12,
     padding: 4,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#DC2626',
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    borderRadius: 6,
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  checkboxChecked: {
+    backgroundColor: '#2D6A4F',
+    borderColor: '#2D6A4F',
+  },
+  rememberMeText: {
+    fontSize: 14,
+    color: '#374151',
   },
   loginButton: {
     width: '100%',
@@ -1133,6 +1328,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 16,
   },
   signUpText: {
     color: '#6B7280',
@@ -1142,5 +1338,23 @@ const styles = StyleSheet.create({
     color: '#2D6A4F',
     fontSize: 14,
     fontWeight: '600',
+  },
+  termsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  termsText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  termsLink: {
+    color: '#2D6A4F',
+    fontSize: 12,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });

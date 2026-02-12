@@ -20,6 +20,7 @@ import {
   User,
   Mail,
   Phone,
+  Calendar,
   Lock,
   Eye,
   EyeOff,
@@ -37,6 +38,9 @@ import {
   Briefcase,
   FileText,
   MessageSquare,
+  Globe,  
+  Navigation,
+  Clock,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -78,6 +82,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
     password: '',
     role: '',
     profileImage: null,
+    // Builder fields
     companyName: '',
     gstNo: '',
     panNo: '',
@@ -90,6 +95,18 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
     city: '',
     state: '',
     pincode: '',
+    // Agent fields
+    licenseNumber: '',
+    licenseAuthority: '',
+    licenseState: '',
+    licenseExpiryDate: '',
+    experience: '',
+    officeAddress: '',
+    officeCity: '',
+    officeState: '',
+    officeCountry: '',
+    serviceRadius: '',
+    licenseDocument: null,
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -149,7 +166,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
       newErrors.role = 'Please select your role';
     }
 
-    // Builder-specific client-side validation
+    // Builder-specific validation
     if (formData.role === 'builder') {
       if (!formData.companyName || !formData.companyName.trim()) {
         newErrors.companyName = 'Company name is required for builders';
@@ -167,6 +184,16 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         if (!gstRegex.test(formData.gstNo.trim())) {
           newErrors.gstNo = 'Please enter a valid GST number (15 characters)';
         }
+      }
+    }
+
+    // Agent-specific validation
+    if (formData.role === 'agent') {
+      if (!formData.licenseNumber || !formData.licenseNumber.trim()) {
+        newErrors.licenseNumber = 'License number is required for agents';
+      }
+      if (!formData.officeCity || !formData.officeCity.trim()) {
+        newErrors.officeCity = 'Office city is required for agents';
       }
     }
 
@@ -260,7 +287,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
     setErrors((prev) => ({ ...prev, profileImage: '' }));
   };
 
-  const handleDocumentUpload = async () => {
+  const handleDocumentUpload = async (documentType = 'registrationCertificate') => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf', 'image/*'],
@@ -275,22 +302,27 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         const asset = result.assets[0];
 
         if (asset.size && asset.size > 10 * 1024 * 1024) {
-          setErrors((prev) => ({ ...prev, registrationCertificate: 'Document must be less than 10MB' }));
+          setErrors((prev) => ({ ...prev, [documentType]: 'Document must be less than 10MB' }));
           return;
         }
 
         setUploadingDocument(true);
-        setErrors((prev) => ({ ...prev, registrationCertificate: '' }));
+        setErrors((prev) => ({ ...prev, [documentType]: '' }));
 
         try {
           const formDataUpload = new FormData();
-          formDataUpload.append('registrationCertificate', {
+          const fieldName = documentType === 'licenseDocument' ? 'licenseDocument' : 'registrationCertificate';
+          formDataUpload.append(fieldName, {
             uri: asset.uri,
             type: asset.mimeType || 'application/pdf',
             name: asset.name || 'certificate.pdf',
           });
 
-          const response = await fetch(`${API_BASE_URL}/upload/registration-certificate`, {
+          const endpoint = documentType === 'licenseDocument' 
+            ? '/upload/license-document'
+            : '/upload/registration-certificate';
+
+          const response = await fetch(`${API_BASE_URL}${endpoint}`, {
             method: 'POST',
             body: formDataUpload,
             headers: {
@@ -306,7 +338,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
 
           setFormData((prev) => ({
             ...prev,
-            registrationCertificate: {
+            [documentType]: {
               uri: data.documentUrl || data.url || asset.uri,
               name: asset.name,
               size: asset.size,
@@ -317,7 +349,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
           // Fallback: use local data if backend fails
           setFormData((prev) => ({
             ...prev,
-            registrationCertificate: {
+            [documentType]: {
               uri: asset.uri,
               name: asset.name,
               size: asset.size,
@@ -335,9 +367,9 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
     }
   };
 
-  const handleRemoveDocument = () => {
-    setFormData((prev) => ({ ...prev, registrationCertificate: null }));
-    setErrors((prev) => ({ ...prev, registrationCertificate: '' }));
+  const handleRemoveDocument = (documentType = 'registrationCertificate') => {
+    setFormData((prev) => ({ ...prev, [documentType]: null }));
+    setErrors((prev) => ({ ...prev, [documentType]: '' }));
   };
 
   const formatFileSize = (bytes) => {
@@ -382,6 +414,21 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         registrationData.city = formData.city?.trim() || null;
         registrationData.state = formData.state?.trim() || null;
         registrationData.pincode = formData.pincode?.trim() || null;
+      }
+
+      // Add agent-specific fields if role is agent
+      if (formData.role === 'agent') {
+        registrationData.licenseNumber = formData.licenseNumber?.trim() || null;
+        registrationData.licenseAuthority = formData.licenseAuthority?.trim() || null;
+        registrationData.licenseState = formData.licenseState?.trim() || null;
+        registrationData.licenseExpiryDate = formData.licenseExpiryDate?.trim() || null;
+        registrationData.experience = formData.experience || null;
+        registrationData.officeAddress = formData.officeAddress?.trim() || null;
+        registrationData.officeCity = formData.officeCity?.trim() || null;
+        registrationData.officeState = formData.officeState?.trim() || null;
+        registrationData.officeCountry = formData.officeCountry?.trim() || null;
+        registrationData.serviceRadius = formData.serviceRadius || null;
+        registrationData.licenseDocument = formData.licenseDocument?.uri || null;
       }
 
       console.log('Sending registration request:', { ...registrationData, password: '***' });
@@ -457,6 +504,17 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         city: '',
         state: '',
         pincode: '',
+        licenseNumber: '',
+        licenseAuthority: '',
+        licenseState: '',
+        licenseExpiryDate: '',
+        experience: '',
+        officeAddress: '',
+        officeCity: '',
+        officeState: '',
+        officeCountry: '',
+        serviceRadius: '',
+        licenseDocument: null,
       });
       setTermsAccepted(false);
 
@@ -972,63 +1030,63 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                   )}
                 </View>
 
-                {/* Registration Certificate Upload */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>
-                    Registration Certificate <Text style={styles.labelOptional}>(Optional)</Text>
-                  </Text>
-                  <View style={styles.documentUploadContainer}>
-                    {formData.registrationCertificate ? (
-                      <View style={styles.documentPreview}>
-                        <View style={styles.documentInfo}>
-                          <FileText color="#2D6A4F" size={24} strokeWidth={2} />
-                          <View style={styles.documentDetails}>
-                            <Text style={styles.documentName} numberOfLines={1}>
-                              {formData.registrationCertificate.name}
-                            </Text>
-                            <Text style={styles.documentSize}>
-                              {formatFileSize(formData.registrationCertificate.size || 0)}
-                            </Text>
-                          </View>
+              {/* Registration Certificate Upload */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>
+                  Registration Certificate <Text style={styles.labelOptional}>(Optional)</Text>
+                </Text>
+                <View style={styles.documentUploadContainer}>
+                  {formData.registrationCertificate ? (
+                    <View style={styles.documentPreview}>
+                      <View style={styles.documentInfo}>
+                        <FileText color="#2D6A4F" size={24} strokeWidth={2} />
+                        <View style={styles.documentDetails}>
+                          <Text style={styles.documentName} numberOfLines={1}>
+                            {formData.registrationCertificate.name}
+                          </Text>
+                          <Text style={styles.documentSize}>
+                            {formatFileSize(formData.registrationCertificate.size || 0)}
+                          </Text>
                         </View>
-                        <TouchableOpacity
-                          onPress={handleRemoveDocument}
-                          style={styles.documentRemoveButton}
-                          activeOpacity={0.8}
-                        >
-                          <X color="#DC2626" size={18} strokeWidth={2} />
-                        </TouchableOpacity>
                       </View>
-                    ) : (
                       <TouchableOpacity
-                        onPress={handleDocumentUpload}
-                        disabled={uploadingDocument}
-                        style={styles.documentUploadButton}
+                        onPress={handleRemoveDocument}
+                        style={styles.documentRemoveButton}
                         activeOpacity={0.8}
                       >
-                        {uploadingDocument ? (
-                          <ActivityIndicator color="#2D6A4F" size="small" />
-                        ) : (
-                          <>
-                            <Upload color="#2D6A4F" size={20} strokeWidth={2} />
-                            <Text style={styles.documentUploadText}>
-                              Upload Certificate (PDF or Image)
-                            </Text>
-                            <Text style={styles.documentUploadSubtext}>
-                              Max 10MB
-                            </Text>
-                          </>
-                        )}
+                        <X color="#DC2626" size={18} strokeWidth={2} />
                       </TouchableOpacity>
-                    )}
-                    {errors.registrationCertificate && (
-                      <View style={styles.errorContainer}>
-                        <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                        <Text style={styles.errorText}>{errors.registrationCertificate}</Text>
-                      </View>
-                    )}
-                  </View>
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={handleDocumentUpload}
+                      disabled={uploadingDocument}
+                      style={styles.documentUploadButton}
+                      activeOpacity={0.8}
+                    >
+                      {uploadingDocument ? (
+                        <ActivityIndicator color="#2D6A4F" size="small" />
+                      ) : (
+                        <>
+                          <Upload color="#2D6A4F" size={20} strokeWidth={2} />
+                          <Text style={styles.documentUploadText}>
+                            Upload Certificate (PDF or Image)
+                          </Text>
+                          <Text style={styles.documentUploadSubtext}>
+                            Max 10MB
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                  {errors.registrationCertificate && (
+                    <View style={styles.errorContainer}>
+                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                      <Text style={styles.errorText}>{errors.registrationCertificate}</Text>
+                    </View>
+                  )}
                 </View>
+              </View>
 
                 {/* Website */}
                 <View style={styles.inputGroup}>
@@ -1185,41 +1243,41 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
               </View>
             )}
 
-            {/* Terms and Conditions */}
-            <View style={styles.inputGroup}>
-              <TouchableOpacity
-                onPress={() => {
-                  setTermsAccepted(!termsAccepted);
-                  if (errors.terms) {
-                    setErrors((prev) => ({ ...prev, terms: '' }));
-                  }
-                }}
-                style={styles.termsButton}
-                activeOpacity={0.7}
+          {/* Terms and Conditions */}
+          <View style={styles.inputGroup}>
+            <TouchableOpacity
+              onPress={() => {
+                setTermsAccepted(!termsAccepted);
+                if (errors.terms) {
+                  setErrors((prev) => ({ ...prev, terms: '' }));
+                }
+              }}
+              style={styles.termsButton}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  termsAccepted && styles.checkboxChecked,
+                ]}
               >
-                <View
-                  style={[
-                    styles.checkbox,
-                    termsAccepted && styles.checkboxChecked,
-                  ]}
-                >
-                  {termsAccepted && (
-                    <Check color="#FFFFFF" size={12} strokeWidth={3} />
-                  )}
-                </View>
-                <Text style={styles.termsText}>
-                  I agree to the{' '}
-                  <Text style={styles.termsLink}>Terms & Conditions</Text> and{' '}
-                  <Text style={styles.termsLink}>Privacy Policy</Text>
-                </Text>
-              </TouchableOpacity>
-              {errors.terms && (
-                <View style={[styles.errorContainer, styles.errorContainerIndent]}>
-                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                  <Text style={styles.errorText}>{errors.terms}</Text>
-                </View>
-              )}
-            </View>
+                {termsAccepted && (
+                  <Check color="#FFFFFF" size={12} strokeWidth={3} />
+                )}
+              </View>
+              <Text style={styles.termsText}>
+                I agree to the{' '}
+                <Text style={styles.termsLink}>Terms & Conditions</Text> and{' '}
+                <Text style={styles.termsLink}>Privacy Policy</Text>
+              </Text>
+            </TouchableOpacity>
+            {errors.terms && (
+              <View style={[styles.errorContainer, styles.errorContainerIndent]}>
+                <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+                <Text style={styles.errorText}>{errors.terms}</Text>
+              </View>
+            )}
+          </View>
 
             {/* Register Button */}
             <TouchableOpacity
@@ -1943,6 +2001,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   builderFieldsContainer: {
+    gap: 16,
+    padding: 16,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  agentFieldsContainer: {
     gap: 16,
     padding: 16,
     backgroundColor: '#F3F4F6',

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -20,22 +21,31 @@ import {
   HelpCircle,
 } from 'lucide-react-native';
 import OTPVerificationScreen from './OTPVerificationScreen';
+import { API_CONFIG, buildUrl, handleApiError } from '../config/apiConfig';
 
-export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin }) {
+export default function ForgetPassword({ onBack, onBackToLogin }) {
   const [screen, setScreen] = useState('forgotPassword');
   const [email, setEmail] = useState('');
-  const [status, setStatus] = useState('idle');
+  const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   // If OTP screen should be shown
   if (screen === 'otp') {
     return (
       <OTPVerificationScreen
-        phoneNumber={email}
-        onBack={() => setScreen('forgotPassword')}
+        email={email}
+        purpose="password_reset"
+        onBack={() => {
+          setScreen('forgotPassword');
+          setStatus('idle');
+          setSuccessMessage('');
+        }}
         onVerify={(otpCode) => {
           console.log('OTP Verified:', otpCode);
-          // Navigate back to login or reset password
+          // After successful OTP verification, you might want to:
+          // 1. Navigate to reset password screen
+          // 2. Or go back to login
           if (onBackToLogin) {
             onBackToLogin();
           } else if (onBack) {
@@ -55,6 +65,7 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
     // Reset states
     setStatus('loading');
     setErrorMessage('');
+    setSuccessMessage('');
 
     // Validate email
     if (!email.trim()) {
@@ -69,17 +80,115 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
       return;
     }
 
-    // Simulate API call
-    setTimeout(() => {
-      setStatus('success');
-      if (onSendResetLink) {
-        onSendResetLink(email);
+    try {
+      // Build the URL
+      const url = buildUrl(API_CONFIG.ENDPOINTS.FORGOT_PASSWORD);
+      
+      // Debug logging - remove in production
+      console.log('🔍 API Request Details:');
+      console.log('URL:', url);
+      console.log('Method: POST');
+      console.log('Headers:', API_CONFIG.HEADERS);
+      console.log('Body:', { email: email.toLowerCase().trim() });
+
+      // Call the backend API with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: API_CONFIG.HEADERS,
+        body: JSON.stringify({
+          email: email.toLowerCase().trim(),
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      // Debug logging
+      console.log('📡 Response Status:', response.status);
+      console.log('📡 Response OK:', response.ok);
+
+      // Handle 404 specifically
+      if (response.status === 404) {
+        setStatus('error');
+        setErrorMessage(
+          'The password reset endpoint is not available. Please contact support or try again later.'
+        );
+        console.error('❌ 404 Error: Endpoint not found at', url);
+        
+        // Show detailed error in development
+        if (__DEV__) {
+          Alert.alert(
+            'Development Error',
+            `404 Not Found\n\nURL: ${url}\n\nPlease check:\n1. API_CONFIG.ENDPOINTS.FORGOT_PASSWORD is correct\n2. Backend server is running\n3. Route exists on backend`,
+            [{ text: 'OK' }]
+          );
+        }
+        return;
       }
-      // Navigate to OTP screen after 1 second
-      setTimeout(() => {
-        setScreen('otp');
-      }, 1000);
-    }, 1500);
+
+      const data = await response.json();
+      console.log('📦 Response Data:', data);
+
+      if (response.ok) {
+        // Success - OTP has been sent
+        setStatus('success');
+        setSuccessMessage(
+          data.message || 
+          'If an account exists with this email, you will receive a password reset OTP.'
+        );
+
+        // Navigate to OTP screen after 2 seconds
+        setTimeout(() => {
+          setScreen('otp');
+        }, 2000);
+      } else if (response.status === 429) {
+        // Rate limit exceeded
+        setStatus('error');
+        setErrorMessage(
+          data.message || 
+          'Too many password reset requests. Please try again after 15 minutes.'
+        );
+      } else if (response.status === 400) {
+        // Bad request
+        setStatus('error');
+        setErrorMessage(data.message || 'Invalid request. Please check your email address.');
+      } else if (response.status === 500) {
+        // Server error
+        setStatus('error');
+        setErrorMessage('Server error. Please try again later or contact support.');
+      } else {
+        // Other errors
+        setStatus('error');
+        const errorInfo = handleApiError(null, response);
+        setErrorMessage(data.message || errorInfo.message || 'An error occurred. Please try again.');
+      }
+    } catch (error) {
+      console.error('❌ Forgot password error:', error);
+      setStatus('error');
+      
+      // Handle different types of errors
+      if (error.name === 'AbortError') {
+        setErrorMessage('Request timeout. Please check your internet connection and try again.');
+      } else if (error.message === 'Network request failed' || error.message.includes('fetch')) {
+        setErrorMessage(
+          'Unable to connect to the server. Please check your internet connection and try again.'
+        );
+      } else {
+        setErrorMessage('An unexpected error occurred. Please try again later.');
+      }
+
+      // Show detailed error in development
+      if (__DEV__) {
+        console.error('Full error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack,
+        });
+      }
+    }
   };
 
   const handleBackToLogin = () => {
@@ -88,6 +197,30 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
     } else if (onBack) {
       onBack();
     }
+  };
+
+  const handleTryAgain = () => {
+    if (status === 'error') {
+      // If there's an error, allow immediate retry
+      handleSubmit();
+    } else {
+      // If previous attempt was successful, confirm before retrying
+      Alert.alert(
+        'Resend OTP',
+        'Are you sure you want to request another OTP?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Yes, Resend', onPress: handleSubmit },
+        ]
+      );
+    }
+  };
+
+  const handleSendToDifferentEmail = () => {
+    setStatus('idle');
+    setEmail('');
+    setErrorMessage('');
+    setSuccessMessage('');
   };
 
   return (
@@ -139,13 +272,13 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
             <View style={styles.titleContainer}>
               <Text style={styles.title}>Forgot Password?</Text>
               <Text style={styles.description}>
-                Enter your email address and we'll send you a link to reset your
+                Enter your email address and we'll send you an OTP to reset your
                 password
               </Text>
             </View>
 
             {/* Success Message */}
-            {status === 'success' && (
+            {status === 'success' && successMessage && (
               <View style={styles.successContainer}>
                 <CheckCircle
                   color="#059669"
@@ -155,8 +288,8 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
                 />
                 <View style={styles.successTextContainer}>
                   <Text style={styles.successText}>
-                    <Text style={styles.successTextBold}>Success!</Text> A reset
-                    link has been sent to your email address.
+                    <Text style={styles.successTextBold}>Success!</Text>{' '}
+                    {successMessage}
                   </Text>
                   <Text style={styles.successSubtext}>
                     Redirecting to OTP verification...
@@ -197,6 +330,8 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    returnKeyType="send"
+                    onSubmitEditing={handleSubmit}
                   />
                 </View>
 
@@ -228,21 +363,21 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
                 {status === 'loading' ? (
                   <View style={styles.submitButtonContent}>
                     <ActivityIndicator color="#FFFFFF" size="small" />
-                    <Text style={styles.submitButtonTextDisabled}>
-                      Sending...
+                    <Text style={[styles.submitButtonText, { marginLeft: 8 }]}>
+                      Sending OTP...
                     </Text>
                   </View>
                 ) : status === 'success' ? (
                   <View style={styles.submitButtonContent}>
                     <CheckCircle color="#6B7280" size={20} strokeWidth={2} />
                     <Text style={styles.submitButtonTextDisabled}>
-                      Link Sent
+                      OTP Sent
                     </Text>
                   </View>
                 ) : (
                   <View style={styles.submitButtonContent}>
                     <Send color="#FFFFFF" size={20} strokeWidth={2} />
-                    <Text style={styles.submitButtonText}>Send Reset Link</Text>
+                    <Text style={styles.submitButtonText}>Send OTP</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -252,10 +387,10 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
             {status !== 'success' && (
               <View style={styles.additionalInfo}>
                 <Text style={styles.additionalInfoText}>
-                  Didn't receive the email? Check your spam folder or
+                  Didn't receive the OTP? Check your spam folder or{' '}
                 </Text>
                 <TouchableOpacity
-                  onPress={handleSubmit}
+                  onPress={handleTryAgain}
                   disabled={status === 'loading'}
                   activeOpacity={0.7}
                 >
@@ -275,16 +410,24 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
             {status === 'success' && (
               <View style={styles.resendContainer}>
                 <TouchableOpacity
-                  onPress={() => {
-                    setStatus('idle');
-                    setEmail('');
-                  }}
+                  onPress={handleSendToDifferentEmail}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.resendText}>
                     Send to a different email
                   </Text>
                 </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Rate Limit Information */}
+            {status === 'error' && errorMessage.includes('15 minutes') && (
+              <View style={styles.rateLimitInfo}>
+                <AlertCircle color="#F59E0B" size={16} strokeWidth={2} />
+                <Text style={styles.rateLimitText}>
+                  For security reasons, password reset attempts are limited to 3
+                  per 15 minutes.
+                </Text>
               </View>
             )}
           </View>
@@ -542,6 +685,23 @@ const styles = StyleSheet.create({
     color: '#2D6A4F',
     fontSize: 14,
     fontWeight: '500',
+  },
+  rateLimitInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 24,
+    gap: 8,
+  },
+  rateLimitText: {
+    flex: 1,
+    color: '#92400E',
+    fontSize: 13,
+    lineHeight: 18,
   },
   footer: {
     backgroundColor: '#FFFFFF',

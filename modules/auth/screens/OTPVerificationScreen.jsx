@@ -8,14 +8,31 @@ import {
   ScrollView,
   ImageBackground,
   Dimensions,
+  Alert,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
-import { ArrowLeft, Shield } from 'lucide-react-native';
+import { ArrowLeft, Shield, AlertCircle } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import ResetPasswordScreen from './ResetPasswordScreen';
 
 const { width, height } = Dimensions.get('window');
 
+// API Configuration - FIXED: Use http for localhost or your production URL
+const API_BASE_URL = Platform.select({
+  ios: 'http://localhost:5000/api',
+  android: 'http://10.0.2.2:5000/api', // Android emulator localhost
+  default: 'http://localhost:5000/api',
+});
+
+// For production, use your actual API URL:
+// const API_BASE_URL = 'https://your-api-domain.com/api';
+
 export default function OTPVerificationScreen({
+  email = '', // Email from registration/login
   phoneNumber = '+1 (555) 123-4567',
-  onVerify,
+  purpose = 'email_verification', // 'email_verification', 'phone_verification', or 'password_reset'
+  onVerifySuccess,
   onResendOTP,
   onChangeNumber,
   onBack,
@@ -23,6 +40,10 @@ export default function OTPVerificationScreen({
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [resendTimer, setResendTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetToken, setResetToken] = useState('');
   const inputRefs = useRef([]);
 
   // Timer countdown for resend OTP
@@ -52,6 +73,9 @@ export default function OTPVerificationScreen({
     newOtp[index] = value.slice(-1); // Only take last character
     setOtp(newOtp);
 
+    // Clear error when user starts typing
+    if (error) setError('');
+
     // Auto-advance to next input
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
@@ -65,26 +89,202 @@ export default function OTPVerificationScreen({
     }
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     const otpValue = otp.join('');
-    if (otpValue.length === 6) {
-      console.log('Verifying OTP:', otpValue);
-      if (onVerify) onVerify(otpValue);
+    
+    if (otpValue.length !== 6) {
+      setError('Please enter a complete 6-digit OTP');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // FIXED: Added timeout and better error handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+      const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.toLowerCase().trim(),
+          otp: otpValue,
+          purpose: purpose,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned invalid response. Please check if the API is running.');
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Handle specific error messages from backend
+        throw new Error(data.message || `Verification failed (${response.status})`);
+      }
+
+      // FIXED: Handle password reset flow
+      if (purpose === 'password_reset') {
+        // Store the reset token if provided
+        if (data.resetToken) {
+          setResetToken(data.resetToken);
+        }
+        
+        // Navigate to ResetPasswordScreen
+        setShowResetPassword(true);
+        return;
+      }
+
+      // Success - store token and user data for email/phone verification
+      if (data.token) {
+        await AsyncStorage.setItem('authToken', data.token);
+        await AsyncStorage.setItem('userData', JSON.stringify(data.user));
+      }
+
+      // Show success message for non-password-reset flows
+      Alert.alert(
+        'Success',
+        data.message || 'Verification successful!',
+        [
+          {
+            text: 'Continue',
+            onPress: () => {
+              if (onVerifySuccess) {
+                onVerifySuccess(data);
+              }
+            },
+          },
+        ]
+      );
+
+    } catch (error) {
+      console.error('OTP Verification Error:', error);
+      
+      let errorMessage = 'Failed to verify OTP. Please try again.';
+      
+      if (error.name === 'AbortError') {
+        errorMessage = 'Request timeout. Please check your internet connection.';
+      } else if (error.message.includes('Network request failed') || error.message.includes('Failed to fetch')) {
+        errorMessage = 'Cannot connect to server. Please check if the API is running and your network connection.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      
+      // Clear OTP inputs on error
+      setOtp(['', '', '', '', '', '']);
+      inputRefs.current[0]?.focus();
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleResendOTP = () => {
-    if (canResend) {
+  const handleResendOTP = async () => {
+    if (!canResend) return;
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // FIXED: Added timeout and better error handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch(`${API_BASE_URL}/auth/resend-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.toLowerCase().trim(),
+          purpose: purpose,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Server returned invalid response. Please check if the API is running.');
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to resend OTP');
+      }
+
+      // Reset timer and OTP inputs
       setResendTimer(60);
       setCanResend(false);
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
-      console.log('Resending OTP');
+
+      // Show success message
+      Alert.alert('Success', data.message || 'OTP has been resent to your email');
+
+      // Call custom onResendOTP callback if provided
       if (onResendOTP) onResendOTP();
+
+    } catch (error) {
+      console.error('Resend OTP Error:', error);
+      
+      let errorMessage = 'Failed to resend OTP. Please try again.';
+      
+      if (error.name === 'AbortError') {
+        errorMessage = 'Request timeout. Please check your internet connection.';
+      } else if (error.message.includes('Network request failed') || error.message.includes('Failed to fetch')) {
+        errorMessage = 'Cannot connect to server. Please check if the API is running.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsLoading(false);
     }
   };
 
+  const handleResetPasswordSuccess = () => {
+    // Navigate back to login or handle success
+    if (onVerifySuccess) {
+      onVerifySuccess({ passwordReset: true });
+    }
+  };
+
+  const handleBackFromReset = () => {
+    // Go back to OTP screen
+    setShowResetPassword(false);
+    setOtp(['', '', '', '', '', '']);
+    inputRefs.current[0]?.focus();
+  };
+
   const isOtpComplete = otp.every((digit) => digit !== '');
+
+  // FIXED: Show ResetPasswordScreen when needed
+  if (showResetPassword) {
+    return (
+      <ResetPasswordScreen
+        email={email}
+        resetToken={resetToken}
+        onResetSuccess={handleResetPasswordSuccess}
+        onBack={handleBackFromReset}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -99,11 +299,22 @@ export default function OTPVerificationScreen({
         />
       </View>
 
+      {/* Loading Overlay */}
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2D6A4F" />
+            <Text style={styles.loadingText}>Verifying...</Text>
+          </View>
+        </View>
+      )}
+
       {/* Main Content */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Back Button */}
         {onBack && (
@@ -111,6 +322,7 @@ export default function OTPVerificationScreen({
             onPress={onBack}
             style={styles.backButton}
             activeOpacity={0.7}
+            disabled={isLoading}
           >
             <ArrowLeft color="#374151" size={20} strokeWidth={2} />
           </TouchableOpacity>
@@ -126,17 +338,42 @@ export default function OTPVerificationScreen({
 
         {/* Headline */}
         <View style={styles.headlineContainer}>
-          <Text style={styles.headline}>Verify Your Number</Text>
-          <Text style={styles.subtext}>Enter the 6-digit code we sent to</Text>
-          <Text style={styles.phoneNumber}>{phoneNumber}</Text>
+          <Text style={styles.headline}>
+            {purpose === 'password_reset' 
+              ? 'Verify Your Email' 
+              : `Verify Your ${purpose === 'phone_verification' ? 'Number' : 'Email'}`
+            }
+          </Text>
+          <Text style={styles.subtext}>
+            Enter the 6-digit code we sent to
+          </Text>
+          <Text style={styles.contactInfo}>
+            {purpose === 'phone_verification' ? phoneNumber : email}
+          </Text>
         </View>
 
-        {/* Change Number Link */}
-        <View style={styles.changeNumberContainer}>
-          <TouchableOpacity onPress={onChangeNumber} activeOpacity={0.7}>
-            <Text style={styles.changeNumberText}>Change Phone Number</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Change Number/Email Link */}
+        {onChangeNumber && (
+          <View style={styles.changeNumberContainer}>
+            <TouchableOpacity 
+              onPress={onChangeNumber} 
+              activeOpacity={0.7}
+              disabled={isLoading}
+            >
+              <Text style={styles.changeNumberText}>
+                Change {purpose === 'phone_verification' ? 'Phone Number' : 'Email'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Error Message */}
+        {error ? (
+          <View style={styles.errorContainer}>
+            <AlertCircle color="#DC2626" size={20} strokeWidth={2} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
         {/* OTP Input Fields */}
         <View style={styles.otpContainer}>
@@ -148,6 +385,7 @@ export default function OTPVerificationScreen({
                 style={[
                   styles.otpInput,
                   digit && styles.otpInputFilled,
+                  error && styles.otpInputError,
                 ]}
                 keyboardType="numeric"
                 maxLength={1}
@@ -156,6 +394,9 @@ export default function OTPVerificationScreen({
                 onKeyPress={(e) => handleKeyPress(index, e)}
                 selectionColor="#2D6A4F"
                 textAlign="center"
+                editable={!isLoading}
+                autoComplete="off"
+                autoCorrect={false}
               />
             ))}
           </View>
@@ -165,14 +406,20 @@ export default function OTPVerificationScreen({
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             onPress={handleVerify}
-            disabled={!isOtpComplete}
+            disabled={!isOtpComplete || isLoading}
             style={[
               styles.verifyButton,
-              !isOtpComplete && styles.verifyButtonDisabled,
+              (!isOtpComplete || isLoading) && styles.verifyButtonDisabled,
             ]}
             activeOpacity={0.8}
           >
-            <Text style={styles.verifyButtonText}>Verify & Continue</Text>
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.verifyButtonText}>
+                {purpose === 'password_reset' ? 'Verify & Reset Password' : 'Verify & Continue'}
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -180,8 +427,17 @@ export default function OTPVerificationScreen({
         <View style={styles.resendContainer}>
           <Text style={styles.resendQuestion}>Didn't receive the code?</Text>
           {canResend ? (
-            <TouchableOpacity onPress={handleResendOTP} activeOpacity={0.7}>
-              <Text style={styles.resendLink}>Resend OTP</Text>
+            <TouchableOpacity 
+              onPress={handleResendOTP} 
+              activeOpacity={0.7}
+              disabled={isLoading}
+            >
+              <Text style={[
+                styles.resendLink,
+                isLoading && styles.resendLinkDisabled
+              ]}>
+                Resend OTP
+              </Text>
             </TouchableOpacity>
           ) : (
             <Text style={styles.resendTimer}>
@@ -239,6 +495,37 @@ const styles = StyleSheet.create({
   backgroundImage: {
     width: '100%',
     height: '100%',
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  loadingContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#111827',
+    fontSize: 16,
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
@@ -305,7 +592,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 16,
   },
-  phoneNumber: {
+  contactInfo: {
     color: '#111827',
     fontSize: 14,
     fontWeight: '600',
@@ -313,10 +600,27 @@ const styles = StyleSheet.create({
   },
   changeNumberContainer: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 24,
   },
   changeNumberText: {
     color: '#2D6A4F',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#DC2626',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    flex: 1,
+    color: '#DC2626',
     fontSize: 14,
     fontWeight: '500',
   },
@@ -343,6 +647,9 @@ const styles = StyleSheet.create({
   otpInputFilled: {
     borderColor: '#2D6A4F',
     backgroundColor: '#FFFFFF',
+  },
+  otpInputError: {
+    borderColor: '#DC2626',
   },
   buttonContainer: {
     marginBottom: 24,
@@ -376,6 +683,9 @@ const styles = StyleSheet.create({
     color: '#2D6A4F',
     fontSize: 14,
     fontWeight: '600',
+  },
+  resendLinkDisabled: {
+    opacity: 0.5,
   },
   resendTimer: {
     color: '#6B7280',

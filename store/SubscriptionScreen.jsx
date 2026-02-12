@@ -99,7 +99,7 @@ export default function App() {
                 <Text style={styles.appIconText}>🏠</Text>
               </View>
               <View>
-                <Text style={styles.appTitle}>RealtyHub</Text>
+                <Text style={styles.appTitle}>EStateHub</Text>
                 <Text style={styles.appSubtitle}>Pro Builder</Text>
               </View>
             </View>

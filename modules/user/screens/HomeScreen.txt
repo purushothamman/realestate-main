@@ -1,0 +1,1918 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  ImageBackground,
+  Image,
+  Alert,
+  ActivityIndicator,
+  RefreshControl,
+  Dimensions,
+  FlatList,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  Home,
+  Search,
+  Heart,
+  MessageCircle,
+  User,
+  Bell,
+  MapPin,
+  TrendingUp,
+  Key,
+  Users,
+  Bed,
+  Bath,
+  Maximize,
+  LogOut,
+  AlertCircle,
+  Star,
+  Calendar,
+  Shield,
+  Award,
+  DollarSign,
+  Filter,
+  ArrowRight,
+  ChevronRight,
+  Clock,
+  CheckCircle,
+  X,
+} from 'lucide-react-native';
+
+// Import screens
+import ProfileScreen from './ProfileScreen';
+import ChatListScreen from '../../chat/screens/ChatListScreen';
+import SearchResultsScreen from '../../property/screens/SearchResultsScreen';
+import FavoritesScreen from './FavoritesScreen';
+import PropertyDetailScreen from '../../property/screens/PropertyDetailScreen';
+import NotificationsScreen from './NotificationsScreen';
+
+// Import UserNavigator component
+import UserNavigator from '../../../navigation/UserNavigator';
+
+const { width } = Dimensions.get('window');
+
+// API Configuration
+const API_BASE_URL = 'http://localhost:5000/api';
+// For physical device testing, use your computer's IP:
+// const API_BASE_URL = 'http://192.168.1.100:5000/api';
+
+export default function HomeScreen({ navigation }) {
+  // State Management
+  const [activeTab, setActiveTab] = useState('home');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [screen, setScreen] = useState('home');
+  const [selectedProperty, setSelectedProperty] = useState(null);
+
+  // User State
+  const [user, setUser] = useState(null);
+  const [authToken, setAuthToken] = useState(null);
+
+  // Data State
+  const [properties, setProperties] = useState([]);
+  const [featuredProperties, setFeaturedProperties] = useState([]);
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
+  const [topAgents, setTopAgents] = useState([]);
+  const [stats, setStats] = useState({
+    saved: 0,
+    viewed: 0,
+    new: 0,
+  });
+  const [notifications, setNotifications] = useState([]);
+  const [messages, setMessages] = useState([]);
+
+  // Filter State
+  const [selectedPropertyType, setSelectedPropertyType] = useState('All');
+  const [priceRange, setPriceRange] = useState({ min: 0, max: 10000000 });
+  const [showFilters, setShowFilters] = useState(false);
+
+  // UI State
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Property Types
+  const propertyTypes = ['All', 'House', 'Apartment', 'Villa', 'Condo', 'Land'];
+
+  // Load user data and fetch initial data
+  useEffect(() => {
+    initializeData();
+  }, []);
+
+  const initializeData = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Load user data from AsyncStorage
+      const token = await AsyncStorage.getItem('authToken');
+      const userStr = await AsyncStorage.getItem('user');
+
+      if (!token || !userStr) {
+        console.log('❌ No auth token found, redirecting to login');
+        navigation.replace('Login');
+        return;
+      }
+
+      const userData = JSON.parse(userStr);
+      setUser(userData);
+      setAuthToken(token);
+
+      console.log('✅ User loaded:', userData.name);
+
+      // Fetch all initial data
+      await Promise.all([
+        fetchProperties(token),
+        fetchFeaturedProperties(token),
+        fetchRecentlyViewed(token, userData.id),
+        fetchTopAgents(token),
+        fetchUserStats(token, userData.id),
+        fetchNotifications(token, userData.id),
+        fetchMessages(token, userData.id),
+      ]);
+
+    } catch (err) {
+      console.error('❌ Initialization error:', err);
+      setError('Failed to load data. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch Properties
+  const fetchProperties = async (token) => {
+    try {
+      console.log('📥 Fetching properties...');
+
+      const response = await fetch(`${API_BASE_URL}/properties`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: Failed to fetch properties`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Properties loaded:', data.properties?.length || 0);
+
+      setProperties(data.properties || mockProperties);
+    } catch (err) {
+      console.error('❌ Error fetching properties:', err);
+      setProperties(mockProperties);
+    }
+  };
+
+  // Fetch Featured Properties
+  const fetchFeaturedProperties = async (token) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/properties/featured`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFeaturedProperties(data.properties || mockProperties.slice(0, 5));
+      } else {
+        setFeaturedProperties(mockProperties.slice(0, 5));
+      }
+    } catch (err) {
+      console.error('Error fetching featured properties:', err);
+      setFeaturedProperties(mockProperties.slice(0, 5));
+    }
+  };
+
+  // Fetch Recently Viewed
+  const fetchRecentlyViewed = async (token, userId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/${userId}/recently-viewed`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRecentlyViewed(data.properties || []);
+      }
+    } catch (err) {
+      console.error('Error fetching recently viewed:', err);
+    }
+  };
+
+  // Fetch Top Agents
+  const fetchTopAgents = async (token) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/agents/top`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTopAgents(data.agents || mockAgents);
+      } else {
+        setTopAgents(mockAgents);
+      }
+    } catch (err) {
+      console.error('Error fetching top agents:', err);
+      setTopAgents(mockAgents);
+    }
+  };
+
+  // Fetch User Stats
+  const fetchUserStats = async (token, userId) => {
+    try {
+      console.log('📊 Fetching user stats...');
+
+      const response = await fetch(`${API_BASE_URL}/users/${userId}/stats`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch stats');
+      }
+
+      const data = await response.json();
+      console.log('✅ Stats loaded:', data.stats);
+
+      setStats(data.stats || { saved: 12, viewed: 34, new: 8 });
+    } catch (err) {
+      console.error('❌ Error fetching stats:', err);
+      setStats({ saved: 12, viewed: 34, new: 8 });
+    }
+  };
+
+  // Fetch Notifications
+  const fetchNotifications = async (token, userId) => {
+    try {
+      console.log('🔔 Fetching notifications...');
+
+      const response = await fetch(`${API_BASE_URL}/users/${userId}/notifications`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch notifications');
+      }
+
+      const data = await response.json();
+      console.log('✅ Notifications loaded:', data.notifications?.length || 0);
+
+      setNotifications(data.notifications || []);
+    } catch (err) {
+      console.error('❌ Error fetching notifications:', err);
+    }
+  };
+
+  // Fetch Messages
+  const fetchMessages = async (token, userId) => {
+    try {
+      console.log('💬 Fetching messages...');
+
+      const response = await fetch(`${API_BASE_URL}/users/${userId}/messages/unread`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch messages');
+      }
+
+      const data = await response.json();
+      console.log('✅ Unread messages:', data.unreadCount || 0);
+
+      setMessages(data.messages || []);
+    } catch (err) {
+      console.error('❌ Error fetching messages:', err);
+    }
+  };
+
+  // Handle Pull to Refresh
+  const onRefresh = useCallback(async () => {
+    if (!authToken || !user) return;
+    
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        fetchProperties(authToken),
+        fetchFeaturedProperties(authToken),
+        fetchRecentlyViewed(authToken, user.id),
+        fetchTopAgents(authToken),
+        fetchUserStats(authToken, user.id),
+        fetchNotifications(authToken, user.id),
+        fetchMessages(authToken, user.id),
+      ]);
+    } catch (err) {
+      console.error('Refresh error:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [authToken, user]);
+
+  // Toggle Favorite
+  const toggleFavorite = async (propertyId) => {
+    try {
+      console.log('❤️ Toggling favorite for property:', propertyId);
+
+      const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/favorite`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to toggle favorite');
+      }
+
+      const data = await response.json();
+      console.log('✅ Favorite toggled:', data.isFavorited);
+
+      // Update local state
+      setProperties(prevProperties =>
+        prevProperties.map(prop =>
+          prop.id === propertyId
+            ? { ...prop, isFavorited: data.isFavorited }
+            : prop
+        )
+      );
+
+      setFeaturedProperties(prevProperties =>
+        prevProperties.map(prop =>
+          prop.id === propertyId
+            ? { ...prop, isFavorited: data.isFavorited }
+            : prop
+        )
+      );
+
+      // Update stats
+      setStats(prev => ({
+        ...prev,
+        saved: data.isFavorited ? prev.saved + 1 : prev.saved - 1,
+      }));
+
+    } catch (err) {
+      console.error('❌ Error toggling favorite:', err);
+      Alert.alert('Error', 'Failed to update favorite status');
+    }
+  };
+
+  // Handle Logout
+  const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await fetch(`${API_BASE_URL}/auth/logout`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${authToken}`,
+                },
+              });
+
+              await AsyncStorage.removeItem('authToken');
+              await AsyncStorage.removeItem('user');
+
+              console.log('✅ Logged out successfully');
+              navigation.replace('Login');
+            } catch (err) {
+              console.error('❌ Logout error:', err);
+              Alert.alert('Error', 'Failed to logout');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle Tab Press
+  const handleTabPress = (tab) => {
+    console.log('Tab pressed:', tab);
+    setActiveTab(tab);
+    setScreen(tab);
+  };
+
+  // Handle Property Click
+  const handlePropertyClick = async (property) => {
+    console.log('🏠 Property clicked:', property.title);
+
+    try {
+      await fetch(`${API_BASE_URL}/properties/${property.id}/view`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      setStats(prev => ({ ...prev, viewed: prev.viewed + 1 }));
+    } catch (err) {
+      console.error('Error tracking view:', err);
+    }
+
+    setSelectedProperty(property);
+    setScreen('propertyDetail');
+  };
+
+  // Handle Search
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      Alert.alert('Search', 'Please enter a search term');
+      return;
+    }
+
+    try {
+      console.log('🔍 Searching for:', searchQuery);
+
+      const response = await fetch(
+        `${API_BASE_URL}/properties/search?q=${encodeURIComponent(searchQuery)}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+
+      const data = await response.json();
+      console.log('✅ Search results:', data.properties?.length || 0);
+
+      setProperties(data.properties || []);
+    } catch (err) {
+      console.error('❌ Search error:', err);
+      Alert.alert('Error', 'Search failed. Please try again.');
+    }
+  };
+
+  // Quick Actions Data
+  const quickActions = [
+    { id: 'buy', label: 'Buy', icon: Home, color: '#2D6A4F' },
+    { id: 'rent', label: 'Rent', icon: Key, color: '#4A90E2' },
+    { id: 'sell', label: 'Sell', icon: TrendingUp, color: '#E27D4A' },
+    { id: 'agents', label: 'Agents', icon: Users, color: '#9B59B6' },
+  ];
+
+  // Featured Services
+  const featuredServices = [
+    { id: 'valuation', icon: DollarSign, title: 'Property Valuation', color: '#2D6A4F' },
+    { id: 'legal', icon: Shield, title: 'Legal Support', color: '#4A90E2' },
+    { id: 'insurance', icon: Award, title: 'Home Insurance', color: '#E27D4A' },
+    { id: 'loan', icon: CheckCircle, title: 'Home Loans', color: '#9B59B6' },
+  ];
+
+  // Filter Properties
+  const getFilteredProperties = () => {
+    let filtered = properties;
+
+    if (selectedPropertyType !== 'All') {
+      filtered = filtered.filter(p => p.type === selectedPropertyType || p.category === selectedPropertyType);
+    }
+
+    return filtered;
+  };
+
+  // Screen Routing
+  if (screen === 'profile') {
+    return <ProfileScreen onBack={() => setScreen('home')} navigation={navigation} />;
+  }
+
+  if (screen === 'messages') {
+    return <ChatListScreen onBack={() => setScreen('home')} navigation={navigation} />;
+  }
+
+  if (screen === 'search') {
+    return <SearchResultsScreen onBack={() => setScreen('home')} navigation={navigation} />;
+  }
+
+  if (screen === 'favorites') {
+    return <FavoritesScreen onBack={() => setScreen('home')} navigation={navigation} />;
+  }
+
+  if (screen === 'notifications') {
+    return <NotificationsScreen onBack={() => setScreen('home')} navigation={navigation} />;
+  }
+
+  if (screen === 'propertyDetail' && selectedProperty) {
+    return (
+      <PropertyDetailScreen
+        property={selectedProperty}
+        onBack={() => {
+          setScreen('home');
+          setSelectedProperty(null);
+        }}
+        navigation={navigation}
+      />
+    );
+  }
+
+  // Loading State
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2D6A4F" />
+        <Text style={styles.loadingText}>Loading your properties...</Text>
+      </View>
+    );
+  }
+
+  // Error State
+  if (error && !user) {
+    return (
+      <View style={styles.errorContainer}>
+        <AlertCircle color="#EF4444" size={48} />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={initializeData}>
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const filteredProperties = getFilteredProperties();
+
+  return (
+    <View style={styles.container}>
+      {/* Fixed Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <View style={styles.logoBox}>
+            <Home color="#FFFFFF" size={20} strokeWidth={2} />
+          </View>
+          <View>
+            <Text style={styles.appName}>EstateHub</Text>
+            <Text style={styles.headerLocation}>
+              <MapPin color="#6B7280" size={12} /> Mumbai, India
+            </Text>
+          </View>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => handleTabPress('notifications')}
+          >
+            <Bell color="#374151" size={24} strokeWidth={2} />
+            {notifications.length > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {notifications.length}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}
+          >
+            <LogOut color="#EF4444" size={20} strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Scrollable Content */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollViewContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={onRefresh}
+            colors={['#2D6A4F']}
+            tintColor="#2D6A4F"
+          />
+        }
+      >
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          <ImageBackground
+            source={{
+              uri: 'https://images.unsplash.com/photo-1757233451731-9a34e164b208?w=1080',
+            }}
+            style={styles.heroImage}
+            resizeMode="cover"
+          >
+            <View style={styles.heroOverlay} />
+            <View style={styles.heroTextContainer}>
+              <Text style={styles.heroWelcome}>Welcome Back 👋</Text>
+              <Text style={styles.heroTitle}>{user?.name || 'User'}</Text>
+              <Text style={styles.heroSubtitle}>
+                Find your dream home from {properties.length}+ properties
+              </Text>
+            </View>
+          </ImageBackground>
+        </View>
+
+        {/* Search Bar with Filter */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchWrapper}>
+            <Search
+              color="#9CA3AF"
+              size={20}
+              strokeWidth={2}
+              style={styles.searchIcon}
+            />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by location, price, or type..."
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={handleSearch}
+              returnKeyType="search"
+            />
+            <TouchableOpacity 
+              style={styles.filterButton}
+              onPress={() => setShowFilters(!showFilters)}
+            >
+              <Filter color="#2D6A4F" size={20} strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Property Type Filters */}
+          {showFilters && (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              style={styles.filterTypeContainer}
+            >
+              {propertyTypes.map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.filterTypeButton,
+                    selectedPropertyType === type && styles.filterTypeButtonActive
+                  ]}
+                  onPress={() => setSelectedPropertyType(type)}
+                >
+                  <Text style={[
+                    styles.filterTypeText,
+                    selectedPropertyType === type && styles.filterTypeTextActive
+                  ]}>
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* Quick Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statBox}>
+            <Heart color="#2D6A4F" size={20} />
+            <Text style={styles.statValue}>{stats.saved}</Text>
+            <Text style={styles.statLabel}>Saved</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Clock color="#4A90E2" size={20} />
+            <Text style={styles.statValue}>{stats.viewed}</Text>
+            <Text style={styles.statLabel}>Viewed</Text>
+          </View>
+          <View style={styles.statBox}>
+            <TrendingUp color="#E27D4A" size={20} />
+            <Text style={styles.statValue}>{stats.new}</Text>
+            <Text style={styles.statLabel}>New</Text>
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.quickActionsContainer}>
+          {quickActions
+            .filter(action => {
+              if (action.id === 'sell') {
+                return user?.role === 'builder' || user?.role === 'agent';
+              }
+              return true;
+            })
+            .map((action) => {
+              const IconComponent = action.icon;
+              return (
+                <TouchableOpacity
+                  key={action.id}
+                  style={styles.quickAction}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    console.log('Quick action:', action.id);
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.quickActionIcon,
+                      { backgroundColor: `${action.color}15` },
+                    ]}
+                  >
+                    <IconComponent color={action.color} size={24} strokeWidth={2} />
+                  </View>
+                  <Text style={styles.quickActionLabel}>{action.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+        </View>
+
+        {/* Featured Properties */}
+        <View style={styles.featuredSection}>
+          <View style={styles.sectionHeader}>
+            <View>
+              <Text style={styles.sectionTitle}>Featured Properties</Text>
+              <Text style={styles.sectionSubtitle}>Handpicked by experts</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.seeAllButton}
+              onPress={() => handleTabPress('search')}
+            >
+              <Text style={styles.seeAllButtonText}>See All</Text>
+              <ChevronRight color="#2D6A4F" size={16} />
+            </TouchableOpacity>
+          </View>
+
+          {featuredProperties.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Home color="#9CA3AF" size={48} />
+              <Text style={styles.emptyStateText}>No properties available</Text>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.featuredScrollContent}
+            >
+              {featuredProperties.map((property) => (
+                <TouchableOpacity
+                  key={property.id}
+                  style={styles.propertyCard}
+                  onPress={() => handlePropertyClick(property)}
+                  activeOpacity={0.9}
+                >
+                  <View style={styles.propertyImageContainer}>
+                    <Image
+                      source={{ uri: property.image || property.imageUrl }}
+                      style={styles.propertyImage}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.typeBadge}>
+                      <Text style={styles.typeBadgeText}>
+                        {property.type || property.listingType}
+                      </Text>
+                    </View>
+                    {property.featured && (
+                      <View style={styles.featuredBadge}>
+                        <Star color="#FFD700" size={12} fill="#FFD700" />
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={styles.favoriteButton}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(property.id);
+                      }}
+                    >
+                      <Heart
+                        color={property.isFavorited ? '#EF4444' : '#374151'}
+                        size={16}
+                        strokeWidth={2}
+                        fill={property.isFavorited ? '#EF4444' : 'none'}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.propertyDetails}>
+                    <Text style={styles.propertyTitle} numberOfLines={1}>
+                      {property.title || property.name}
+                    </Text>
+                    <View style={styles.propertyLocation}>
+                      <MapPin color="#9CA3AF" size={12} strokeWidth={2} />
+                      <Text style={styles.propertyLocationText} numberOfLines={1}>
+                        {property.location || property.address}
+                      </Text>
+                    </View>
+
+                    <View style={styles.propertyStats}>
+                      <View style={styles.propertyStat}>
+                        <Bed color="#9CA3AF" size={16} strokeWidth={2} />
+                        <Text style={styles.propertyStatText}>
+                          {property.bedrooms || property.beds}
+                        </Text>
+                      </View>
+                      <View style={styles.propertyStat}>
+                        <Bath color="#9CA3AF" size={16} strokeWidth={2} />
+                        <Text style={styles.propertyStatText}>
+                          {property.bathrooms || property.baths}
+                        </Text>
+                      </View>
+                      <View style={styles.propertyStat}>
+                        <Maximize color="#9CA3AF" size={16} strokeWidth={2} />
+                        <Text style={styles.propertyStatText}>
+                          {property.area || property.sqft}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.propertyFooter}>
+                      <Text style={styles.propertyPrice}>
+                        ${property.price?.toLocaleString() || property.price}
+                      </Text>
+                      {property.rating && (
+                        <View style={styles.ratingContainer}>
+                          <Star color="#FFD700" size={12} fill="#FFD700" />
+                          <Text style={styles.ratingText}>{property.rating}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+
+        {/* Recently Viewed */}
+        {recentlyViewed.length > 0 && (
+          <View style={styles.recentSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recently Viewed</Text>
+              <TouchableOpacity>
+                <Text style={styles.clearButton}>Clear All</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.recentScrollContent}
+            >
+              {recentlyViewed.map((property) => (
+                <TouchableOpacity
+                  key={property.id}
+                  style={styles.recentCard}
+                  onPress={() => handlePropertyClick(property)}
+                >
+                  <Image
+                    source={{ uri: property.image }}
+                    style={styles.recentImage}
+                    resizeMode="cover"
+                  />
+                  <Text style={styles.recentTitle} numberOfLines={1}>
+                    {property.title}
+                  </Text>
+                  <Text style={styles.recentPrice}>
+                    ${property.price?.toLocaleString()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Services Section */}
+        <View style={styles.servicesSection}>
+          <Text style={styles.sectionTitle}>Our Services</Text>
+          <View style={styles.servicesGrid}>
+            {featuredServices.map((service) => {
+              const IconComponent = service.icon;
+              return (
+                <TouchableOpacity
+                  key={service.id}
+                  style={styles.serviceCard}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.serviceIcon, { backgroundColor: `${service.color}15` }]}>
+                    <IconComponent color={service.color} size={24} />
+                  </View>
+                  <Text style={styles.serviceTitle}>{service.title}</Text>
+                  <ArrowRight color="#9CA3AF" size={16} />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Top Agents */}
+        {topAgents.length > 0 && (
+          <View style={styles.agentsSection}>
+            <View style={styles.sectionHeader}>
+              <View>
+                <Text style={styles.sectionTitle}>Top Agents</Text>
+                <Text style={styles.sectionSubtitle}>Connect with experts</Text>
+              </View>
+              <TouchableOpacity style={styles.seeAllButton}>
+                <Text style={styles.seeAllButtonText}>View All</Text>
+                <ChevronRight color="#2D6A4F" size={16} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.agentsScrollContent}
+            >
+              {topAgents.map((agent) => (
+                <TouchableOpacity
+                  key={agent.id}
+                  style={styles.agentCard}
+                  activeOpacity={0.8}
+                >
+                  <Image
+                    source={{ uri: agent.avatar }}
+                    style={styles.agentAvatar}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.verifiedBadge}>
+                    <CheckCircle color="#2D6A4F" size={14} fill="#2D6A4F" />
+                  </View>
+                  <Text style={styles.agentName}>{agent.name}</Text>
+                  <View style={styles.agentRating}>
+                    <Star color="#FFD700" size={12} fill="#FFD700" />
+                    <Text style={styles.agentRatingText}>{agent.rating}</Text>
+                  </View>
+                  <Text style={styles.agentProperties}>{agent.properties} properties</Text>
+                  <TouchableOpacity style={styles.agentContactButton}>
+                    <MessageCircle color="#2D6A4F" size={16} />
+                    <Text style={styles.agentContactText}>Contact</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* All Properties */}
+        <View style={styles.allPropertiesSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>All Properties</Text>
+            <Text style={styles.propertyCount}>{filteredProperties.length} found</Text>
+          </View>
+          
+          {filteredProperties.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Search color="#9CA3AF" size={48} />
+              <Text style={styles.emptyStateText}>No properties found</Text>
+            </View>
+          ) : (
+            <View style={styles.propertiesList}>
+              {filteredProperties.slice(0, 6).map((property) => (
+                <TouchableOpacity
+                  key={property.id}
+                  style={styles.listPropertyCard}
+                  onPress={() => handlePropertyClick(property)}
+                  activeOpacity={0.9}
+                >
+                  <Image
+                    source={{ uri: property.image || property.imageUrl }}
+                    style={styles.listPropertyImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.listPropertyDetails}>
+                    <View style={styles.listPropertyTop}>
+                      <Text style={styles.listPropertyTitle} numberOfLines={1}>
+                        {property.title || property.name}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(property.id);
+                        }}
+                      >
+                        <Heart
+                          color={property.isFavorited ? '#EF4444' : '#9CA3AF'}
+                          size={18}
+                          fill={property.isFavorited ? '#EF4444' : 'none'}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.listPropertyLocation}>
+                      <MapPin color="#9CA3AF" size={12} />
+                      <Text style={styles.listPropertyLocationText} numberOfLines={1}>
+                        {property.location || property.address}
+                      </Text>
+                    </View>
+                    <View style={styles.listPropertyStats}>
+                      <View style={styles.listPropertyStat}>
+                        <Bed color="#9CA3AF" size={14} />
+                        <Text style={styles.listPropertyStatText}>
+                          {property.bedrooms || property.beds} beds
+                        </Text>
+                      </View>
+                      <View style={styles.listPropertyStat}>
+                        <Bath color="#9CA3AF" size={14} />
+                        <Text style={styles.listPropertyStatText}>
+                          {property.bathrooms || property.baths} baths
+                        </Text>
+                      </View>
+                      <View style={styles.listPropertyStat}>
+                        <Maximize color="#9CA3AF" size={14} />
+                        <Text style={styles.listPropertyStatText}>
+                          {property.area || property.sqft}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.listPropertyFooter}>
+                      <Text style={styles.listPropertyPrice}>
+                        ${property.price?.toLocaleString()}
+                      </Text>
+                      <View style={styles.listPropertyType}>
+                        <Text style={styles.listPropertyTypeText}>
+                          {property.type || property.listingType}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* CTA Banner */}
+        {(user?.role === 'builder' || user?.role === 'agent') && (
+          <View style={styles.ctaBanner}>
+            <View style={styles.ctaContent}>
+              <Text style={styles.ctaTitle}>List Your Property</Text>
+              <Text style={styles.ctaSubtitle}>
+                Reach millions of buyers and get the best price for your property
+              </Text>
+              <TouchableOpacity style={styles.ctaButton} activeOpacity={0.8}>
+                <Text style={styles.ctaButtonText}>Get Started</Text>
+                <ArrowRight color="#2D6A4F" size={16} />
+              </TouchableOpacity>
+            </View>
+            <Image
+              source={{ uri: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=400' }}
+              style={styles.ctaImage}
+              resizeMode="cover"
+            />
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Bottom Navigation */}
+      <UserNavigator 
+        activeTab={activeTab}
+        onTabPress={handleTabPress}
+        messageCount={messages.length}
+      />
+    </View>
+  );
+}
+
+// Mock data
+const mockProperties = [
+  {
+    id: '1',
+    title: 'Modern Luxury Villa',
+    price: 2450000,
+    location: 'Beverly Hills, CA',
+    image: 'https://images.unsplash.com/photo-1638369022547-1c763b1b9b3b?w=1080',
+    bedrooms: 5,
+    bathrooms: 4,
+    area: '4,200 sq ft',
+    type: 'For Sale',
+    isFavorited: false,
+    featured: true,
+    rating: 4.8,
+  },
+  {
+    id: '2',
+    title: 'Luxury Apartment',
+    price: 3800,
+    location: 'Manhattan, NY',
+    image: 'https://images.unsplash.com/photo-1654506012740-09321c969dc2?w=1080',
+    bedrooms: 2,
+    bathrooms: 2,
+    area: '1,450 sq ft',
+    type: 'For Rent',
+    isFavorited: false,
+    rating: 4.6,
+  },
+  {
+    id: '3',
+    title: 'Beach House Paradise',
+    price: 1850000,
+    location: 'Malibu, CA',
+    image: 'https://images.unsplash.com/photo-1751253603871-cef51ec75f4a?w=1080',
+    bedrooms: 4,
+    bathrooms: 3,
+    area: '3,200 sq ft',
+    type: 'For Sale',
+    isFavorited: true,
+    featured: true,
+    rating: 4.9,
+  },
+  {
+    id: '4',
+    title: 'Downtown Penthouse',
+    price: 5200,
+    location: 'Chicago, IL',
+    image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1080',
+    bedrooms: 3,
+    bathrooms: 2,
+    area: '2,100 sq ft',
+    type: 'For Rent',
+    isFavorited: false,
+    rating: 4.7,
+  },
+  {
+    id: '5',
+    title: 'Mountain Retreat',
+    price: 980000,
+    location: 'Aspen, CO',
+    image: 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=1080',
+    bedrooms: 3,
+    bathrooms: 2,
+    area: '2,500 sq ft',
+    type: 'For Sale',
+    isFavorited: false,
+    featured: true,
+    rating: 4.5,
+  },
+];
+
+const mockAgents = [
+  {
+    id: '1',
+    name: 'Sarah Johnson',
+    avatar: 'https://i.pravatar.cc/150?img=1',
+    rating: 4.9,
+    properties: 125,
+  },
+  {
+    id: '2',
+    name: 'Michael Chen',
+    avatar: 'https://i.pravatar.cc/150?img=13',
+    rating: 4.8,
+    properties: 98,
+  },
+  {
+    id: '3',
+    name: 'Emma Williams',
+    avatar: 'https://i.pravatar.cc/150?img=5',
+    rating: 4.7,
+    properties: 87,
+  },
+];
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 24,
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 24,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    backgroundColor: '#2D6A4F',
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  header: {
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  logoBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#2D6A4F',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appName: {
+    color: '#111827',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  headerLocation: {
+    color: '#6B7280',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  logoutButton: {
+    padding: 4,
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: 4,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    backgroundColor: '#EF4444',
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    paddingBottom: 100,
+  },
+  heroSection: {
+    height: 220,
+    overflow: 'hidden',
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  heroTextContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  heroWelcome: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  heroTitle: {
+    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  heroSubtitle: {
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontSize: 15,
+    fontWeight: '400',
+  },
+  searchContainer: {
+    paddingHorizontal: 20,
+    marginTop: -28,
+    marginBottom: 20,
+    zIndex: 10,
+  },
+  searchWrapper: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  searchIcon: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 1,
+  },
+  searchInput: {
+    flex: 1,
+    height: 56,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingLeft: 48,
+    paddingRight: 56,
+    fontSize: 15,
+    color: '#111827',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  filterButton: {
+    position: 'absolute',
+    right: 12,
+    width: 40,
+    height: 40,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterTypeContainer: {
+    marginTop: 12,
+    paddingVertical: 8,
+  },
+  filterTypeButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  filterTypeButtonActive: {
+    backgroundColor: '#2D6A4F',
+    borderColor: '#2D6A4F',
+  },
+  filterTypeText: {
+    color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  filterTypeTextActive: {
+    color: '#FFFFFF',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginBottom: 24,
+    gap: 12,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  statValue: {
+    color: '#111827',
+    fontSize: 24,
+    fontWeight: '800',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  statLabel: {
+    color: '#6B7280',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  quickActionsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginBottom: 28,
+    gap: 16,
+  },
+  quickAction: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 10,
+  },
+  quickActionIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  quickActionLabel: {
+    color: '#374151',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  featuredSection: {
+    marginBottom: 32,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    color: '#111827',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  sectionSubtitle: {
+    color: '#6B7280',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  seeAllButtonText: {
+    color: '#2D6A4F',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  clearButton: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  propertyCount: {
+    color: '#6B7280',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyStateText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  featuredScrollContent: {
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  propertyCard: {
+    width: 280,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  propertyImageContainer: {
+    position: 'relative',
+    height: 180,
+  },
+  propertyImage: {
+    width: '100%',
+    height: '100%',
+  },
+  typeBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    backgroundColor: '#2D6A4F',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  typeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  featuredBadge: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  propertyDetails: {
+    padding: 16,
+  },
+  propertyTitle: {
+    color: '#111827',
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  propertyLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 14,
+  },
+  propertyLocationText: {
+    color: '#6B7280',
+    fontSize: 13,
+    flex: 1,
+  },
+  propertyStats: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 14,
+  },
+  propertyStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  propertyStatText: {
+    color: '#6B7280',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  propertyFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  propertyPrice: {
+    color: '#2D6A4F',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  ratingText: {
+    color: '#92400E',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  recentSection: {
+    marginBottom: 32,
+  },
+  recentScrollContent: {
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  recentCard: {
+    width: 140,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  recentImage: {
+    width: '100%',
+    height: 100,
+  },
+  recentTitle: {
+    color: '#111827',
+    fontSize: 13,
+    fontWeight: '600',
+    padding: 10,
+    paddingBottom: 4,
+  },
+  recentPrice: {
+    color: '#2D6A4F',
+    fontSize: 15,
+    fontWeight: '700',
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+  },
+  servicesSection: {
+    paddingHorizontal: 20,
+    marginBottom: 32,
+  },
+  servicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 16,
+  },
+  serviceCard: {
+    width: (width - 52) / 2,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  serviceIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  serviceTitle: {
+    flex: 1,
+    color: '#374151',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  agentsSection: {
+    marginBottom: 32,
+  },
+  agentsScrollContent: {
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  agentCard: {
+    width: 160,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  agentAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 12,
+  },
+  verifiedBadge: {
+    position: 'absolute',
+    top: 78,
+    right: 44,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 2,
+  },
+  agentName: {
+    color: '#111827',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  agentRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
+  agentRatingText: {
+    color: '#92400E',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  agentProperties: {
+    color: '#6B7280',
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  agentContactButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  agentContactText: {
+    color: '#2D6A4F',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  allPropertiesSection: {
+    paddingHorizontal: 20,
+    marginBottom: 32,
+  },
+  propertiesList: {
+    gap: 16,
+    marginTop: 16,
+  },
+  listPropertyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  listPropertyImage: {
+    width: 120,
+    height: 140,
+  },
+  listPropertyDetails: {
+    flex: 1,
+    padding: 14,
+    justifyContent: 'space-between',
+  },
+  listPropertyTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+  },
+  listPropertyTitle: {
+    flex: 1,
+    color: '#111827',
+    fontSize: 16,
+    fontWeight: '700',
+    marginRight: 8,
+  },
+  listPropertyLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 10,
+  },
+  listPropertyLocationText: {
+    color: '#6B7280',
+    fontSize: 13,
+    flex: 1,
+  },
+  listPropertyStats: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 10,
+  },
+  listPropertyStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  listPropertyStatText: {
+    color: '#6B7280',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  listPropertyFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  listPropertyPrice: {
+    color: '#2D6A4F',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  listPropertyType: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  listPropertyTypeText: {
+    color: '#2D6A4F',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  ctaBanner: {
+    marginHorizontal: 20,
+    marginBottom: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  ctaContent: {
+    flex: 1,
+    padding: 24,
+    justifyContent: 'center',
+  },
+  ctaTitle: {
+    color: '#111827',
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  ctaSubtitle: {
+    color: '#6B7280',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  ctaButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#2D6A4F',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  ctaButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  ctaImage: {
+    width: 140,
+    height: 180,
+  },
+});

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text as RNText, StyleSheet } from 'react-native';
 import { SplashScreen } from './modules/user/screens/SplashScreen';
 import { WelcomeScreen } from './modules/user/screens/WelcomeScreen';
 import LoginScreen from './modules/auth/screens/LoginScreen';
@@ -14,6 +14,9 @@ import ExploreProperties from './modules/property/screens/ExploreProperties';
 import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
 import ReportPropertyScreen from './modules/property/screens/ReportPropertyScreen';
 import PaymentScreen from './store/PaymentScreen';
+import AgentDashboard from './modules/agent/AgentDashboard';
+import ResetPasswordScreen from './modules/auth/screens/ResetPasswordScreen';
+const Text = RNText;
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
@@ -22,11 +25,13 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [reportPropertyData, setReportPropertyData] = useState(null);
   const [paymentData, setPaymentData] = useState(null);
+  const [otpContext, setOtpContext] = useState(''); // Track if OTP is for registration or forgot password
 
   const [userData, setUserData] = useState({
-    name: 'Sarah',
-    email: 'sarah@example.com',
-    phone: '+1 234 567 8900',
+    name: '',
+    email: '',
+    phone: '',
+    role: '', // Default role
   });
 
   // 🔹 Splash Screen Timeout (fallback)
@@ -51,7 +56,7 @@ export default function App() {
 
     // Handle search query
     if (params.query !== undefined) setSearchQuery(params.query);
-
+    
     // Handle Report Property data
     if (params.propertyId || params.propertyName || params.propertyAddress || params.propertyPrice || params.propertyImage) {
       setReportPropertyData({
@@ -92,11 +97,86 @@ export default function App() {
     setSelectedProperty(null);
     setReportPropertyData(null);
     setPaymentData(null);
+    setOtpContext('');
+    setUserData({
+      name: '',
+      email: '',
+      phone: '',
+      role: '',
+    });
   };
 
   const navigation = {
     navigate: navigateTo,
     goBack,
+  };
+
+  // 🔹 FIXED: Role-based navigation handler
+  const handleLoginSuccess = (user) => {
+    console.log('\n' + '='.repeat(60));
+    console.log('🎯 APP.JSX - HANDLING LOGIN SUCCESS');
+    console.log('='.repeat(60));
+    console.log('User data received:', {
+      id: user?.id,
+      email: user?.email,
+      name: user?.name,
+      role: user?.role
+    });
+
+    if (!user) {
+      console.error('❌ No user data provided');
+      return;
+    }
+
+    // Update user data state
+    setUserData({
+      name: user.name || user.email?.split('@')[0] || 'User',
+      email: user.email,
+      phone: user.phone || user.phoneNumber || '',
+      role: user.role?.toLowerCase() || 'buyer',
+      id: user.id,
+    });
+
+    // Normalize role
+    const userRole = (user.role || 'buyer').toLowerCase().trim();
+    console.log('📊 Normalized role:', userRole);
+
+    // Clear navigation stack for fresh start
+    setScreenStack([]);
+
+    // Navigate based on role
+    let targetScreen = 'home'; // Default
+
+    switch (userRole) {
+      case 'buyer':
+        targetScreen = 'home';
+        console.log('→ Navigating to Home (Buyer)');
+        break;
+        
+      case 'builder':
+        targetScreen = 'builderDashboard';
+        console.log('→ Navigating to Builder Dashboard');
+        break;
+        
+      case 'agent':
+        targetScreen = 'agentDashboard';
+        console.log('→ Navigating to Agent Dashboard');
+        break;
+        
+      case 'admin':
+        targetScreen = 'adminDashboard';
+        console.log('→ Navigating to Admin Dashboard');
+        break;
+        
+      default:
+        console.warn(`⚠️ Unknown role: ${userRole}, defaulting to Home`);
+        targetScreen = 'home';
+        break;
+    }
+
+    setCurrentScreen(targetScreen);
+    console.log('✅ Navigation complete');
+    console.log('='.repeat(60) + '\n');
   };
 
   // 🔹 Render Screens
@@ -122,10 +202,7 @@ export default function App() {
           <LoginScreen
             navigation={navigation}
             onBack={goBack}
-            onNavigateToLoginSuccess={(user) => {
-              if (user) setUserData(user);
-              navigateTo('home');
-            }}
+            onNavigateToLoginSuccess={handleLoginSuccess}
             onForgotPassword={() => navigateTo('forgotPassword')}
             onRegister={() => navigateTo('register')}
           />
@@ -137,8 +214,16 @@ export default function App() {
             navigation={navigation}
             onBack={goBack}
             onRegisterSuccess={(user) => {
-              if (user) setUserData(user);
-              navigateTo('otp');
+              if (user) {
+                setUserData({
+                  name: user.name || user.email?.split('@')[0] || 'User',
+                  email: user.email,
+                  phone: user.phone || user.phoneNumber || '',
+                  role: user.role?.toLowerCase() || 'buyer',
+                  id: user.id,
+                });
+              }
+              navigateTo('otp', { otpContext: 'registration' });
             }}
             onNavigateToLogin={() => navigateTo('login')}
           />
@@ -147,9 +232,33 @@ export default function App() {
       case 'otp':
         return (
           <OTPVerificationScreen
-            navigation={navigation}
             onBack={goBack}
-            onVerifySuccess={() => navigateTo('home')}
+            onVerifySuccess={() => {
+              console.log('🔐 OTP Verified, Context:', otpContext);
+              
+              // Check the context of OTP verification
+              if (otpContext === 'forgotPassword') {
+                // Forgot password flow: OTP → Reset Password
+                console.log('→ Navigating to Reset Password (Forgot Password Flow)');
+                navigateTo('resetPassword');
+              } else {
+                // Registration flow: OTP → Role-based dashboard
+                const userRole = (userData.role || 'buyer').toLowerCase();
+                console.log('→ Navigating based on role:', userRole);
+                
+                switch (userRole) {
+                  case 'builder':
+                    navigateTo('builderDashboard');
+                    break;
+                  case 'agent':
+                    navigateTo('agentDashboard');
+                    break;
+                  default:
+                    navigateTo('home');
+                    break;
+                }
+              }
+            }}
           />
         );
 
@@ -158,7 +267,24 @@ export default function App() {
           <ForgotPassword
             navigation={navigation}
             onBack={goBack}
-            onResetSuccess={() => navigateTo('login')}
+            onOtpSent={() => {
+              // Navigate to OTP screen with forgot password context
+              console.log('📧 OTP sent for forgot password');
+              navigateTo('otp', { otpContext: 'forgotPassword' });
+            }}
+          />
+        );
+
+      case 'resetPassword':
+        return (
+          <ResetPasswordScreen
+            onBack={goBack}
+            onResetSuccess={() => {
+              console.log('✅ Password reset successful, navigating to login');
+              // Clear the stack and navigate to login
+              setScreenStack([]);
+              navigateTo('login');
+            }}
           />
         );
 
@@ -240,20 +366,28 @@ export default function App() {
           />
         );
 
+      case 'agentDashboard':
+        return (
+          <AgentDashboard
+            navigation={navigation}
+            agentName={userData.name}
+            onBack={goBack}
+          />
+        );
+
+      case 'adminDashboard':
+        return (
+          <View style={styles.placeholderContainer}>
+            <Text style={styles.placeholderText}>Admin Dashboard</Text>
+            <Text style={styles.placeholderSubtext}>Coming Soon</Text>
+          </View>
+        );
+
       case 'ReportPropertyScreen':
         return (
           <ReportPropertyScreen
             navigation={navigation}
             onBack={goBack}
-            route={{
-              params: {
-                propertyId: reportPropertyData?.propertyId || 'property-001',
-                propertyName: reportPropertyData?.propertyName || 'Modern Luxury Villa',
-                propertyAddress: reportPropertyData?.propertyAddress || '1245 Sunset Boulevard, Beverly Hills, CA 90210',
-                propertyPrice: reportPropertyData?.propertyPrice || '$789,000',
-                propertyImage: reportPropertyData?.propertyImage || 'https://images.unsplash.com/photo-1706808849780-7a04fbac83ef',
-              },
-            }}
           />
         );
 
@@ -262,18 +396,11 @@ export default function App() {
           <PaymentScreen
             navigation={navigation}
             onBack={goBack}
-            route={{
-              params: {
-                propertyId: paymentData?.propertyId || 'property-001',
-                propertyName: paymentData?.propertyName || 'Modern Luxury Villa',
-                propertyPrice: paymentData?.propertyPrice || '$789,000',
-              },
-            }}
           />
         );
 
       default:
-        console.warn('⚠️ Unknown screen:', currentScreen);
+        console.warn('Unknown screen:', currentScreen);
         return (
           <WelcomeScreen
             onGetStarted={() => navigateTo('register')}
@@ -295,5 +422,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  placeholderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  placeholderText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  placeholderSubtext: {
+    fontSize: 16,
+    color: '#6B7280',
   },
 });

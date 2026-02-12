@@ -5,6 +5,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { OAuth2Client } = require('google-auth-library');
 const { getRequestMetadata, getDeviceType, getBrowser, getOS } = require("../utils/requestUtils");
+const {  sendPasswordResetOTP, sendPasswordChangedNotification } = require('../services/emailService');
 
 // generate 6 digit OTP
 const generateOTP = () => {
@@ -20,12 +21,33 @@ const sendOTP = async (email, phone, otp, purpose = "verification") => {
 
 // Send email notification (implement actual email service later)
 const sendEmailNotification = async (email, subject, message) => {
-    console.log(`Email to ${email}: ${subject} - ${message}`);
-    // TODO: Implement actual email service
-    return true;
+    try {
+        // Implement your email sending logic here
+        // Example using nodemailer or your preferred email service
+        console.log(`Sending email to ${email}: ${subject}`);
+        
+        // Example implementation:
+        // const mailOptions = {
+        //     from: process.env.EMAIL_FROM,
+        //     to: email,
+        //     subject: subject,
+        //     html: `<p>${message}</p>`
+        // };
+        // await transporter.sendMail(mailOptions);
+        
+    } catch (error) {
+        console.error('Error sending email notification:', error);
+    }
 };
 
-// Helper function to log activity with device info
+// const getRequestMetadata = (req) => {
+//     return {
+//         ipAddress: req.ip || req.connection.remoteAddress || 'Unknown',
+//         userAgent: req.get('user-agent') || 'Unknown'
+//     };
+// };
+
+// Helper function to log user activity
 const logUserActivity = async (userId, activityType, ipAddress, userAgent, description = null, loginMethod = 'email') => {
     try {
         const deviceType = getDeviceType(userAgent);
@@ -46,439 +68,347 @@ const logUserActivity = async (userId, activityType, ipAddress, userAgent, descr
 // Helper function to check for suspicious activity
 const checkSuspiciousActivity = async (userId, ipAddress) => {
     try {
-        // Check for multiple failed login attempts
-        const [failedAttempts] = await pool.query(
+        // Check failed login attempts in last 15 minutes
+        const [recentFailures] = await pool.query(
             `SELECT COUNT(*) as count FROM user_login_logs 
-             WHERE user_id = ? 
-             AND activity_type = 'failed_login' 
-             AND login_time > DATE_SUB(NOW(), INTERVAL 15 MINUTE)`,
+            WHERE user_id = ? 
+            AND activity_type = 'failed_login' 
+            AND login_time > DATE_SUB(NOW(), INTERVAL 15 MINUTE)`,
             [userId]
         );
 
-        // Check for logins from different IPs in short time
-        const [differentIPs] = await pool.query(
-            `SELECT COUNT(DISTINCT ip_address) as ip_count 
-             FROM user_login_logs 
-             WHERE user_id = ? 
-             AND login_time > DATE_SUB(NOW(), INTERVAL 1 HOUR)`,
-            [userId]
+        // Check login from new IP
+        const [knownIPs] = await pool.query(
+            `SELECT COUNT(*) as count FROM user_login_logs 
+            WHERE user_id = ? 
+            AND ip_address = ? 
+            AND activity_type = 'login' 
+            AND login_time > DATE_SUB(NOW(), INTERVAL 30 DAY)`,
+            [userId, ipAddress]
         );
+
+        const isSuspicious = recentFailures[0].count >= 3 || knownIPs[0].count === 0;
 
         return {
-            isSuspicious: failedAttempts[0].count >= 5 || differentIPs[0].ip_count >= 3,
-            failedAttempts: failedAttempts[0].count,
-            differentIPs: differentIPs[0].ip_count
+            isSuspicious,
+            reason: recentFailures[0].count >= 3 
+                ? 'Multiple failed login attempts' 
+                : knownIPs[0].count === 0 
+                    ? 'Login from new IP address' 
+                    : null
         };
-    } catch (err) {
-        console.error("Suspicious activity check error:", err);
-        return { isSuspicious: false, failedAttempts: 0, differentIPs: 0 };
+    } catch (error) {
+        console.error('Error checking suspicious activity:', error);
+        return { isSuspicious: false };
     }
 };
 
-// Helper function to check if account should be locked
-const checkAccountLockout = async (userId) => {
-    try {
-        const [attempts] = await pool.query(
-            `SELECT COUNT(*) as count FROM user_login_logs 
-             WHERE user_id = ? 
-             AND activity_type = 'failed_login' 
-             AND login_time > DATE_SUB(NOW(), INTERVAL 30 MINUTE)`,
-            [userId]
-        );
-
-        if (attempts[0].count >= 5) {
-            // Lock account temporarily
-            await pool.query(
-                "UPDATE users SET account_locked_until = DATE_ADD(NOW(), INTERVAL 30 MINUTE) WHERE id = ?",
-                [userId]
-            );
-            return true;
-        }
-        return false;
-    } catch (err) {
-        console.error("Account lockout check error:", err);
-        return false;
-    }
+// Validate role
+const validateRole = (role) => {
+    const validRoles = ['buyer', 'builder', 'agent', 'admin'];
+    return validRoles.includes(role.toLowerCase());
 };
 
-// GOOGLE OAUTH LOGIN
-module.exports.googleLogin = async (req, res) => {
-    console.log('\n' + '='.repeat(70));
-    console.log('🔐 GOOGLE LOGIN REQUEST RECEIVED');
-    console.log('='.repeat(70));
-
-    const startTime = Date.now();
-
+module.exports.verifyToken = async (req, res) => {
     try {
-        const { token } = req.body;
-        const { ipAddress, userAgent } = getRequestMetadata(req); // Uses existing function
-
-        console.log('📋 Request Details:');
-        console.log(`  IP Address: ${ipAddress}`);
-        console.log(`  User Agent: ${userAgent}`);
-        console.log(`  Has Token: ${!!token}`);
-        console.log('');
-
-        // ==================== STEP 1: VALIDATE REQUEST ====================
-        console.log('STEP 1: Validating Request...');
+        const token = req.headers.authorization?.split(' ')[1] || req.body.token;
 
         if (!token) {
-            console.error('❌ No token provided in request body');
-            return res.status(400).json({
-                message: "Google token is required"
-            });
-        }
-        console.log(`✅ Token present (length: ${token.length})`);
-        console.log(`   Preview: ${token.substring(0, 30)}...`);
-        console.log('');
-
-        // ==================== STEP 2: CHECK ENVIRONMENT ====================
-        console.log('STEP 2: Checking Environment Configuration...');
-
-        if (!process.env.GOOGLE_CLIENT_ID) {
-            console.error('❌ GOOGLE_CLIENT_ID not configured in environment variables');
-            console.error('   Please add GOOGLE_CLIENT_ID to your .env file');
-            return res.status(500).json({
-                message: "Google authentication is not properly configured on the server"
-            });
-        }
-
-        console.log('✅ GOOGLE_CLIENT_ID found');
-        console.log(`   Client ID: ${process.env.GOOGLE_CLIENT_ID.substring(0, 20)}...`);
-
-        if (!process.env.JWT_SECRET) {
-            console.error('❌ JWT_SECRET not configured');
-            return res.status(500).json({
-                message: "Server authentication is not properly configured"
-            });
-        }
-
-        console.log('✅ JWT_SECRET found');
-        console.log('');
-
-        // ==================== STEP 3: VERIFY GOOGLE TOKEN ====================
-        console.log('STEP 3: Verifying Google Token...');
-
-        const { OAuth2Client } = require('google-auth-library');
-        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-        let ticket;
-        let payload;
-
-        try {
-            console.log('   Calling Google token verification API...');
-            ticket = await client.verifyIdToken({
-                idToken: token,
-                audience: process.env.GOOGLE_CLIENT_ID,
-            });
-
-            payload = ticket.getPayload();
-
-            if (!payload) {
-                throw new Error('No payload in verified token');
-            }
-
-            console.log('✅ Token verified successfully');
-            console.log(`   Token issued for: ${payload.email}`);
-            console.log(`   Issued at: ${new Date(payload.iat * 1000).toISOString()}`);
-            console.log(`   Expires at: ${new Date(payload.exp * 1000).toISOString()}`);
-            console.log('');
-
-        } catch (verifyError) {
-            console.error('❌ Token verification failed');
-            console.error(`   Error: ${verifyError.message}`);
-            console.error(`   Error code: ${verifyError.code || 'N/A'}`);
-
-            // Check for common issues
-            if (verifyError.message.includes('audience')) {
-                console.error('   → Client ID mismatch: Token audience does not match server client ID');
-                console.error('   → Ensure frontend and backend use the SAME Web Client ID');
-            } else if (verifyError.message.includes('expired')) {
-                console.error('   → Token has expired');
-            } else if (verifyError.message.includes('invalid')) {
-                console.error('   → Invalid token format or signature');
-            }
-
             return res.status(401).json({
-                message: "Invalid or expired Google token. Please try signing in again.",
-                error: process.env.NODE_ENV === 'development' ? verifyError.message : undefined
+                success: false,
+                message: "No token provided"
             });
         }
 
-        // ==================== STEP 4: EXTRACT USER INFO ====================
-        console.log('STEP 4: Extracting User Information...');
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        const { email, name, picture, sub: googleId } = payload;
-
-        console.log('   User data from Google:');
-        console.log(`     Email: ${email}`);
-        console.log(`     Name: ${name || 'Not provided'}`);
-        console.log(`     Google ID: ${googleId.substring(0, 15)}...`);
-        console.log(`     Picture: ${picture ? 'Yes' : 'No'}`);
-        console.log('');
-
-        if (!email || !googleId) {
-            console.error('❌ Missing required fields in Google payload');
-            return res.status(400).json({
-                message: "Invalid Google account information"
-            });
-        }
-
-        console.log('✅ Required fields validated');
-        console.log('');
-
-        // ==================== STEP 5: CHECK DATABASE FOR USER ====================
-        console.log('STEP 5: Checking Database for User...');
-
+        // Fetch fresh user data
         const [users] = await pool.query(
-            "SELECT * FROM users WHERE email = ?",
-            [email.toLowerCase().trim()]
+            "SELECT id, name, email, phone, role, is_blocked, is_verified FROM users WHERE id = ?",
+            [decoded.id]
         );
 
-        console.log(`   Query returned ${users.length} user(s)`);
-        console.log('');
-
-        let user;
-        let isNewUser = false;
-
-        if (users.length > 0) {
-            // ==================== EXISTING USER ====================
-            user = users[0];
-            console.log('✅ Existing user found');
-            console.log(`   User ID: ${user.id}`);
-            console.log(`   Email: ${user.email}`);
-            console.log(`   Role: ${user.role}`);
-            console.log('');
-
-        } else {
-            // ==================== NEW USER ====================
-            console.log('🆕 Creating new user account...');
-            isNewUser = true;
-
-            try {
-                const [result] = await pool.query(
-                    `INSERT INTO users (name, email, role, is_verified, created_at) 
-                     VALUES (?, ?, 'buyer', true, NOW())`,
-                    [name, email.toLowerCase().trim()]
-                );
-
-                console.log('✅ New user created');
-                console.log(`   User ID: ${result.insertId}`);
-                console.log(`   Email: ${email}`);
-                console.log(`   Role: buyer (default)`);
-                console.log('');
-
-                user = {
-                    id: result.insertId,
-                    name,
-                    email: email.toLowerCase().trim(),
-                    role: 'buyer',
-                    is_verified: true,
-                    is_blocked: false,
-                    phone: null
-                };
-
-            } catch (insertError) {
-                console.error('❌ Failed to create user');
-                console.error(`   Error: ${insertError.message}`);
-                console.error(`   Code: ${insertError.code}`);
-
-                if (insertError.code === 'ER_DUP_ENTRY') {
-                    console.error('   → Duplicate email detected');
-                    return res.status(409).json({
-                        message: "An account with this email already exists"
-                    });
-                }
-
-                throw insertError;
-            }
-        }
-
-        // ==================== STEP 6: SECURITY CHECKS ====================
-        console.log('STEP 6: Performing Security Checks...');
-
-        // Check if account is blocked
-        if (user.is_blocked) {
-            console.log('⛔ Blocked user attempted login');
-
-            // Use logUserActivity if it exists in your file
-            if (typeof logUserActivity === 'function') {
-                await logUserActivity(
-                    user.id,
-                    'blocked_login_attempt',
-                    ipAddress,
-                    userAgent,
-                    'Blocked user attempted Google login',
-                    'google'
-                );
-            }
-
-            return res.status(403).json({
-                message: "Your account has been blocked. Please contact support."
+        if (users.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
             });
         }
-        console.log('✅ Account not blocked');
-        console.log('');
 
-        // Check for suspicious activity (non-blocking) - only if function exists
-        try {
-            if (typeof checkSuspiciousActivity === 'function') {
-                const suspiciousCheck = await checkSuspiciousActivity(user.id, ipAddress);
-                if (suspiciousCheck.isSuspicious) {
-                    console.log('⚠️  Suspicious activity detected');
+        const user = users[0];
 
-                    if (typeof sendEmailNotification === 'function') {
-                        await sendEmailNotification(
-                            user.email,
-                            'Suspicious Login Activity Detected',
-                            `We detected unusual login activity on your account from IP: ${ipAddress}`
-                        );
-                    }
-                } else {
-                    console.log('✅ No suspicious activity detected');
-                }
-            }
-        } catch (suspiciousError) {
-            console.warn('⚠️  Suspicious activity check failed:', suspiciousError.message);
-            console.warn('   Continuing with login...');
-        }
-        console.log('');
-
-        // ==================== STEP 7: GENERATE JWT TOKEN ====================
-        console.log('STEP 7: Generating JWT Token...');
-
-        const jwt = require('jsonwebtoken');
-        const jwtToken = jwt.sign(
-            {
-                id: user.id,
-                role: user.role,
-                email: user.email
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
-
-        console.log('✅ JWT token generated');
-        console.log(`   Expires in: 7 days`);
-        console.log('');
-
-        // ==================== STEP 8: LOG ACTIVITY ====================
-        console.log('STEP 8: Logging User Activity...');
-
-        // Use logUserActivity if it exists in your file
-        if (typeof logUserActivity === 'function') {
-            await logUserActivity(
-                user.id,
-                isNewUser ? 'registration' : 'login',
-                ipAddress,
-                userAgent,
-                isNewUser ? 'New user registered via Google' : 'User logged in via Google',
-                'google'
-            );
-            console.log('✅ Activity logged');
-        } else {
-            console.log('⚠️  logUserActivity function not found - skipping');
-        }
-        console.log('');
-
-        // ==================== STEP 9: UPDATE LAST LOGIN ====================
-        console.log('STEP 9: Updating Last Login...');
-
-        await pool.query(
-            "UPDATE users SET updated_at = NOW() WHERE id = ?",
-            [user.id]
-        );
-
-        console.log('✅ Last login updated');
-        console.log('');
-
-        // ==================== STEP 10: NEW DEVICE NOTIFICATION ====================
-        if (!isNewUser) {
-            console.log('STEP 10: Checking for New Device...');
-
-            try {
-                const [recentLogins] = await pool.query(
-                    `SELECT COUNT(*) as count FROM user_login_logs 
-                     WHERE user_id = ? AND user_agent = ? AND login_time > DATE_SUB(NOW(), INTERVAL 30 DAY)`,
-                    [user.id, userAgent]
-                );
-
-                if (recentLogins[0].count === 0) {
-                    console.log('📧 New device detected');
-
-                    // Only send notification if function exists
-                    if (typeof sendEmailNotification === 'function') {
-                        const deviceType = /mobile/i.test(userAgent) ? 'Mobile Device' : 'Desktop';
-                        const browser = /chrome/i.test(userAgent) ? 'Chrome' :
-                            /firefox/i.test(userAgent) ? 'Firefox' :
-                                /safari/i.test(userAgent) ? 'Safari' : 'Unknown Browser';
-
-                        await sendEmailNotification(
-                            user.email,
-                            'New Device Login Detected',
-                            `A new login was detected from ${deviceType} using ${browser} at IP: ${ipAddress}`
-                        );
-                        console.log('✅ Notification sent');
-                    } else {
-                        console.log('⚠️  sendEmailNotification function not found - skipping');
-                    }
-                } else {
-                    console.log('✅ Known device - no notification needed');
-                }
-            } catch (notificationError) {
-                console.warn('⚠️  New device notification failed:', notificationError.message);
-            }
-            console.log('');
-        } else {
-            console.log('STEP 10: Skipping (new user)');
-            console.log('');
+        // Check if blocked
+        if (user.is_blocked) {
+            return res.status(403).json({
+                success: false,
+                message: "Account has been blocked"
+            });
         }
 
-        // ==================== STEP 11: SEND RESPONSE ====================
-        console.log('STEP 11: Sending Success Response...');
+        // Verify role matches token
+        if (user.role.toLowerCase() !== decoded.role.toLowerCase()) {
+            return res.status(403).json({
+                success: false,
+                message: "Role mismatch. Please login again."
+            });
+        }
 
-        const responseData = {
-            message: isNewUser ? "Account created successfully via Google" : "Login successful via Google",
-            token: jwtToken,
+        res.status(200).json({
+            success: true,
+            message: "Token is valid",
             user: {
                 id: user.id,
                 name: user.name,
                 email: user.email,
                 phone: user.phone,
-                role: user.role,
-                isVerified: true
+                role: user.role.toLowerCase(),
+                isVerified: user.is_verified
             }
-        };
-
-        console.log('Response data:');
-        console.log(`  User ID: ${responseData.user.id}`);
-        console.log(`  Email: ${responseData.user.email}`);
-        console.log(`  Role: ${responseData.user.role}`);
-        console.log(`  Has Token: Yes`);
-        console.log('');
-
-        const duration = Date.now() - startTime;
-        console.log('='.repeat(70));
-        console.log(`✅ GOOGLE LOGIN SUCCESSFUL (${duration}ms)`);
-        console.log('='.repeat(70) + '\n');
-
-        res.json(responseData);
+        });
 
     } catch (err) {
-        const duration = Date.now() - startTime;
+        if (err.name === 'JsonWebTokenError') {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid token"
+            });
+        }
+        if (err.name === 'TokenExpiredError') {
+            return res.status(401).json({
+                success: false,
+                message: "Token has expired"
+            });
+        }
 
-        console.error('\n' + '='.repeat(70));
-        console.error('❌ GOOGLE LOGIN FAILED');
-        console.error('='.repeat(70));
-        console.error(`Error Type: ${err.name}`);
-        console.error(`Error Message: ${err.message}`);
-        console.error(`Error Code: ${err.code || 'N/A'}`);
-        console.error(`Duration: ${duration}ms`);
-        console.error('\nStack Trace:');
-        console.error(err.stack);
-        console.error('='.repeat(70) + '\n');
-
+        console.error("Token verification error:", err);
         res.status(500).json({
+            success: false,
+            message: "Server error during token verification"
+        });
+    }
+};
+
+// Helper function to check if account should be locked
+// const checkAccountLockout = async (userId) => {
+//     try {
+//         const [attempts] = await pool.query(
+//             `SELECT COUNT(*) as count FROM user_login_logs 
+//              WHERE user_id = ? 
+//              AND activity_type = 'failed_login' 
+//              AND login_time > DATE_SUB(NOW(), INTERVAL 30 MINUTE)`,
+//             [userId]
+//         );
+
+//         if (attempts[0].count >= 5) {
+//             // Lock account temporarily
+//             await pool.query(
+//                 "UPDATE users SET account_locked_until = DATE_ADD(NOW(), INTERVAL 30 MINUTE) WHERE id = ?",
+//                 [userId]
+//             );
+//             return true;
+//         }
+//         return false;
+//     } catch (err) {
+//         console.error("Account lockout check error:", err);
+//         return false;
+//     }
+// };
+
+// GOOGLE OAUTH LOGIN
+module.exports.googleLogin = async (req, res) => {
+    try {
+        const { token: googleIdToken } = req.body;
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+
+        if (!googleIdToken) {
+            return res.status(400).json({
+                success: false,
+                message: "Google ID token is required"
+            });
+        }
+
+        // Verify Google token (implement OAuth2Client verification)
+        const { OAuth2Client } = require('google-auth-library');
+        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+        let googleUser;
+        try {
+            const ticket = await client.verifyIdToken({
+                idToken: googleIdToken,
+                audience: process.env.GOOGLE_CLIENT_ID,
+            });
+            googleUser = ticket.getPayload();
+        } catch (verifyError) {
+            console.error('Google token verification failed:', verifyError);
+            return res.status(401).json({
+                success: false,
+                message: "Invalid Google token"
+            });
+        }
+
+        const { email, name, picture, sub: googleId } = googleUser;
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email not provided by Google"
+            });
+        }
+
+        // Find or create user
+        let [users] = await pool.query(
+            "SELECT * FROM users WHERE email = ? OR google_id = ?",
+            [email.toLowerCase(), googleId]
+        );
+
+        let user;
+        let isNewUser = false;
+
+        if (users.length === 0) {
+            // Create new user
+            const defaultRole = 'buyer'; // Default role for Google sign-ups
+            
+            const [result] = await pool.query(
+                `INSERT INTO users 
+                (email, name, google_id, profile_image, role, is_verified, created_at) 
+                VALUES (?, ?, ?, ?, ?, 1, NOW())`,
+                [email.toLowerCase(), name, googleId, picture, defaultRole]
+            );
+
+            // Fetch the newly created user
+            [users] = await pool.query("SELECT * FROM users WHERE id = ?", [result.insertId]);
+            user = users[0];
+            isNewUser = true;
+
+            await logUserActivity(user.id, 'google_signup', ipAddress, userAgent, 
+                'New user registered via Google', 'google');
+        } else {
+            user = users[0];
+
+            // Update Google ID and profile image if not set
+            if (!user.google_id || user.google_id !== googleId) {
+                await pool.query(
+                    "UPDATE users SET google_id = ?, profile_image = ? WHERE id = ?",
+                    [googleId, picture, user.id]
+                );
+                user.google_id = googleId;
+                user.profile_image = picture;
+            }
+        }
+
+        // Validate user role
+        if (!validateRole(user.role)) {
+            console.error(`Invalid role detected for user ${user.id}: ${user.role}`);
+            return res.status(500).json({
+                success: false,
+                message: "Account configuration error. Please contact support."
+            });
+        }
+
+        // Check if account is blocked
+        if (user.is_blocked) {
+            await logUserActivity(user.id, 'blocked_login_attempt', ipAddress, userAgent, 
+                'Blocked user attempted Google login', 'google');
+
+            return res.status(403).json({
+                success: false,
+                message: "Your account has been blocked. Please contact support."
+            });
+        }
+
+        // Check for suspicious activity (only for existing users)
+        if (!isNewUser) {
+            const suspiciousCheck = await checkSuspiciousActivity(user.id, ipAddress);
+            if (suspiciousCheck.isSuspicious) {
+                await sendEmailNotification(
+                    user.email,
+                    'Suspicious Login Activity Detected',
+                    `We detected unusual login activity on your account via Google from IP: ${ipAddress}`
+                );
+            }
+        }
+
+        // Fetch builder details if applicable
+        let builderDetails = {};
+        if (user.role === 'builder') {
+            const [builder] = await pool.query(
+                "SELECT * FROM builder WHERE user_id = ?",
+                [user.id]
+            );
+            if (builder.length > 0) {
+                builderDetails = builder[0];
+            }
+        }
+
+        // Generate JWT token with role
+        const tokenPayload = {
+            id: user.id,
+            role: user.role.toLowerCase(),
+            email: user.email,
+            iat: Math.floor(Date.now() / 1000)
+        };
+
+        const jwtToken = jwt.sign(
+            tokenPayload,
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        // Log successful login
+        await logUserActivity(
+            user.id,
+            isNewUser ? 'google_signup' : 'login',
+            ipAddress,
+            userAgent,
+            isNewUser ? 'User signed up via Google' : 'User logged in successfully via Google',
+            'google'
+        );
+
+        // Update last login
+        await pool.query(
+            "UPDATE users SET last_login = NOW() WHERE id = ?",
+            [user.id]
+        );
+
+        // Prepare user response
+        const userResponse = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone || null,
+            role: user.role.toLowerCase(),
+            isVerified: user.is_verified || true, // Google users are auto-verified
+            profileImage: user.profile_image || picture,
+            lastLogin: new Date().toISOString()
+        };
+
+        // Add builder specific fields
+        if (user.role === 'builder' && builderDetails.id) {
+            userResponse.companyName = builderDetails.company_name;
+            userResponse.gstNo = builderDetails.gst_no;
+            userResponse.panNo = builderDetails.pan_no;
+            userResponse.website = builderDetails.website;
+            userResponse.verificationStatus = builderDetails.verification_status;
+            userResponse.businessAddress = builderDetails.address;
+            userResponse.city = builderDetails.city;
+            userResponse.state = builderDetails.state;
+            userResponse.pincode = builderDetails.pincode;
+            userResponse.experienceYears = builderDetails.experience_years;
+        }
+
+        res.status(200).json({
+            success: true,
+            message: isNewUser ? "Account created successfully" : "Login successful",
+            token: jwtToken,
+            user: userResponse,
+            isNewUser
+        });
+
+    } catch (err) {
+        console.error("Google login error:", err);
+        res.status(500).json({
+            success: false,
             message: "Server error during Google login. Please try again.",
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
@@ -636,7 +566,18 @@ module.exports.register = async (req, res) => {
             address,
             city,
             state,
-            pincode
+            pincode,
+            // Agent specific fields
+            licenseNumber,
+            licenseIssuingAuthority,
+            licenseState,
+            licenseExpiryDate,
+            licenseDocumentUrl,
+            officeAddress,
+            officeAddressCity,
+            officeAddressState,
+            officeAddressCountry,
+            serviceRadiusKm
         } = req.body;
 
         const { ipAddress, userAgent } = getRequestMetadata(req);
@@ -697,6 +638,31 @@ module.exports.register = async (req, res) => {
                 connection.release();
                 return res.status(400).json({
                     message: "Invalid PAN number format"
+                });
+            }
+        }
+
+        // Additional validation for agent
+        if (role === "agent") {
+            if (!licenseNumber) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    message: "License number is required for agent registration"
+                });
+            }
+            if (!licenseIssuingAuthority) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    message: "License issuing authority is required for agent registration"
+                });
+            }
+            if (!licenseState) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    message: "License state is required for agent registration"
                 });
             }
         }
@@ -808,6 +774,22 @@ module.exports.register = async (req, res) => {
             }
         }
 
+        // For agents, check if license number already exists
+        if (role === "agent") {
+            const [existingLicense] = await connection.query(
+                "SELECT id FROM agent WHERE license_number = ?",
+                [licenseNumber.trim()]
+            );
+
+            if (existingLicense.length > 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(409).json({
+                    message: "This license number is already registered."
+                });
+            }
+        }
+
         console.log("Register payload:", {
             name,
             email,
@@ -825,7 +807,13 @@ module.exports.register = async (req, res) => {
             description: role === 'builder' ? description : null,
             gstNo: role === 'builder' ? gstNo : 'N/A',
             panNo: role === 'builder' ? panNo : 'N/A',
-            totalProjects: role === 'builder' ? totalProjects : null
+            totalProjects: role === 'builder' ? totalProjects : null,
+            licenseNumber: role === 'agent' ? licenseNumber : 'N/A',
+            licenseIssuingAuthority: role === 'agent' ? licenseIssuingAuthority : null,
+            licenseState: role === 'agent' ? licenseState : null,
+            licenseExpiryDate: role === 'agent' ? licenseExpiryDate : null,
+            officeAddress: role === 'agent' ? officeAddress : null,
+            serviceRadiusKm: role === 'agent' ? serviceRadiusKm : null
         });
 
         // Hash password
@@ -893,6 +881,60 @@ module.exports.register = async (req, res) => {
             );
         }
 
+        // If agent role, also insert into agent table
+        if (role === "agent") {
+            const parsedYearsOfExperience = experienceYears ? parseInt(experienceYears, 10) : null;
+            const parsedServiceRadiusKm = serviceRadiusKm ? parseFloat(serviceRadiusKm) : null;
+
+            // Validate parsed numbers
+            if (experienceYears && (isNaN(parsedYearsOfExperience) || parsedYearsOfExperience < 0)) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    message: "Years of experience must be a valid positive number"
+                });
+            }
+
+            if (serviceRadiusKm && (isNaN(parsedServiceRadiusKm) || parsedServiceRadiusKm < 0)) {
+                await connection.rollback();
+                connection.release();
+                return res.status(400).json({
+                    message: "Service radius must be a valid positive number"
+                });
+            }
+
+            await connection.query(
+                `INSERT INTO agent (
+                    email, password, name, phone, profile_image,
+                    license_number, license_issuing_authority, license_state,
+                    license_expiry_date, license_document_url,
+                    verification_status, years_of_experience, account_status,
+                    office_address, office_address_city, office_address_state,
+                    office_address_country, service_radius_km
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    email?.toLowerCase().trim() || null,
+                    hashed,
+                    name?.trim() || null,
+                    phone?.trim() || null,
+                    profileImage?.trim() || null,
+                    licenseNumber?.trim() || null,
+                    licenseIssuingAuthority?.trim() || null,
+                    licenseState?.trim() || null,
+                    licenseExpiryDate || null,
+                    licenseDocumentUrl?.trim() || null,
+                    'pending', // Default verification status
+                    parsedYearsOfExperience,
+                    'active', // Default account status
+                    officeAddress?.trim() || null,
+                    officeAddressCity?.trim() || null,
+                    officeAddressState?.trim() || null,
+                    officeAddressCountry?.trim() || null,
+                    parsedServiceRadiusKm
+                ]
+            );
+        }
+
         // Commit transaction
         await connection.commit();
         connection.release();
@@ -939,11 +981,33 @@ module.exports.register = async (req, res) => {
             userResponse.state = state?.trim() || null;
         }
 
+        // Add agent-specific fields to response
+        if (role === "agent") {
+            userResponse.licenseNumber = licenseNumber?.trim() || null;
+            userResponse.licenseIssuingAuthority = licenseIssuingAuthority?.trim() || null;
+            userResponse.licenseState = licenseState?.trim() || null;
+            userResponse.licenseExpiryDate = licenseExpiryDate || null;
+            userResponse.licenseDocumentUrl = licenseDocumentUrl?.trim() || null;
+            userResponse.verificationStatus = 'pending';
+            userResponse.accountStatus = 'active';
+            userResponse.yearsOfExperience = experienceYears ? parseInt(experienceYears) : null;
+            userResponse.officeAddress = officeAddress?.trim() || null;
+            userResponse.officeAddressCity = officeAddressCity?.trim() || null;
+            userResponse.officeAddressState = officeAddressState?.trim() || null;
+            userResponse.officeAddressCountry = officeAddressCountry?.trim() || null;
+            userResponse.serviceRadiusKm = serviceRadiusKm ? parseFloat(serviceRadiusKm) : null;
+        }
+
         // Return success response
+        let successMessage = "Registration successful";
+        if (role === "builder") {
+            successMessage = "Builder registration successful. Your account is pending verification.";
+        } else if (role === "agent") {
+            successMessage = "Agent registration successful. Your account is pending verification.";
+        }
+
         res.status(201).json({
-            message: role === "builder"
-                ? "Builder registration successful. Your account is pending verification."
-                : "Registration successful",
+            message: successMessage,
             token,
             user: userResponse
         });
@@ -984,7 +1048,7 @@ module.exports.register = async (req, res) => {
             } else if (err.code === 'ER_BAD_FIELD_ERROR' || err.code === 'ER_NO_SUCH_TABLE') {
                 errorMessage = "Database table or column not found. Please check your database schema.";
             } else if (err.code === 'ER_DUP_ENTRY') {
-                errorMessage = "Duplicate entry. Email or phone may already be registered.";
+                errorMessage = "Duplicate entry. Email, phone, or license number may already be registered.";
             } else if (err.code === 'ER_ACCESS_DENIED_ERROR') {
                 errorMessage = "Database access denied. Check your credentials.";
             } else if (err.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD') {
@@ -1008,6 +1072,7 @@ module.exports.login = async (req, res) => {
         // Validate required fields
         if (!email || !password) {
             return res.status(400).json({
+                success: false,
                 message: "Email and password are required"
             });
         }
@@ -1028,17 +1093,29 @@ module.exports.login = async (req, res) => {
             );
 
             return res.status(400).json({
+                success: false,
                 message: "Invalid credentials"
             });
         }
 
         const user = users[0];
 
+        // Validate user role
+        if (!validateRole(user.role)) {
+            console.error(`Invalid role detected for user ${user.id}: ${user.role}`);
+            return res.status(500).json({
+                success: false,
+                message: "Account configuration error. Please contact support."
+            });
+        }
+
         // Check if account is blocked
         if (user.is_blocked) {
-            await logUserActivity(user.id, 'blocked_login_attempt', ipAddress, userAgent, 'Blocked user attempted login', 'email');
+            await logUserActivity(user.id, 'blocked_login_attempt', ipAddress, userAgent, 
+                'Blocked user attempted login', 'email');
 
             return res.status(403).json({
+                success: false,
                 message: "Your account has been blocked. Please contact support."
             });
         }
@@ -1047,9 +1124,11 @@ module.exports.login = async (req, res) => {
         const valid = await bcrypt.compare(password, user.password);
         if (!valid) {
             // Log failed login attempt
-            await logUserActivity(user.id, 'failed_login', ipAddress, userAgent, 'Invalid password', 'email');
+            await logUserActivity(user.id, 'failed_login', ipAddress, userAgent, 
+                'Invalid password', 'email');
 
             return res.status(400).json({
+                success: false,
                 message: "Invalid credentials"
             });
         }
@@ -1060,7 +1139,7 @@ module.exports.login = async (req, res) => {
             await sendEmailNotification(
                 user.email,
                 'Suspicious Login Activity Detected',
-                `We detected unusual login activity on your account from IP: ${ipAddress}`
+                `We detected unusual login activity on your account from IP: ${ipAddress}. Reason: ${suspiciousCheck.reason}`
             );
         }
 
@@ -1076,9 +1155,16 @@ module.exports.login = async (req, res) => {
             }
         }
 
-        // Generate JWT token
+        // Generate JWT token with role included in payload
+        const tokenPayload = {
+            id: user.id,
+            role: user.role.toLowerCase(), // Normalize to lowercase
+            email: user.email,
+            iat: Math.floor(Date.now() / 1000)
+        };
+
         const token = jwt.sign(
-            { id: user.id, role: user.role },
+            tokenPayload,
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
         );
@@ -1090,12 +1176,12 @@ module.exports.login = async (req, res) => {
                 'login',
                 ipAddress,
                 userAgent,
-                'User logged in successfully',
+                'User logged in successfully via email/password',
                 'email'
             );
         } catch (logError) {
             console.error("Failed to log user activity:", logError);
-            // Continue execution - don't fail registration due to logging error
+            // Continue execution - don't fail login due to logging error
         }
 
 
@@ -1106,15 +1192,16 @@ module.exports.login = async (req, res) => {
             name: user.name,
             email: user.email,
             phone: user.phone,
-            role: user.role,
-            isVerified: user.is_verified, // Assuming is_verified column exists
-            profileImage: user.profile_image // Assuming profile_image column exists
+            role: user.role.toLowerCase(), // Normalize role
+            isVerified: user.is_verified || false,
+            profileImage: user.profile_image || null,
+            lastLogin: new Date().toISOString()
         };
 
         // Add builder specific fields
         if (user.role === 'builder' && builderDetails.id) {
             userResponse.companyName = builderDetails.company_name;
-            userResponse.gstNo = builderDetails.gst_no; // Or separates if you prefer
+            userResponse.gstNo = builderDetails.gst_no;
             userResponse.panNo = builderDetails.pan_no;
             userResponse.website = builderDetails.website;
             userResponse.verificationStatus = builderDetails.verification_status;
@@ -1126,7 +1213,8 @@ module.exports.login = async (req, res) => {
         }
 
         // Return success response
-        res.json({
+        res.status(200).json({
+            success: true,
             message: "Login successful",
             token,
             user: userResponse
@@ -1135,6 +1223,7 @@ module.exports.login = async (req, res) => {
     } catch (err) {
         console.error("Login error:", err);
         res.status(500).json({
+            success: false,
             message: "Server error during login. Please try again.",
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
@@ -1481,24 +1570,69 @@ module.exports.forgotPassword = async (req, res) => {
     }
 };
 
+const validatePassword = (password) => {
+    const errors = [];
+    
+    if (!password || password.length < 8) {
+        errors.push('Password must be at least 8 characters long');
+    }
+    
+    if (!/[a-zA-Z]/.test(password)) {
+        errors.push('Password must contain at least one letter');
+    }
+    
+    if (!/[0-9]/.test(password)) {
+        errors.push('Password must contain at least one number');
+    }
+    
+    return {
+        isValid: errors.length === 0,
+        errors
+    };
+};
+
 // RESET PASSWORD
 module.exports.resetPassword = async (req, res) => {
     try {
         const { email, otp, newPassword } = req.body;
         const { ipAddress, userAgent } = getRequestMetadata(req);
 
+        // 1. Validate required fields
         if (!email || !otp || !newPassword) {
             return res.status(400).json({
+                success: false,
                 message: "Email, OTP, and new password are required"
             });
         }
 
-        if (newPassword.length < 8 || !/[a-zA-Z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+        // 2. Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
             return res.status(400).json({
-                message: "Password must be at least 8 characters with letters and numbers"
+                success: false,
+                message: "Invalid email format"
             });
         }
 
+        // 3. Validate OTP format (should be 6 digits)
+        if (!/^\d{6}$/.test(otp.trim())) {
+            return res.status(400).json({
+                success: false,
+                message: "OTP must be 6 digits"
+            });
+        }
+
+        // 4. Validate password strength
+        const passwordValidation = validatePassword(newPassword);
+        if (!passwordValidation.isValid) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 8 characters with letters and numbers",
+                errors: passwordValidation.errors
+            });
+        }
+
+        // 5. Retrieve OTP record from database
         const [otpRecords] = await pool.query(
             `SELECT ov.*, u.id as user_id, u.password as current_password, u.email as user_email
              FROM otp_verifications ov
@@ -1511,73 +1645,218 @@ module.exports.resetPassword = async (req, res) => {
 
         if (otpRecords.length === 0) {
             return res.status(400).json({
-                message: "Invalid or expired OTP"
+                success: false,
+                message: "Invalid or expired OTP. Please request a new password reset."
             });
         }
 
         const otpRecord = otpRecords[0];
 
+        // 6. Check if OTP has expired
         if (new Date() > new Date(otpRecord.expires_at)) {
             return res.status(400).json({
+                success: false,
                 message: "OTP has expired. Please request a new one."
             });
         }
 
-        if (otpRecord.otp !== otp) {
+        // 7. Check if maximum attempts exceeded (optional security feature)
+        if (otpRecord.attempts >= 5) {
+            return res.status(400).json({
+                success: false,
+                message: "Maximum OTP attempts exceeded. Please request a new password reset."
+            });
+        }
+
+        // 8. Verify OTP code
+        if (otpRecord.otp !== otp.trim()) {
+            // Increment failed attempts
             await pool.query(
                 "UPDATE otp_verifications SET attempts = attempts + 1 WHERE id = ?",
                 [otpRecord.id]
             );
 
             // Log failed password reset attempt
-            await logUserActivity(otpRecord.user_id, 'failed_password_reset', ipAddress, userAgent, 'Invalid OTP for password reset', 'email');
+            await logUserActivity(
+                otpRecord.user_id, 
+                'failed_password_reset', 
+                ipAddress, 
+                userAgent, 
+                'Invalid OTP for password reset', 
+                'email'
+            );
 
             return res.status(400).json({
-                message: "Invalid OTP. Please try again."
+                success: false,
+                message: "Invalid OTP. Please try again.",
+                attemptsRemaining: 5 - (otpRecord.attempts + 1)
             });
         }
 
-        // Check if new password is same as current password
+        // 9. Check if new password is same as current password
         if (otpRecord.current_password) {
             const isSamePassword = await bcrypt.compare(newPassword, otpRecord.current_password);
             if (isSamePassword) {
                 return res.status(400).json({
+                    success: false,
                     message: "New password cannot be the same as your current password"
                 });
             }
         }
 
+        // 10. Hash the new password
         const hashedPassword = await bcrypt.hash(newPassword, 10);
 
+        // 11. Update user's password in database
         await pool.query(
-            "UPDATE users SET password = ?, password_changed_at = NOW() WHERE id = ?",
+            "UPDATE users SET password = ?, password_changed_at = NOW(), updated_at = NOW() WHERE id = ?",
             [hashedPassword, otpRecord.user_id]
         );
 
+        // 12. Mark OTP as used
         await pool.query(
             "UPDATE otp_verifications SET is_used = true, verified_at = NOW() WHERE id = ?",
             [otpRecord.id]
         );
 
-        // Log successful password reset
-        await logUserActivity(otpRecord.user_id, 'password_reset', ipAddress, userAgent, 'Password was reset successfully', 'email');
+        // 13. Invalidate any other unused OTPs for this user
+        await pool.query(
+            `UPDATE otp_verifications 
+             SET is_used = true 
+             WHERE user_id = ? AND is_used = false AND id != ?`,
+            [otpRecord.user_id, otpRecord.id]
+        );
 
-        // Send email notification about password change
+        // 14. Log successful password reset
+        await logUserActivity(
+            otpRecord.user_id, 
+            'password_reset', 
+            ipAddress, 
+            userAgent, 
+            'Password was reset successfully', 
+            'email'
+        );
+
+        // 15. Send email notification about password change
         await sendEmailNotification(
             otpRecord.user_email,
             'Password Changed Successfully',
-            `Your password was successfully changed from IP: ${ipAddress}. If you did not make this change, please contact support immediately.`
+            `
+                <div style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h2>Password Changed Successfully</h2>
+                    <p>Hello ${otpRecord.full_name || 'User'},</p>
+                    <p>Your password was successfully changed on ${new Date().toLocaleString()}.</p>
+                    <p><strong>IP Address:</strong> ${ipAddress}</p>
+                    <p><strong>Device:</strong> ${userAgent.substring(0, 50)}...</p>
+                    <p>If you did not make this change, please contact our support team immediately.</p>
+                    <br>
+                    <p>Best regards,<br>RealEstate Pro Team</p>
+                </div>
+            `
         );
 
+        // 16. Send success response
         res.json({
+            success: true,
             message: "Password has been reset successfully. Please login with your new password."
         });
 
     } catch (err) {
         console.error("Reset password error:", err);
+        
+        // Log error for debugging
+        console.error("Error details:", {
+            message: err.message,
+            stack: err.stack
+        });
+        
         res.status(500).json({
+            success: false,
             message: "Server error during password reset. Please try again.",
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
+
+module.exports.requestPasswordReset = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required"
+            });
+        }
+
+        // Check if user exists
+        const [users] = await pool.query(
+            "SELECT id, email, full_name FROM users WHERE email = ?",
+            [email.toLowerCase().trim()]
+        );
+
+        if (users.length === 0) {
+            // Don't reveal if email exists or not (security best practice)
+            return res.json({
+                success: true,
+                message: "If an account exists with this email, you will receive a password reset code."
+            });
+        }
+
+        const user = users[0];
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        // Store OTP in database
+        await pool.query(
+            `INSERT INTO otp_verifications (user_id, email, otp, purpose, expires_at, created_at)
+             VALUES (?, ?, ?, 'password_reset', ?, NOW())`,
+            [user.id, user.email, otp, expiresAt]
+        );
+
+        // Send OTP via email
+        await sendEmailNotification(
+            user.email,
+            'Password Reset Code',
+            `
+                <div style="font-family: Arial, sans-serif; padding: 20px;">
+                    <h2>Password Reset Request</h2>
+                    <p>Hello ${user.full_name || 'User'},</p>
+                    <p>You requested to reset your password. Use the code below:</p>
+                    <div style="background: #f0f0f0; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; margin: 20px 0;">
+                        ${otp}
+                    </div>
+                    <p>This code will expire in 10 minutes.</p>
+                    <p>If you didn't request this, please ignore this email.</p>
+                    <br>
+                    <p>Best regards,<br>RealEstate Pro Team</p>
+                </div>
+            `
+        );
+
+        // Log activity
+        await logUserActivity(
+            user.id,
+            'password_reset_requested',
+            ipAddress,
+            userAgent,
+            'Password reset OTP sent',
+            'email'
+        );
+
+        res.json({
+            success: true,
+            message: "If an account exists with this email, you will receive a password reset code."
+        });
+
+    } catch (err) {
+        console.error("Request password reset error:", err);
+        res.status(500).json({
+            success: false,
+            message: "Server error. Please try again."
         });
     }
 };

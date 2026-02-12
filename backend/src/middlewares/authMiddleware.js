@@ -1,9 +1,178 @@
-// backend/src/middlewares/authMiddleware.js
-/**
- * Middleware to protect routes - requires valid JWT token
- * Usage: router.get('/protected-route', protect, yourController)
- */
-exports.protect = (req, res, next) => {
+// backend/src/middleware/authMiddleware.js
+const jwt = require("jsonwebtoken");
+const pool = require('../config/db');
+
+// ==================== VERIFY TOKEN MIDDLEWARE ====================
+const verifyToken = async (req, res, next) => {
+    try {
+        // Extract token from Authorization header
+        const authHeader = req.headers.authorization;
+        
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({
+                success: false,
+                message: "Access denied. No token provided."
+            });
+        }
+
+        const token = authHeader.split(' ')[1];
+
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        // Fetch user from db to ensure account is still active
+        const [users] = await pool.query(
+            "SELECT id, email, role, is_blocked, is_verified FROM users WHERE id = ?",
+            [decoded.id]
+        );
+
+        if (users.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        const user = users[0];
+
+        // Check if account is blocked
+        if (user.is_blocked) {
+            return res.status(403).json({
+                success: false,
+                message: "Account has been blocked. Please contact support."
+            });
+        }
+
+        // Verify role matches token (prevent role escalation)
+        if (user.role.toLowerCase() !== decoded.role.toLowerCase()) {
+            return res.status(403).json({
+                success: false,
+                message: "Role mismatch detected. Please login again."
+            });
+        }
+
+        // Attach user data to request object
+        req.user = {
+            id: user.id,
+            email: user.email,
+            role: user.role.toLowerCase(),
+            isVerified: user.is_verified
+        };
+
+        next();
+
+    } catch (err) {
+        if (err.name === 'JsonWebTokenError') {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid token. Please login again."
+            });
+        }
+        if (err.name === 'TokenExpiredError') {
+            return res.status(401).json({
+                success: false,
+                message: "Token has expired. Please login again."
+            });
+        }
+
+        console.error("Token verification error:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Server error during authentication"
+        });
+    }
+};
+
+// ==================== ROLE-BASED ACCESS CONTROL ====================
+const requireRole = (...allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({
+                success: false,
+                message: "Authentication required"
+            });
+        }
+
+        // Normalize roles to lowercase for comparison
+        const normalizedAllowedRoles = allowedRoles.map(role => role.toLowerCase());
+        const userRole = req.user.role.toLowerCase();
+
+        if (!normalizedAllowedRoles.includes(userRole)) {
+            return res.status(403).json({
+                success: false,
+                message: `Access denied. Required role: ${allowedRoles.join(' or ')}`
+            });
+        }
+
+        next();
+    };
+};
+
+// ==================== OPTIONAL AUTH (for routes that work with/without auth) ====================
+const optionalAuth = async (req, res, next) => {
+    try {
+        const authHeader = req.headers.authorization;
+        
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            // No token provided, continue without user data
+            req.user = null;
+            return next();
+        }
+
+        const token = authHeader.split(' ')[1];
+
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+            const [users] = await pool.query(
+                "SELECT id, email, role, is_blocked FROM users WHERE id = ?",
+                [decoded.id]
+            );
+
+            if (users.length > 0 && !users[0].is_blocked) {
+                req.user = {
+                    id: users[0].id,
+                    email: users[0].email,
+                    role: users[0].role.toLowerCase()
+                };
+            } else {
+                req.user = null;
+            }
+        } catch (tokenError) {
+            // Invalid/expired token - continue without user data
+            req.user = null;
+        }
+
+        next();
+
+    } catch (err) {
+        console.error("Optional auth error:", err);
+        req.user = null;
+        next();
+    }
+};
+
+// ==================== VERIFY EMAIL (require verified email) ====================
+const requireVerifiedEmail = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({
+            success: false,
+            message: "Authentication required"
+        });
+    }
+
+    if (!req.user.isVerified) {
+        return res.status(403).json({
+            success: false,
+            message: "Email verification required. Please verify your email address."
+        });
+    }
+
+    next();
+};
+
+// ==================== PROTECT MIDDLEWARE ====================
+const protect = (req, res, next) => {
     try {
         // Get authorization header
         const header = req.headers.authorization;
@@ -73,7 +242,7 @@ exports.protect = (req, res, next) => {
  * 
  * @param {...string} allowedRoles - Roles that are allowed to access the route
  */
-exports.allow = (...allowedRoles) => {
+const allow = (...allowedRoles) => {
     return (req, res, next) => {
         // Check if user exists in request (protect middleware should run first)
         if (!req.user) {
@@ -98,10 +267,8 @@ exports.allow = (...allowedRoles) => {
     };
 };
 
-// backend/src/middleware/authMiddleware.js
-const jwt = require("jsonwebtoken");
-
-exports.authenticate = (req, res, next) => {
+// ==================== AUTHENTICATE MIDDLEWARE ====================
+const authenticate = (req, res, next) => {
     try {
         const token = req.headers.authorization?.split(" ")[1];
         
@@ -118,44 +285,13 @@ exports.authenticate = (req, res, next) => {
 };
 
 /**
- * Optional middleware - attaches user if token exists but doesn't fail if missing
- * Useful for routes that work for both authenticated and non-authenticated users
- * Usage: router.get('/public-route', optionalAuth, yourController)
- */
-exports.optionalAuth = (req, res, next) => {
-    try {
-        const header = req.headers.authorization;
-
-        if (header && header.startsWith("Bearer ")) {
-            const token = header.split(" ")[1];
-            
-            if (token) {
-                const decoded = jwt.verify(token, process.env.JWT_SECRET);
-                req.user = decoded;
-            }
-        }
-
-        // Always proceed to next middleware
-        next();
-
-    } catch (err) {
-        // If token is invalid, just proceed without user
-        // Don't throw error for optional auth
-        if (process.env.NODE_ENV === 'development') {
-            console.log("Optional auth failed:", err.message);
-        }
-        next();
-    }
-};
-
-/**
  * Middleware to check if user owns the resource they're trying to access
  * Useful for routes where users can only access their own data
  * Usage: router.get('/users/:userId', protect, checkOwnership('userId'), yourController)
  * 
  * @param {string} paramName - Name of the URL parameter containing the user ID
  */
-exports.checkOwnership = (paramName = 'id') => {
+const checkOwnership = (paramName = 'id') => {
     return (req, res, next) => {
         if (!req.user) {
             return res.status(401).json({
@@ -189,10 +325,8 @@ exports.checkOwnership = (paramName = 'id') => {
  * Middleware to verify user account is not blocked
  * Usage: router.get('/protected-route', protect, checkAccountStatus, yourController)
  */
-exports.checkAccountStatus = async (req, res, next) => {
+const checkAccountStatus = async (req, res, next) => {
     try {
-        const pool = require("../config/db");
-
         const [users] = await pool.query(
             "SELECT is_blocked FROM users WHERE id = ?",
             [req.user.id]
@@ -221,4 +355,17 @@ exports.checkAccountStatus = async (req, res, next) => {
             error: "SERVER_ERROR"
         });
     }
+};
+
+// ==================== EXPORTS ====================
+module.exports = {
+    verifyToken,
+    requireRole,
+    optionalAuth,
+    requireVerifiedEmail,
+    authenticate,
+    protect,
+    allow,
+    checkOwnership,
+    checkAccountStatus
 };

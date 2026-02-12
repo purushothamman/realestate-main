@@ -160,7 +160,7 @@ const ExploreProperties = () => {
       case 'New':
         return { colors: ['#10b981', '#14b8a6'], icon: Award };
       case 'Ready':
-        return { colors: ['#3b82f6', '#6366f1'], icon: Home };
+        return { colors: ['#2D6A4F', '#2D6A4F'], icon: Home };
       case 'Under Construction':
         return { colors: ['#f97316', '#ef4444'], icon: Building2 };
       default:
@@ -211,7 +211,7 @@ const ExploreProperties = () => {
           <View style={styles.headerLeft}>
             <View style={styles.logoContainer}>
               <LinearGradient
-                colors={['#2563eb', '#6366f1']}
+                colors={['#2D6A4F', '#2D6A4F']}
                 style={styles.logoGradient}
               >
                 <Building2 width={24} height={24} color="#ffffff" strokeWidth={2.5} />
@@ -265,7 +265,7 @@ const ExploreProperties = () => {
               </TouchableOpacity>
               <TouchableOpacity>
                 <LinearGradient
-                  colors={['#2563eb', '#6366f1']}
+                  colors={['#2D6A4F', '#2D6A4F']}
                   style={styles.searchActionButton}
                 >
                   <Search width={18} height={18} color="#ffffff" strokeWidth={2} />
@@ -283,7 +283,7 @@ const ExploreProperties = () => {
         >
           <TouchableOpacity style={styles.filtersMainButton}>
             <LinearGradient
-              colors={['#2563eb', '#6366f1']}
+              colors={['#2D6A4F', '#2D6A4F']}
               style={styles.filtersMainButtonGradient}
             >
               <Filter width={18} height={18} color="#ffffff" strokeWidth={2} />
@@ -384,7 +384,7 @@ const ExploreProperties = () => {
         <View style={styles.summaryContainer}>
           <View style={styles.summaryLeft}>
             <LinearGradient
-              colors={['#3b82f6', '#6366f1']}
+              colors={['#2D6A4F', '#2D6A4F']}
               style={styles.summaryIcon}
             >
               <TrendingUp width={18} height={18} color="#ffffff" strokeWidth={2} />
@@ -491,7 +491,7 @@ const ExploreProperties = () => {
                     <View style={styles.propertyStats}>
                       <View style={styles.propertyStat}>
                         <View style={styles.propertyStatIconBlue}>
-                          <Home width={18} height={18} color="#2563eb" strokeWidth={2} />
+                          <Home width={18} height={18} color="#2D6A4F" strokeWidth={2} />
                         </View>
                         <Text style={styles.propertyStatText}>{property.bhk}</Text>
                       </View>
@@ -532,7 +532,7 @@ const ExploreProperties = () => {
                       
                       <TouchableOpacity>
                         <LinearGradient
-                          colors={['#2563eb', '#6366f1']}
+                          colors={['#2D6A4F', '#2D6A4F']}
                           style={styles.viewButton}
                         >
                           <Text style={styles.viewButtonText}>View</Text>
@@ -550,11 +550,11 @@ const ExploreProperties = () => {
           <View style={styles.emptyState}>
             <View style={styles.emptyStateIconContainer}>
               <View style={styles.emptyStateIconBg}>
-                <Search width={64} height={64} color="#2563eb" strokeWidth={1.5} />
+                <Search width={64} height={64} color="#2D6A4F" strokeWidth={1.5} />
               </View>
               <View style={styles.emptyStateIconBadge}>
                 <LinearGradient
-                  colors={['#2563eb', '#6366f1']}
+                  colors={['#2D6A4F', '#2D6A4F']}
                   style={styles.emptyStateIconBadgeGradient}
                 >
                   <Heart width={24} height={24} color="#ffffff" strokeWidth={2} />
@@ -569,7 +569,7 @@ const ExploreProperties = () => {
             
             <TouchableOpacity onPress={clearFilters}>
               <LinearGradient
-                colors={['#2563eb', '#6366f1']}
+                colors={['#2D6A4F', '#2D6A4F']}
                 style={styles.emptyStateButton}
               >
                 <Text style={styles.emptyStateButtonText}>Clear All Filters</Text>
@@ -582,7 +582,7 @@ const ExploreProperties = () => {
       {/* FAB */}
       <TouchableOpacity style={styles.fab}>
         <LinearGradient
-          colors={['#2563eb', '#6366f1']}
+          colors={['#2D6A4F', '#2D6A4F']}
           style={styles.fabGradient}
         >
           <Plus width={28} height={28} color="#ffffff" strokeWidth={2.5} />
@@ -593,7 +593,7 @@ const ExploreProperties = () => {
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem}>
           <LinearGradient
-            colors={['#2563eb', '#6366f1']}
+            colors={['#2D6A4F', '#2D6A4F']}
             style={styles.navItemActive}
           >
             <Home width={24} height={24} color="#ffffff" strokeWidth={2} />
@@ -718,7 +718,7 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#2563eb'
+    color: '#2D6A4F'
   },
   appTagline: {
     fontSize: 12,
@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   heroTitleGradient: {
-    color: '#2563eb'
+    color: '#2D6A4F'
   },
   heroSubtitle: {
     fontSize: 16,
@@ -883,7 +883,7 @@ const styles = StyleSheet.create({
     color: '#374151'
   },
   typeFilterTextActive: {
-    color: '#2563eb'
+    color: '#2D6A4F'
   },
   
   // Status Filters & View Mode
@@ -946,8 +946,8 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   viewModeButtonActive: {
-    backgroundColor: '#2563eb',
-    shadowColor: '#2563eb',
+    backgroundColor: '#2D6A4F',
+    shadowColor: '#2D6A4F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -997,7 +997,7 @@ const styles = StyleSheet.create({
     elevation: 2
   },
   clearButtonText: {
-    color: '#2563eb',
+    color: '#2D6A4F',
     fontSize: 14,
     fontWeight: '500'
   },
@@ -1223,7 +1223,7 @@ const styles = StyleSheet.create({
   priceValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#2563eb'
+    color: '#2D6A4F'
   },
   viewButton: {
     flexDirection: 'row',
@@ -1393,7 +1393,7 @@ const styles = StyleSheet.create({
   navItemTextActive: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#2563eb'
+    color: '#2D6A4F'
   },
   navItemTextInactive: {
     fontSize: 12,
