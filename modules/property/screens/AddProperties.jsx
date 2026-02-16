@@ -48,7 +48,7 @@ const getApiUrl = () => {
 
 const API_BASE_URL = getApiUrl();
 
-const AddProperty = ({ onBack, onShowEditProperty }) => {
+const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
   const [propertyData, setPropertyData] = useState({
     title: '',
     propertyType: '',
@@ -275,8 +275,14 @@ const AddProperty = ({ onBack, onShowEditProperty }) => {
             {
               text: 'Great!',
               onPress: () => {
-                if (onShowEditProperty) onShowEditProperty(); // Close or navigate back
-                else if (onBack) onBack();
+                // Navigate to builder dashboard to see live updated data
+                if (onPropertyAdded) {
+                  onPropertyAdded();
+                } else if (onShowEditProperty) {
+                  onShowEditProperty();
+                } else if (onBack) {
+                  onBack();
+                }
               }
             }
           ]

@@ -103,9 +103,9 @@ export default function HomeScreen({ navigation }) {
       // Fetch all initial data
       await Promise.all([
         fetchProperties(token),
-        fetchUserStats(token, userData.id),
-        fetchNotifications(token, userData.id),
-        fetchMessages(token, userData.id),
+        // fetchUserStats(token, userData.id),
+        // fetchNotifications(token, userData.id),
+        // fetchMessages(token, userData.id),
       ]);
 
     } catch (err) {
@@ -140,88 +140,89 @@ export default function HomeScreen({ navigation }) {
     } catch (err) {
       console.error('❌ Error fetching properties:', err);
       // Use fallback mock data if API fails
-      setProperties(mockProperties);
+      // setProperties(mockProperties);
+      setProperties([]);
     }
   };
 
   // Fetch User Stats
-  const fetchUserStats = async (token, userId) => {
-    try {
-      console.log('📊 Fetching user stats...');
+  // const fetchUserStats = async (token, userId) => {
+  //   try {
+  //     console.log('📊 Fetching user stats...');
 
-      const response = await fetch(`${API_BASE_URL}/users/${userId}/stats`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+  //     const response = await fetch(`${API_BASE_URL}/users/${userId}/stats`, {
+  //       method: 'GET',
+  //       headers: {
+  //         'Authorization': `Bearer ${token}`,
+  //         'Content-Type': 'application/json',
+  //       },
+  //     });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch stats');
-      }
+  //     if (!response.ok) {
+  //       throw new Error('Failed to fetch stats');
+  //     }
 
-      const data = await response.json();
-      console.log('✅ Stats loaded:', data.stats);
+  //     const data = await response.json();
+  //     console.log('✅ Stats loaded:', data.stats);
 
-      setStats(data.stats || { saved: 0, viewed: 0, new: 0 });
-    } catch (err) {
-      console.error('❌ Error fetching stats:', err);
-      // Keep default stats
-    }
-  };
+  //     setStats(data.stats || { saved: 0, viewed: 0, new: 0 });
+  //   } catch (err) {
+  //     console.error('❌ Error fetching stats:', err);
+  //     // Keep default stats
+  //   }
+  // };
 
   // Fetch Notifications
-  const fetchNotifications = async (token, userId) => {
-    try {
-      console.log('🔔 Fetching notifications...');
+  // const fetchNotifications = async (token, userId) => {
+  //   try {
+  //     console.log('🔔 Fetching notifications...');
 
-      const response = await fetch(`${API_BASE_URL}/users/${userId}/notifications`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+  //     const response = await fetch(`${API_BASE_URL}/users/${userId}/notifications`, {
+  //       method: 'GET',
+  //       headers: {
+  //         'Authorization': `Bearer ${token}`,
+  //         'Content-Type': 'application/json',
+  //       },
+  //     });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch notifications');
-      }
+  //     if (!response.ok) {
+  //       throw new Error('Failed to fetch notifications');
+  //     }
 
-      const data = await response.json();
-      console.log('✅ Notifications loaded:', data.notifications?.length || 0);
+  //     const data = await response.json();
+  //     console.log('✅ Notifications loaded:', data.notifications?.length || 0);
 
-      setNotifications(data.notifications || []);
-    } catch (err) {
-      console.error('❌ Error fetching notifications:', err);
-    }
-  };
+  //     setNotifications(data.notifications || []);
+  //   } catch (err) {
+  //     console.error('❌ Error fetching notifications:', err);
+  //   }
+  // };
 
   // Fetch Messages
-  const fetchMessages = async (token, userId) => {
-    try {
-      console.log('💬 Fetching messages...');
+  // const fetchMessages = async (token, userId) => {
+  //   try {
+  //     console.log('💬 Fetching messages...');
 
-      const response = await fetch(`${API_BASE_URL}/users/${userId}/messages/unread`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+  //     const response = await fetch(`${API_BASE_URL}/users/${userId}/messages/unread`, {
+  //       method: 'GET',
+  //       headers: {
+  //         'Authorization': `Bearer ${token}`,
+  //         'Content-Type': 'application/json',
+  //       },
+  //     });
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch messages');
-      }
+  //     if (!response.ok) {
+  //       throw new Error('Failed to fetch messages');
+  //     }
 
-      const data = await response.json();
-      console.log('✅ Unread messages:', data.unreadCount || 0);
+  //     const data = await response.json();
+  //     console.log('✅ Unread messages:', data.unreadCount || 0);
 
-      setMessages(data.messages || []);
-    } catch (err) {
-      console.error('❌ Error fetching messages:', err);
-    }
-  };
+  //     setMessages(data.messages || []);
+  //   } catch (err) {
+  //     console.error('❌ Error fetching messages:', err);
+  //   }
+  // };
 
   // Handle Pull to Refresh
   const onRefresh = useCallback(async () => {

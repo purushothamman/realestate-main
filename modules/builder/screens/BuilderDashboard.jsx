@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,10 @@ import {
   ImageBackground,
   Dimensions,
   StatusBar,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Home,
   Building2,
@@ -16,6 +19,7 @@ import {
   TrendingUp,
   FileText,
   Users,
+  User,
   Calendar,
   Bell,
   Settings,
@@ -26,9 +30,22 @@ import {
   MessageSquare,
   BarChart3,
   MapPin,
+  Check,
+  X,
 } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
+
+// API CONFIGURATION
+const getApiUrl = () => {
+  if (Platform.OS === 'android') {
+    return 'http://10.0.2.2:5000/api';
+  } else {
+    return 'http://localhost:5000/api';
+  }
+};
+
+const API_BASE_URL = getApiUrl();
 
 export default function BuilderDashboard({
   builderName = 'John Anderson',
@@ -38,87 +55,157 @@ export default function BuilderDashboard({
   onAddProperty,
   onMyProperties,
 }) {
-  // Dashboard stats
-  const stats = {
-    activeProjects: 8,
-    totalListings: 24,
-    pendingInquiries: 15,
-    upcomingDeadlines: 3,
+  // State management
+  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [inquiries, setInquiries] = useState([]);
+  const [loadingInquiries, setLoadingInquiries] = useState(false);
+
+  // Fetch dashboard data
+  useEffect(() => {
+    fetchDashboardData();
+    fetchInquiries();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/builder/dashboard`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch dashboard data');
+      }
+
+      setDashboardData(data);
+    } catch (err) {
+      console.error('Dashboard fetch error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Recent listings
-  const recentListings = [
-    {
-      id: '1',
-      title: 'Luxury Villa - Sunset Hills',
-      location: 'Beverly Hills, CA',
-      price: '$2,450,000',
-      status: 'active',
-      views: 342,
-      inquiries: 12,
-      image: 'https://images.unsplash.com/photo-1706808849780-7a04fbac83ef?w=1080',
-      beds: 5,
-      baths: 4,
-      area: '4,200 sq ft',
-      type: 'Villa',
-      description: 'Stunning luxury villa with modern architecture',
-    },
-    {
-      id: '2',
-      title: 'Modern Apartment Complex',
-      location: 'Downtown LA',
-      price: '$850,000',
-      status: 'pending',
-      views: 189,
-      inquiries: 8,
-      image: 'https://images.unsplash.com/photo-1515263487990-61b07816b324?w=1080',
-      beds: 3,
-      baths: 2,
-      area: '2,100 sq ft',
-      type: 'Apartment',
-      description: 'Contemporary apartment in prime location',
-    },
-    {
-      id: '3',
-      title: 'Beachfront Condos',
-      location: 'Malibu, CA',
-      price: '$1,250,000',
-      status: 'active',
-      views: 521,
-      inquiries: 23,
-      image: 'https://images.unsplash.com/photo-1598635031829-4bfae29d33eb?w=1080',
-      beds: 4,
-      baths: 3,
-      area: '3,500 sq ft',
-      type: 'Condo',
-      description: 'Exclusive beachfront condos with ocean views',
-    },
-  ];
+  // Fetch inquiries
+  const fetchInquiries = async () => {
+    try {
+      setLoadingInquiries(true);
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) return;
 
-  // Active projects
-  const activeProjects = [
-    {
-      id: '1',
-      name: 'Sunset Residences Phase 2',
-      progress: 75,
-      deadline: 'Dec 15, 2025',
-      status: 'on-track',
-    },
-    {
-      id: '2',
-      name: 'Green Valley Townhomes',
-      progress: 45,
-      deadline: 'Jan 30, 2026',
-      status: 'on-track',
-    },
-    {
-      id: '3',
-      name: 'Downtown Luxury Apartments',
-      progress: 60,
-      deadline: 'Nov 20, 2025',
-      status: 'delayed',
-    },
-  ];
+      const response = await fetch(`${API_BASE_URL}/inquiries/builder?status=pending`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setInquiries(data.inquiries || []);
+      }
+    } catch (err) {
+      console.error('Fetch inquiries error:', err);
+    } finally {
+      setLoadingInquiries(false);
+    }
+  };
+
+  // Handle accept inquiry
+  const handleAcceptInquiry = async (inquiryId) => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE_URL}/inquiries/${inquiryId}/accept`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        Alert.alert('Success', 'Inquiry accepted! You can now chat with the user.');
+        fetchInquiries(); // Refresh inquiries list
+      } else {
+        Alert.alert('Error', data.message || 'Failed to accept inquiry');
+      }
+    } catch (error) {
+      console.error('Accept inquiry error:', error);
+      Alert.alert('Error', 'Failed to accept inquiry');
+    }
+  };
+
+  // Handle reject inquiry
+  const handleRejectInquiry = async (inquiryId) => {
+    Alert.alert(
+      'Reject Inquiry',
+      'Are you sure you want to reject this inquiry?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const token = await AsyncStorage.getItem('authToken');
+              const response = await fetch(`${API_BASE_URL}/inquiries/${inquiryId}/reject`, {
+                method: 'PUT',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  rejection_reason: 'Not interested at this time'
+                })
+              });
+
+              const data = await response.json();
+              if (response.ok && data.success) {
+                Alert.alert('Success', 'Inquiry rejected');
+                fetchInquiries(); // Refresh inquiries list
+              } else {
+                Alert.alert('Error', data.message || 'Failed to reject inquiry');
+              }
+            } catch (error) {
+              console.error('Reject inquiry error:', error);
+              Alert.alert('Error', 'Failed to reject inquiry');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Dashboard stats - use API data or fallback to defaults
+  const stats = dashboardData?.stats || {
+    activeProjects: 0,
+    totalListings: 0,
+    pendingInquiries: 0,
+    upcomingDeadlines: 0,
+  };
+
+  // Recent listings - use API data or empty array
+  const recentListings = dashboardData?.recentListings || [];
+
+  // Active projects - use API data or empty array  
+  const activeProjects = dashboardData?.activeListings || [];
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -151,6 +238,46 @@ export default function BuilderDashboard({
       onPropertyClick(listing);
     }
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2D6A4F" />
+          <Text style={styles.loadingText}>Loading dashboard...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Unable to load dashboard</Text>
+          <Text style={styles.errorMessage}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={fetchDashboardData}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+          {onBack && (
+            <TouchableOpacity
+              style={styles.backButtonError}
+              onPress={onBack}
+            >
+              <Text style={styles.backButtonTextError}>Go Back</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -316,7 +443,7 @@ export default function BuilderDashboard({
             <View key={project.id} style={styles.projectCard}>
               <View style={styles.projectHeader}>
                 <View style={styles.projectInfo}>
-                  <Text style={styles.projectName}>{project.name}</Text>
+                  <Text style={styles.projectName}>{project.title}</Text>
                   <View style={styles.projectDeadline}>
                     <Calendar size={12} color="#9CA3AF" strokeWidth={2} />
                     <Text style={styles.projectDeadlineText}>
@@ -364,6 +491,63 @@ export default function BuilderDashboard({
           ))}
         </View>
 
+        {/* Pending Inquiries */}
+        {inquiries.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleRow}>
+                <Text style={styles.sectionTitleLarge}>Pending Inquiries</Text>
+                <View style={styles.inquiryBadge}>
+                  <Text style={styles.inquiryBadgeText}>{inquiries.length}</Text>
+                </View>
+              </View>
+            </View>
+
+            {inquiries.map((inquiry) => (
+              <View key={inquiry.id} style={styles.inquiryCard}>
+                <View style={styles.inquiryImageContainer}>
+                  <Image
+                    source={{ uri: inquiry.property_images?.[0] || 'https://via.placeholder.com/100' }}
+                    style={styles.inquiryImage}
+                    resizeMode="cover"
+                  />
+                </View>
+                <View style={styles.inquiryContent}>
+                  <Text style={styles.inquiryPropertyTitle} numberOfLines={1}>
+                    {inquiry.property_title}
+                  </Text>
+                  <View style={styles.inquiryUserRow}>
+                    <User size={14} color="#6B7280" strokeWidth={2} />
+                    <Text style={styles.inquiryUserName}>{inquiry.user_name}</Text>
+                  </View>
+                  <Text style={styles.inquiryMessage} numberOfLines={2}>
+                    {inquiry.initial_message}
+                  </Text>
+                  <Text style={styles.inquiryTime}>
+                    {new Date(inquiry.created_at).toLocaleDateString()}
+                  </Text>
+                  <View style={styles.inquiryActions}>
+                    <TouchableOpacity
+                      style={styles.acceptButton}
+                      onPress={() => handleAcceptInquiry(inquiry.id)}
+                    >
+                      <Check size={16} color="#FFFFFF" strokeWidth={2} />
+                      <Text style={styles.acceptButtonText}>Accept</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.rejectButton}
+                      onPress={() => handleRejectInquiry(inquiry.id)}
+                    >
+                      <X size={16} color="#DC2626" strokeWidth={2} />
+                      <Text style={styles.rejectButtonText}>Reject</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* Recent Listings */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -386,7 +570,7 @@ export default function BuilderDashboard({
                   <View style={styles.listingLocation}>
                     <MapPin size={12} color="#9CA3AF" strokeWidth={2} />
                     <Text style={styles.listingLocationText}>
-                      {listing.location}
+                      {listing.city}
                     </Text>
                   </View>
                   <Text style={styles.listingPrice}>{listing.price}</Text>
@@ -868,6 +1052,166 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#2D6A4F',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    padding: 24,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: '#2D6A4F',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  backButtonError: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  backButtonTextError: {
+    color: '#2D6A4F',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Inquiry styles
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  inquiryBadge: {
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  inquiryBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  inquiryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    flexDirection: 'row',
+    gap: 16,
+  },
+  inquiryImageContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  inquiryImage: {
+    width: '100%',
+    height: '100%',
+  },
+  inquiryContent: {
+    flex: 1,
+  },
+  inquiryPropertyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 6,
+  },
+  inquiryUserRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  inquiryUserName: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  inquiryMessage: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  inquiryTime: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 12,
+  },
+  inquiryActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  acceptButton: {
+    flex: 1,
+    backgroundColor: '#2D6A4F',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  acceptButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  rejectButton: {
+    flex: 1,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  rejectButtonText: {
+    color: '#DC2626',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 

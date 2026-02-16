@@ -24,7 +24,9 @@ router.post("/", protect,
     property.createProperty
 );
 
-router.get("/", property.getVerifiedProperties)
+router.get("/", property.getAllProperties)
+
+router.post("/:id/view", protect, property.addPropertyView)
 
 console.log("✅ All property routes registered");
 

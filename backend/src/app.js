@@ -6,6 +6,9 @@ const propertyRoutes = require("./routes/propertyRoutes")
 const bookingRoutes = require("./routes/bookingRoutes")
 const chatRoutes = require("./routes/chatRoutes")
 const { protect } = require("./middlewares/authMiddleware");
+const builderRoutes = require("./routes/builderRoutes");
+const inquiryRoutes = require("./routes/inquiryRoutes");
+
 require("dotenv").config();
 
 const app = express();
@@ -40,6 +43,12 @@ app.use("/api/properties", propertyRoutes);
 app.use("/api/booking", bookingRoutes);
 app.use("/api/chats", chatRoutes);
 
+console.log("✅ Registering /api/builder routes");
+app.use("/api/builder", builderRoutes);
+
+console.log("✅ Registering /api/inquiries routes");
+app.use("/api/inquiries", inquiryRoutes);
+
 // Root route
 app.get("/", (req, res) => {
   res.json({ message: "RealEstate API is running" });
@@ -68,6 +77,7 @@ app.use((req, res) => {
   console.log("     - POST /api/auth/register");
   console.log("     - POST /api/auth/login");
   console.log("     - POST /api/properties/add");
+  console.log("     - GET /api/builder/dashboard");
   console.log("❌".repeat(30) + "\n");
 
   res.status(404).json({

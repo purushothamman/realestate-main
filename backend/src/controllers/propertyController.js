@@ -203,17 +203,15 @@ exports.getAllProperties = async (req, res) => {
                 u.name as owner_name,
                 u.email as owner_email,
                 u.phone as owner_phone,
-                COUNT(DISTINCT f.id) as favorite_count,
-                COUNT(DISTINCT v.id) as view_count,
+                (SELECT COUNT(*) FROM favorites f WHERE f.property_id = p.id) as favorite_count,
+                (SELECT COUNT(*) FROM property_views v WHERE v.property_id = p.id) as view_count,
                 EXISTS(
-                    SELECT 1 FROM favorites 
-                    WHERE property_id = p.property_id AND user_id = ?
+                    SELECT 1 FROM favorites f2
+                    WHERE f2.property_id = p.id AND f2.user_id = ?
                 ) as is_favorited
             FROM properties p
-            LEFT JOIN users u ON p.owner_id = u.id
-            LEFT JOIN favorites f ON p.property_id = f.property_id
-            LEFT JOIN property_views v ON p.property_id = v.property_id
-            WHERE p.is_active = TRUE AND p.status = 'active' AND p.verification_status = 'verified'
+            LEFT JOIN users u ON p.uploaded_by = u.id
+            WHERE p.is_active = TRUE AND p.status = 'active'
         `;
 
         const params = [req.user?.id || 0];
@@ -249,7 +247,6 @@ exports.getAllProperties = async (req, res) => {
         }
 
         query += ` 
-            GROUP BY p.property_id
             ORDER BY p.created_at DESC
             LIMIT ? OFFSET ?
         `;
@@ -258,7 +255,7 @@ exports.getAllProperties = async (req, res) => {
         const [properties] = await pool.query(query, params);
         
         const transformedProperties = properties.map(prop => ({
-            id: prop.property_id,
+            id: prop.id,
             title: prop.title,
             price: prop.price,
             purpose: prop.purpose,
@@ -395,7 +392,7 @@ exports.searchProperties = async (req, res) => {
                     WHERE property_id = p.property_id AND user_id = ?
                 ) as is_favorited
             FROM properties p
-            WHERE p.is_active = TRUE AND p.status = 'active' AND p.verification_status = 'verified'
+            WHERE p.is_active = TRUE AND p.status = 'active'
             AND (
                 p.title LIKE ? OR
                 p.description LIKE ? OR
@@ -438,6 +435,27 @@ exports.searchProperties = async (req, res) => {
         });
     }
 };
+
+exports.addPropertyView = async (req, res) => {
+  try {
+    const propertyId = req.params.id;
+    const userId = req.user?.id || null;
+
+    await pool.query(
+      "INSERT INTO property_views (user_id, property_id) VALUES (?, ?)",
+      [userId, propertyId]
+    );
+
+    res.json({ success: true });
+
+  } catch (error) {
+    console.error("View error:", error);
+    res.status(500).json({ success: false });
+  }
+};
+
+
+
 
 // const pool = require("../config/db")
 

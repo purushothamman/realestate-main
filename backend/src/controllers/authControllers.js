@@ -780,32 +780,30 @@ module.exports.register = async (req, res) => {
         }
 
         // For builders, check if GST or PAN already exists
-        if (role === "builder") {
-            const [existingGst] = await connection.query(
-                "SELECT user_id FROM builder WHERE gst_no = ?",
-                [gstNo.trim()]
-            );
+        const [existingGst] = await connection.query(
+            "SELECT user_id FROM builders WHERE gst_no = ?",
+            [gstNo.trim()]
+        );
 
-            if (existingGst.length > 0) {
-                await connection.rollback();
-                connection.release();
-                return res.status(409).json({
-                    message: "This GST number is already registered."
-                });
-            }
+        if (existingGst.length > 0) {
+            await connection.rollback();
+            connection.release();
+            return res.status(409).json({
+                message: "This GST number is already registered."
+            });
+        }
 
-            const [existingPan] = await connection.query(
-                "SELECT user_id FROM builder WHERE pan_no = ?",
-                [panNo.trim()]
-            );
+        const [existingPan] = await connection.query(
+            "SELECT user_id FROM builders WHERE pan_no = ?",
+            [panNo.trim()]
+        );
 
-            if (existingPan.length > 0) {
-                await connection.rollback();
-                connection.release();
-                return res.status(409).json({
-                    message: "This PAN number is already registered."
-                });
-            }
+        if (existingPan.length > 0) {
+            await connection.rollback();
+            connection.release();
+            return res.status(409).json({
+                message: "This PAN number is already registered."
+            });
         }
 
         console.log("Register payload:", {
@@ -863,20 +861,16 @@ module.exports.register = async (req, res) => {
             }
 
             await connection.query(
-                `INSERT INTO builder (
-                    user_id, name, email, phone, password, profile_image,
+                `INSERT INTO builders (
+                    user_id,
                     company_name, gst_no, pan_no, website,
                     registration_certificate, description,
-                    experience_years, total_projects,
-                    address, city, state, pincode
-                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    experience_years,
+                    address, city, state, pincode,
+                    profile_image
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     userId,
-                    name?.trim() || null,
-                    email?.toLowerCase().trim() || null,
-                    phone?.trim() || null,
-                    hashed,
-                    profileImage?.trim() || null,
                     companyName?.trim() || null,
                     gstNo?.trim() || null,
                     panNo?.trim() || null,
@@ -884,11 +878,11 @@ module.exports.register = async (req, res) => {
                     registrationCertificate?.trim() || null,
                     description?.trim() || null,
                     parsedExperienceYears,
-                    parsedTotalProjects,
                     address?.trim() || null,
                     city?.trim() || null,
                     state?.trim() || null,
-                    pincode?.trim() || null
+                    pincode?.trim() || null,
+                    profileImage?.trim() || null
                 ]
             );
         }
@@ -948,7 +942,8 @@ module.exports.register = async (req, res) => {
             user: userResponse
         });
 
-    } catch (err) {
+    }
+    catch (err) {
         // Rollback transaction on error
         try {
             await connection.rollback();

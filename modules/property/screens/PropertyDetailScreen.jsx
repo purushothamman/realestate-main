@@ -9,7 +9,9 @@ import {
   Dimensions,
   StatusBar,
   Alert,
+  Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ArrowLeft,
   Heart,
@@ -58,22 +60,51 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
 
-  // Extract property data from route params or use defaults
-  const propertyData = route?.params || {};
-  const propertyId = propertyData.propertyId || 'property-123';
-  const propertyName = propertyData.propertyName || 'Modern Luxury Villa';
-  const propertyAddress = propertyData.propertyAddress || '1245 Sunset Boulevard, Beverly Hills, CA 90210';
-  const propertyPrice = propertyData.propertyPrice || '$789,000';
+  // API Configuration
+  const getApiUrl = () => {
+    const platform = Platform.OS;
+    if (platform === 'android') {
+      return 'http://10.0.2.2:5000/api';
+    } else if (platform === 'ios') {
+      return 'http://localhost:5000/api';
+    } else {
+      return 'http://localhost:5000/api';
+    }
+  };
 
-  const propertyImages = [
-    'https://images.unsplash.com/photo-1706808849780-7a04fbac83ef?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBsdXh1cnklMjBob3VzZSUyMGV4dGVyaW9yfGVufDF8fHx8MTc2NjE0Mzk2MHww&ixlib=rb-4.1.0&q=80&w=1080',
-    'https://images.unsplash.com/photo-1611094016919-36b65678f3d6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBsaXZpbmclMjByb29tJTIwaW50ZXJpb3J8ZW58MXx8fHwxNzY2MjExNDU4fDA&ixlib=rb-4.1.0&q=80&w=1080',
-    'https://images.unsplash.com/photo-1682888813795-192fca4a10d9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBraXRjaGVuJTIwZGVzaWdufGVufDF8fHx8MTc2NjE2ODI3N3ww&ixlib=rb-4.1.0&q=80&w=1080',
-    'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiZWRyb29tJTIwaW50ZXJpb3IlMjBkZXNpZ258ZW58MXx8fHwxNzY2MjMwMTM3fDA&ixlib=rb-4.1.0&q=80&w=1080',
-    'https://images.unsplash.com/photo-1625578324458-a106197ff141?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBiYXRocm9vbSUyMGludGVyaW9yfGVufDF8fHx8MTc2NjEyNjk4MXww&ixlib=rb-4.1.0&q=80&w=1080',
-    'https://images.unsplash.com/photo-1711110065918-388182f86e00?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiYWNreWFyZCUyMHBvb2wlMjBsdXh1cnl8ZW58MXx8fHwxNzY2MjM0NTc0fDA&ixlib=rb-4.1.0&q=80&w=1080',
-    'https://images.unsplash.com/photo-1625496015040-2f461a6a717b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxob21lJTIwb2ZmaWNlJTIwaW50ZXJpb3J8ZW58MXx8fHwxNzY2MTc4NzEzfDA&ixlib=rb-4.1.0&q=80&w=1080',
+  const API_BASE_URL = getApiUrl();
+
+  // Extract property data from route params
+  const property = route?.params?.property || {};
+  const propertyId = property.id || 'property-123';
+  const propertyName = property.title || 'Modern Luxury Villa';
+  const propertyAddress = property.address || (property.city ? `${property.city}, ${property.state}` : '1245 Sunset Boulevard, Beverly Hills, CA 90210');
+  const propertyPrice = property.price ? (typeof property.price === 'number' ? `$${property.price.toLocaleString()}` : property.price) : '$789,000';
+
+  // Property specs
+  const bedrooms = property.bedrooms || 4;
+  const bathrooms = property.bathrooms || 3;
+  const area = property.area || property.area_sqft || '3,400';
+  const builtYear = property.builtYear || 2021;
+  const description = property.description || "Step into luxury with this stunning modern villa. This architectural masterpiece features an open floor plan with floor-to-ceiling windows that flood the space with natural light.";
+
+  // Parse images if they are JSON string
+  let propertyImages = [
+    'https://images.unsplash.com/photo-1706808849780-7a04fbac83ef?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBsdXh1cnklMjBob3VzZSUyMGV4dGVyaW9yfGVufDF8fHx8MTc2NjE0Mzk2MHww&ixlib=rb-4.1.0&q=80&w=1080'
   ];
+
+  if (property.images) {
+    try {
+      const parsedImages = typeof property.images === 'string' ? JSON.parse(property.images) : property.images;
+      if (Array.isArray(parsedImages) && parsedImages.length > 0) {
+        propertyImages = parsedImages;
+      }
+    } catch (e) {
+      console.log('Error parsing property images:', e);
+    }
+  } else if (property.image) {
+    propertyImages = [property.image];
+  }
 
   const handleBack = () => {
     if (navigation && navigation.goBack) {
@@ -83,20 +114,60 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
     }
   };
 
-  const handleMakeOffer = () => {
-    if (navigation && navigation.navigate) {
-      try {
-        navigation.navigate('PaymentScreen', {
-          propertyId,
-          propertyName,
-          propertyPrice,
-        });
-      } catch (error) {
-        console.error('Navigation error:', error);
-        Alert.alert('Navigation Error', 'Unable to navigate to Payment Screen');
+  const handleMakeOffer = async () => {
+    try {
+      // Get the actual property data from route params or use defaults
+      const property = route?.params?.property || {};
+      const propertyId = property.id || property.property_id || propertyId;
+
+      if (!propertyId) {
+        Alert.alert('Error', 'Property information is missing');
+        return;
       }
-    } else {
-      Alert.alert('Info', 'Make an Offer feature coming soon!');
+
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) {
+        Alert.alert('Authentication Required', 'Please log in to make an offer');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/inquiries/create`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          property_id: propertyId,
+          initial_message: `I am interested in ${propertyName}. I would like to discuss this property with you.`
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        Alert.alert(
+          'Inquiry Sent! 🎉',
+          'Your inquiry has been sent to the builder. They will review and respond soon. You can chat with them once they accept your inquiry.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                if (navigation && navigation.goBack) {
+                  navigation.goBack();
+                } else if (onBack) {
+                  onBack();
+                }
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', data.message || 'Failed to send inquiry');
+      }
+    } catch (error) {
+      console.error('Make offer error:', error);
+      Alert.alert('Error', 'Failed to send inquiry. Please try again.');
     }
   };
 
@@ -173,7 +244,7 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      
+
       <View style={styles.heroContainer}>
         <Image source={{ uri: propertyImages[currentImageIndex] }} style={styles.heroImage} resizeMode="cover" />
 
@@ -232,20 +303,17 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
 
         <View style={styles.specsSection}>
           <View style={styles.specsGrid}>
-            <SpecCard icon={<Bed size={24} color="#2D6A4F" strokeWidth={2} />} label="Bedrooms" value="4" />
-            <SpecCard icon={<Bath size={24} color="#2D6A4F" strokeWidth={2} />} label="Bathrooms" value="3" />
-            <SpecCard icon={<Maximize size={24} color="#2D6A4F" strokeWidth={2} />} label="Area" value="3,400" />
-            <SpecCard icon={<Calendar size={24} color="#2D6A4F" strokeWidth={2} />} label="Built" value="2021" />
+            <SpecCard icon={<Bed size={24} color="#2D6A4F" strokeWidth={2} />} label="Bedrooms" value={bedrooms} />
+            <SpecCard icon={<Bath size={24} color="#2D6A4F" strokeWidth={2} />} label="Bathrooms" value={bathrooms} />
+            <SpecCard icon={<Maximize size={24} color="#2D6A4F" strokeWidth={2} />} label="Area" value={area} />
+            <SpecCard icon={<Calendar size={24} color="#2D6A4F" strokeWidth={2} />} label="Built" value={builtYear} />
           </View>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.description}>
-            Step into luxury with this stunning modern villa located in the heart of Beverly Hills. This architectural masterpiece features an open floor plan with floor-to-ceiling windows that flood the space with natural light. The gourmet kitchen boasts high-end appliances, custom cabinetry, and a large island perfect for entertaining.
-          </Text>
-          <Text style={[styles.description, styles.descriptionSpaced]}>
-            The master suite includes a spa-like bathroom and private balcony with breathtaking views. Outside, enjoy the resort-style pool, outdoor kitchen, and beautifully landscaped gardens. This home is the epitome of California luxury living.
+            {description}
           </Text>
         </View>
 
@@ -427,7 +495,7 @@ const styles = StyleSheet.create({
   contactButtons: { flexDirection: 'row', gap: 8 },
   contactButton: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 12, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#E5E7EB' },
   contactButtonText: { fontSize: 12, color: '#374151', fontWeight: '600' },
-  bottomSpacer: { height: 200 },
+  bottomSpacer: { height: 220 },
   bottomCTA: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingHorizontal: 24, paddingVertical: 16, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 8 },
   ctaRow: { flexDirection: 'row', gap: 12, marginBottom: 8 },
   ctaButtonGreen: { flex: 1, backgroundColor: '#2D6A4F', borderRadius: 12, paddingVertical: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 },
