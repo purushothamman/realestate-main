@@ -14,6 +14,7 @@ import {
     RefreshControl,
     Alert
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
     Home,
@@ -57,11 +58,15 @@ const AgentDashboard = ({ navigation, route }) => {
     const [activeListings, setActiveListings] = useState([]);
     const [agentData, setAgentData] = useState(null);
 
-    // Get auth token from your auth context or AsyncStorage
+    // Get auth token from AsyncStorage
     const getAuthToken = async () => {
-        // Replace with your actual token retrieval logic
-        // For example: await AsyncStorage.getItem('authToken');
-        return 'YOUR_AUTH_TOKEN';
+        try {
+            const token = await AsyncStorage.getItem('authToken');
+            return token;
+        } catch (error) {
+            console.error('Error getting auth token:', error);
+            return null;
+        }
     };
 
     // API Request Helper
@@ -88,7 +93,6 @@ const AgentDashboard = ({ navigation, route }) => {
             return data;
         } catch (error) {
             console.error('API Error:', error);
-            Alert.alert('Error', error.message || 'Something went wrong');
             throw error;
         }
     };
@@ -98,25 +102,24 @@ const AgentDashboard = ({ navigation, route }) => {
         try {
             setLoading(true);
 
-            // Fetch all data in parallel
-            const [statsResponse, leadsResponse, propertiesResponse] = await Promise.all([
-                apiRequest('/dashboard/stats'),
-                apiRequest('/leads/recent?limit=3'),
-                apiRequest('/properties/my-properties?limit=3&status=active,pending')
-            ]);
+            // Fetch properties from the new endpoint
+            const propertiesResponse = await apiRequest('/properties/my-properties');
 
             // Update state with fetched data
-            if (statsResponse.success) {
-                setStats(statsResponse.data.stats);
-                setAgentData(statsResponse.data.stats.agent);
-            }
-
-            if (leadsResponse.success) {
-                setRecentLeads(leadsResponse.data.leads);
-            }
-
             if (propertiesResponse.success) {
-                setActiveListings(propertiesResponse.data.properties);
+                setActiveListings(propertiesResponse.properties || []);
+
+                // Calculate stats from properties
+                const properties = propertiesResponse.properties || [];
+                setStats({
+                    totalListings: properties.length,
+                    activeLeads: Math.floor(properties.length * 1.5), // Mock data
+                    siteVisits: Math.floor(properties.length * 2), // Mock data
+                    dealsClosed: Math.floor(properties.length * 0.3), // Mock data
+                    newLeads: 3, // Mock data
+                    conversionRate: 15, // Mock data
+                    monthlyRevenue: properties.reduce((sum, p) => sum + (p.price * 0.03), 0) // 3% commission
+                });
             }
 
         } catch (error) {
@@ -412,7 +415,7 @@ const AgentDashboard = ({ navigation, route }) => {
                         <TouchableOpacity
                             style={styles.actionPrimary}
                             activeOpacity={0.8}
-                            onPress={() => navigation.navigate('addProperty')}
+                            onPress={() => navigation.navigate('addPropertyAgent')}
                         >
                             <View style={styles.actionIconPrimary}>
                                 <Plus width={24} height={24} color="#ffffff" />
@@ -529,27 +532,24 @@ const AgentDashboard = ({ navigation, route }) => {
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>My Listings</Text>
-                        <TouchableOpacity onPress={() => {/* Navigate to all listings */ }}>
+                        <TouchableOpacity onPress={() => navigation.navigate('myListings')}>
                             <Text style={styles.viewAllButton}>View All</Text>
                         </TouchableOpacity>
                     </View>
 
                     <View style={styles.listingsList}>
                         {activeListings.length > 0 ? (
-                            activeListings.map((listing) => {
+                            activeListings.slice(0, 5).map((listing) => {
                                 const statusStyle = getStatusStyle(listing.status);
-                                const primaryImage = listing.images?.find(img => img.isPrimary)?.url ||
-                                    listing.images?.[0]?.url ||
-                                    'https://images.unsplash.com/photo-1640109478916-f445f8f19b11?w=800';
 
                                 return (
                                     <TouchableOpacity
-                                        key={listing._id}
+                                        key={listing.id}
                                         style={styles.listingCard}
-                                        onPress={() => handleViewProperty(listing)}
+                                        onPress={() => navigation.navigate('PropertyDetailScreen', { property: listing })}
                                     >
                                         <Image
-                                            source={{ uri: primaryImage }}
+                                            source={{ uri: listing.primaryImage || 'https://images.unsplash.com/photo-1640109478916-f445f8f19b11?w=800' }}
                                             style={styles.listingImage}
                                         />
                                         <View style={styles.listingContent}>
@@ -561,7 +561,7 @@ const AgentDashboard = ({ navigation, route }) => {
                                                     <View style={styles.listingLocation}>
                                                         <MapPin width={12} height={12} color="#9ca3af" />
                                                         <Text style={styles.listingLocationText} numberOfLines={1}>
-                                                            {listing.location?.city || listing.location?.address}
+                                                            {listing.address}, {listing.city}
                                                         </Text>
                                                     </View>
                                                 </View>
@@ -570,7 +570,7 @@ const AgentDashboard = ({ navigation, route }) => {
                                                     { backgroundColor: statusStyle.bg }
                                                 ]}>
                                                     <Text style={[styles.listingStatusText, { color: statusStyle.text }]}>
-                                                        {getStatusLabel(listing.status)}
+                                                        {listing.status || 'Active'}
                                                     </Text>
                                                 </View>
                                             </View>
@@ -676,7 +676,7 @@ const AgentDashboard = ({ navigation, route }) => {
             <TouchableOpacity
                 style={styles.fab}
                 activeOpacity={0.8}
-                onPress={() => {/* Navigate to add property */ }}
+                onPress={() => navigation.navigate('addPropertyAgent')}
             >
                 <LinearGradient
                     colors={['#2D6A4F', '#245A42']}
@@ -908,14 +908,15 @@ const styles = StyleSheet.create({
     kpiGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 16, // Increased gap
+        justifyContent: 'space-between',
         marginBottom: 20
     },
     kpiCard: {
-        width: (width - 64) / 2, // Calculated width: (padding*2 + gap) = (24*2 + 16) = 64
+        width: '48%', // 2 cards per row with space between
         backgroundColor: '#ffffff',
         borderRadius: 20, // Softer corners
         padding: 16,
+        marginBottom: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.08,

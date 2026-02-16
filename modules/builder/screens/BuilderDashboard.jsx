@@ -780,20 +780,19 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between', // Better spacing
+    justifyContent: 'space-between',
     marginBottom: 24,
-    gap: 16, // Consistent gap
   },
   statCard: {
-    width: (width - 56) / 2, // Calculated width (20 padding * 2 + 16 gap) / 2
-    minWidth: '45%',
+    width: '48%',
+    marginBottom: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20, // Softer corners
+    borderRadius: 20,
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 12, // Softer shadow
+    shadowRadius: 12,
     elevation: 4,
   },
   statHeader: {

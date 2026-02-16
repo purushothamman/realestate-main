@@ -41,6 +41,13 @@ import {
 import ReportPropertyScreen from './ReportPropertyScreen';
 const { width } = Dimensions.get('window');
 
+/**
+ * PropertyDetailScreen – Displays the selected property when the user taps any listing.
+ * Shows: agent-uploaded images (gallery + thumbnails), full property information,
+ * and property status (e.g. Active, Pending, For Sale / For Rent).
+ * Opened from Agent Dashboard, My Listings, Home, Search Results, or Explore.
+ */
+
 const FeatureChip = ({ icon, label }) => (
   <View style={styles.featureChip}>
     {icon}
@@ -56,9 +63,12 @@ const SpecCard = ({ icon, label, value }) => (
   </View>
 );
 
-export default function PropertyDetailScreen({ navigation, onBack, route }) {
+export default function PropertyDetailScreen({ navigation, onBack, route, property: propertyProp }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
+
+  // Property from route (App stack) or direct prop (e.g. HomeScreen)
+  const property = route?.params?.property || propertyProp || {};
 
   // API Configuration
   const getApiUrl = () => {
@@ -74,36 +84,45 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
 
   const API_BASE_URL = getApiUrl();
 
-  // Extract property data from route params
-  const property = route?.params?.property || {};
-  const propertyId = property.id || 'property-123';
-  const propertyName = property.title || 'Modern Luxury Villa';
-  const propertyAddress = property.address || (property.city ? `${property.city}, ${property.state}` : '1245 Sunset Boulevard, Beverly Hills, CA 90210');
-  const propertyPrice = property.price ? (typeof property.price === 'number' ? `$${property.price.toLocaleString()}` : property.price) : '$789,000';
+  // Extract property data (from agent/builder listings, explore, or home)
+  const propertyId = property.id || property.property_id || 'property-123';
+  const propertyName = property.title || property.name || 'Modern Luxury Villa';
+  const propertyAddress = [property.address, property.city, property.state].filter(Boolean).join(', ') || '1245 Sunset Boulevard, Beverly Hills, CA 90210';
+  const propertyPrice = property.price != null
+    ? (typeof property.price === 'number' ? `$${Number(property.price).toLocaleString()}` : String(property.price))
+    : '$789,000';
+  const propertyStatus = property.status || 'active';
+  const listingType = property.listingType || property.listing_type || 'sale';
 
-  // Property specs
-  const bedrooms = property.bedrooms || 4;
-  const bathrooms = property.bathrooms || 3;
-  const area = property.area || property.area_sqft || '3,400';
-  const builtYear = property.builtYear || 2021;
+  // Property specs (support both API camelCase and snake_case)
+  const bedrooms = property.bedrooms ?? 4;
+  const bathrooms = property.bathrooms ?? 3;
+  const area = property.areaSqft ?? property.area ?? property.area_sqft ?? '3,400';
+  const builtYear = property.builtYear ?? property.built_year ?? 2021;
   const description = property.description || "Step into luxury with this stunning modern villa. This architectural masterpiece features an open floor plan with floor-to-ceiling windows that flood the space with natural light.";
 
-  // Parse images if they are JSON string
-  let propertyImages = [
-    'https://images.unsplash.com/photo-1706808849780-7a04fbac83ef?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBsdXh1cnklMjBob3VzZSUyMGV4dGVyaW9yfGVufDF8fHx8MTc2NjE0Mzk2MHww&ixlib=rb-4.1.0&q=80&w=1080'
-  ];
+  // Use images uploaded by the agent/builder (from API or route params)
+  const placeholderImage = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800';
+  let propertyImages = [placeholderImage];
 
-  if (property.images) {
+  if (property.images && (Array.isArray(property.images) || typeof property.images === 'string')) {
     try {
       const parsedImages = typeof property.images === 'string' ? JSON.parse(property.images) : property.images;
       if (Array.isArray(parsedImages) && parsedImages.length > 0) {
-        propertyImages = parsedImages;
+        propertyImages = parsedImages.map(img => {
+          if (typeof img === 'object' && img !== null) {
+            return img.url || img.image_url || placeholderImage;
+          }
+          return String(img);
+        });
       }
     } catch (e) {
       console.log('Error parsing property images:', e);
     }
-  } else if (property.image) {
-    propertyImages = [property.image];
+  }
+  if (propertyImages.length === 1 && propertyImages[0] === placeholderImage) {
+    const primary = property.primaryImage || property.image;
+    if (primary) propertyImages = [primary];
   }
 
   const handleBack = () => {
@@ -287,10 +306,10 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
         <View style={styles.propertyHeader}>
           <View style={styles.badgeRow}>
             <View style={styles.badgeGreen}>
-              <Text style={styles.badgeGreenText}>For Sale</Text>
+              <Text style={styles.badgeGreenText}>{listingType === 'rent' ? 'For Rent' : 'For Sale'}</Text>
             </View>
-            <View style={styles.badgeBlue}>
-              <Text style={styles.badgeBlueText}>New Listing</Text>
+            <View style={[styles.badgeBlue, styles.badgeStatus]}>
+              <Text style={styles.badgeBlueText}>{String(propertyStatus).charAt(0).toUpperCase() + String(propertyStatus).slice(1).toLowerCase()}</Text>
             </View>
           </View>
           <Text style={styles.title}>{propertyName}</Text>
@@ -307,6 +326,40 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
             <SpecCard icon={<Bath size={24} color="#2D6A4F" strokeWidth={2} />} label="Bathrooms" value={bathrooms} />
             <SpecCard icon={<Maximize size={24} color="#2D6A4F" strokeWidth={2} />} label="Area" value={area} />
             <SpecCard icon={<Calendar size={24} color="#2D6A4F" strokeWidth={2} />} label="Built" value={builtYear} />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Property Information</Text>
+          <View style={styles.infoGrid}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Title</Text>
+              <Text style={styles.infoValue}>{propertyName}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Address</Text>
+              <Text style={styles.infoValue}>{propertyAddress}</Text>
+            </View>
+            {(property.city || property.state || property.pincode) ? (
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Location</Text>
+                <Text style={styles.infoValue}>
+                  {[property.city, property.state, property.pincode].filter(Boolean).join(', ') || '—'}
+                </Text>
+              </View>
+            ) : null}
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Price</Text>
+              <Text style={styles.infoValue}>{propertyPrice}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Status</Text>
+              <Text style={[styles.infoValue, styles.infoStatus]}>{String(propertyStatus).charAt(0).toUpperCase() + String(propertyStatus).slice(1).toLowerCase()}</Text>
+            </View>
+            <View style={[styles.infoRow, styles.infoRowLast]}>
+              <Text style={styles.infoLabel}>Listing type</Text>
+              <Text style={styles.infoValue}>{listingType === 'rent' ? 'For Rent' : 'For Sale'}</Text>
+            </View>
           </View>
         </View>
 
@@ -345,7 +398,7 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
             <View style={styles.mapOverlay}>
               <View style={styles.mapLabel}>
                 <MapPin size={20} color="#2D6A4F" strokeWidth={2} />
-                <Text style={styles.mapLabelText}>Beverly Hills, CA</Text>
+                <Text style={styles.mapLabelText} numberOfLines={1}>{propertyAddress || 'View on map'}</Text>
               </View>
             </View>
           </View>
@@ -450,6 +503,7 @@ const styles = StyleSheet.create({
   badgeGreen: { backgroundColor: '#2D6A4F', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   badgeGreenText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
   badgeBlue: { backgroundColor: '#E8F5E9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  badgeStatus: {},
   badgeBlueText: { color: '#2D6A4F', fontSize: 12, fontWeight: '600' },
   title: { fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 8 },
   addressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginBottom: 12 },
@@ -463,6 +517,12 @@ const styles = StyleSheet.create({
   specLabel: { fontSize: 12, color: '#6B7280' },
   section: { backgroundColor: '#FFFFFF', paddingHorizontal: 24, paddingVertical: 20, marginTop: 1 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 12 },
+  infoGrid: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  infoRowLast: { borderBottomWidth: 0 },
+  infoLabel: { fontSize: 13, color: '#6B7280', fontWeight: '500', flex: 0.4 },
+  infoValue: { fontSize: 14, color: '#111827', fontWeight: '500', flex: 0.6, textAlign: 'right' },
+  infoStatus: { color: '#2D6A4F', fontWeight: '600' },
   description: { fontSize: 14, color: '#6B7280', lineHeight: 22 },
   descriptionSpaced: { marginTop: 12 },
   featuresSection: { backgroundColor: '#FFFFFF', paddingHorizontal: 24, paddingVertical: 20, marginTop: 1 },

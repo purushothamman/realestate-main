@@ -24,6 +24,11 @@ router.post("/", protect,
     property.createProperty
 );
 
+router.get("/my-properties", protect,
+    allow("builder", "agent"),
+    property.getMyProperties
+);
+
 router.get("/", property.getAllProperties)
 
 router.post("/:id/view", protect, property.addPropertyView)

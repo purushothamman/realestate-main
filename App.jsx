@@ -14,8 +14,10 @@ import ExploreProperties from './modules/property/screens/ExploreProperties';
 import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
 import ReportPropertyScreen from './modules/property/screens/ReportPropertyScreen';
 import AddProperty from './modules/property/screens/AddProperties';
+import AddPropertiesAgent from './modules/property/screens/AddPropertiesAgent';
 import PaymentScreen from './store/PaymentScreen';
 import AgentDashboard from './modules/agent/AgentDashboardScreen';
+import MyListingsScreen from './modules/property/screens/MyListingsScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
@@ -45,8 +47,9 @@ export default function App() {
 
   // 🔹 Navigation handler (Stack based)
   const navigateTo = (screen, params = {}) => {
+    const normalizedScreen = screen === 'PropertyDetailScreen' ? 'propertyDetail' : screen;
     setScreenStack(prev => [...prev, currentScreen]);
-    setCurrentScreen(screen);
+    setCurrentScreen(normalizedScreen);
 
     // Handle property selection
     if (params.property) setSelectedProperty(params.property);
@@ -194,14 +197,14 @@ export default function App() {
         return (
           <PropertyDetailScreen
             navigation={navigation}
-            property={selectedProperty}
             onBack={goBack}
             route={{
               params: {
-                propertyId: selectedProperty?.id || 'property-001',
-                propertyName: selectedProperty?.name || 'Modern Luxury Villa',
-                propertyAddress: selectedProperty?.address || '1245 Sunset Boulevard, Beverly Hills, CA 90210',
-                propertyPrice: selectedProperty?.price || '$789,000',
+                property: selectedProperty,
+                propertyId: selectedProperty?.id,
+                propertyName: selectedProperty?.title ?? selectedProperty?.name,
+                propertyAddress: selectedProperty?.address,
+                propertyPrice: selectedProperty?.price,
               }
             }}
           />
@@ -258,6 +261,26 @@ export default function App() {
             onBack={goBack}
             onPropertyAdded={() => {
               navigateTo('builderDashboard');
+            }}
+          />
+        );
+
+      case 'addPropertyAgent':
+        return (
+          <AddPropertiesAgent
+            onBack={goBack}
+            onPropertyAdded={() => {
+              navigateTo('agentDashboard');
+            }}
+          />
+        );
+
+      case 'myListings':
+        return (
+          <MyListingsScreen
+            navigation={{
+              navigate: navigateTo,
+              goBack: goBack
             }}
           />
         );

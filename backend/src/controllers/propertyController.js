@@ -129,7 +129,7 @@ exports.addProperty = async (req, res) => {
                 await connection.query(
                     `INSERT INTO property_images (property_id, image_url, is_primary, sort_order)
            VALUES (?, ?, ?, ?)`,
-                    [property_id, image.url, i === 0, i]
+                    [property_id, image.image_url || image.url, i === 0, i]
                 );
             }
         }
@@ -189,6 +189,105 @@ exports.addProperty = async (req, res) => {
         });
     } finally {
         connection.release();
+    }
+};
+
+// Get properties uploaded by logged-in agent/builder
+exports.getMyProperties = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const userRole = req.user?.role;
+
+        if (!userId || !userRole) {
+            return res.status(401).json({
+                success: false,
+                message: 'User authentication required'
+            });
+        }
+
+        // Fetch properties uploaded by this user with all images
+        const [rows] = await pool.query(
+            `SELECT 
+                p.id,
+                p.title,
+                p.description,
+                p.price,
+                p.listing_type,
+                p.address,
+                p.city,
+                p.state,
+                p.area_sqft,
+                p.bedrooms,
+                p.bathrooms,
+                p.status,
+                p.is_verified,
+                p.created_at,
+                p.updated_at,
+                pi.image_url,
+                pi.is_primary
+            FROM properties p
+            LEFT JOIN property_images pi ON p.id = pi.property_id
+            WHERE p.uploaded_by = ? AND p.uploaded_by_role = ?
+            ORDER BY p.created_at DESC, pi.sort_order ASC`,
+            [userId, userRole]
+        );
+
+        // Group images by property
+        const propertiesMap = new Map();
+
+        rows.forEach(row => {
+            if (!propertiesMap.has(row.id)) {
+                propertiesMap.set(row.id, {
+                    id: row.id,
+                    title: row.title,
+                    description: row.description,
+                    price: row.price,
+                    listingType: row.listing_type,
+                    address: row.address,
+                    city: row.city,
+                    state: row.state,
+                    areaSqft: row.area_sqft,
+                    bedrooms: row.bedrooms,
+                    bathrooms: row.bathrooms,
+                    status: row.status,
+                    isVerified: row.is_verified,
+                    createdAt: row.created_at,
+                    updatedAt: row.updated_at,
+                    images: []
+                });
+            }
+
+            if (row.image_url) {
+                const property = propertiesMap.get(row.id);
+                property.images.push({
+                    url: row.image_url,
+                    isPrimary: row.is_primary === 1
+                });
+            }
+        });
+
+        // Transform to array and set primary image
+        const transformedProperties = Array.from(propertiesMap.values()).map(prop => ({
+            ...prop,
+            primaryImage: prop.images.find(img => img.isPrimary)?.url || 
+                         prop.images[0]?.url || 
+                         'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
+            imageCount: prop.images.length
+        }));
+
+        res.json({
+            success: true,
+            properties: transformedProperties,
+            total: transformedProperties.length
+        });
+
+    } catch (error) {
+        console.error('Get my properties error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch properties',
+            error: error.message
+        });
     }
 };
 
