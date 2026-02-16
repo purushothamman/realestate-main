@@ -320,25 +320,20 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                 }),
             ]).start();
 
+            // Redirect back to agent dashboard (or builder/edit/back fallback)
+            if (onPropertyAdded) {
+                onPropertyAdded();
+            } else if (onShowEditProperty) {
+                onShowEditProperty();
+            } else if (onBack) {
+                onBack();
+            }
+
             setTimeout(() => {
                 Alert.alert(
                     'Success! 🎉',
                     'Your property has been published successfully!',
-                    [
-                        {
-                            text: 'Great!',
-                            onPress: () => {
-                                // Navigate to builder dashboard to see live updated data
-                                if (onPropertyAdded) {
-                                    onPropertyAdded();
-                                } else if (onShowEditProperty) {
-                                    onShowEditProperty();
-                                } else if (onBack) {
-                                    onBack();
-                                }
-                            }
-                        }
-                    ]
+                    [{ text: 'OK' }]
                 );
             }, 200);
 

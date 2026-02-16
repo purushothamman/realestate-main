@@ -41,13 +41,6 @@ import {
 import ReportPropertyScreen from './ReportPropertyScreen';
 const { width } = Dimensions.get('window');
 
-/**
- * PropertyDetailScreen – Displays the selected property when the user taps any listing.
- * Shows: agent-uploaded images (gallery + thumbnails), full property information,
- * and property status (e.g. Active, Pending, For Sale / For Rent).
- * Opened from Agent Dashboard, My Listings, Home, Search Results, or Explore.
- */
-
 const FeatureChip = ({ icon, label }) => (
   <View style={styles.featureChip}>
     {icon}
@@ -63,12 +56,9 @@ const SpecCard = ({ icon, label, value }) => (
   </View>
 );
 
-export default function PropertyDetailScreen({ navigation, onBack, route, property: propertyProp }) {
+export default function PropertyDetailScreen({ navigation, onBack, route }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
-
-  // Property from route (App stack) or direct prop (e.g. HomeScreen)
-  const property = route?.params?.property || propertyProp || {};
 
   // API Configuration
   const getApiUrl = () => {
@@ -84,7 +74,8 @@ export default function PropertyDetailScreen({ navigation, onBack, route, proper
 
   const API_BASE_URL = getApiUrl();
 
-  // Extract property data (from agent/builder listings, explore, or home)
+  // Extract property data from route params (from agent/builder listings or explore)
+  const property = route?.params?.property || {};
   const propertyId = property.id || property.property_id || 'property-123';
   const propertyName = property.title || property.name || 'Modern Luxury Villa';
   const propertyAddress = [property.address, property.city, property.state].filter(Boolean).join(', ') || '1245 Sunset Boulevard, Beverly Hills, CA 90210';
@@ -330,40 +321,6 @@ export default function PropertyDetailScreen({ navigation, onBack, route, proper
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Property Information</Text>
-          <View style={styles.infoGrid}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Title</Text>
-              <Text style={styles.infoValue}>{propertyName}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Address</Text>
-              <Text style={styles.infoValue}>{propertyAddress}</Text>
-            </View>
-            {(property.city || property.state || property.pincode) ? (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Location</Text>
-                <Text style={styles.infoValue}>
-                  {[property.city, property.state, property.pincode].filter(Boolean).join(', ') || '—'}
-                </Text>
-              </View>
-            ) : null}
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Price</Text>
-              <Text style={styles.infoValue}>{propertyPrice}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Status</Text>
-              <Text style={[styles.infoValue, styles.infoStatus]}>{String(propertyStatus).charAt(0).toUpperCase() + String(propertyStatus).slice(1).toLowerCase()}</Text>
-            </View>
-            <View style={[styles.infoRow, styles.infoRowLast]}>
-              <Text style={styles.infoLabel}>Listing type</Text>
-              <Text style={styles.infoValue}>{listingType === 'rent' ? 'For Rent' : 'For Sale'}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Description</Text>
           <Text style={styles.description}>
             {description}
@@ -517,12 +474,6 @@ const styles = StyleSheet.create({
   specLabel: { fontSize: 12, color: '#6B7280' },
   section: { backgroundColor: '#FFFFFF', paddingHorizontal: 24, paddingVertical: 20, marginTop: 1 },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 12 },
-  infoGrid: { backgroundColor: '#F9FAFB', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  infoRowLast: { borderBottomWidth: 0 },
-  infoLabel: { fontSize: 13, color: '#6B7280', fontWeight: '500', flex: 0.4 },
-  infoValue: { fontSize: 14, color: '#111827', fontWeight: '500', flex: 0.6, textAlign: 'right' },
-  infoStatus: { color: '#2D6A4F', fontWeight: '600' },
   description: { fontSize: 14, color: '#6B7280', lineHeight: 22 },
   descriptionSpaced: { marginTop: 12 },
   featuresSection: { backgroundColor: '#FFFFFF', paddingHorizontal: 24, paddingVertical: 20, marginTop: 1 },
