@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,10 @@ import {
   StatusBar,
   Alert,
   Platform,
+  Animated,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   ArrowLeft,
   Heart,
@@ -37,28 +39,68 @@ import {
   Star,
   Home,
   Flag,
+  TrendingUp,
+  Award,
+  CheckCircle,
 } from 'lucide-react-native';
-import ReportPropertyScreen from './ReportPropertyScreen';
+
 const { width } = Dimensions.get('window');
 
 const FeatureChip = ({ icon, label }) => (
   <View style={styles.featureChip}>
-    {icon}
+    <View style={styles.featureIconWrapper}>
+      {icon}
+    </View>
     <Text style={styles.featureChipText}>{label}</Text>
   </View>
 );
 
-const SpecCard = ({ icon, label, value }) => (
-  <View style={styles.specCard}>
-    <View style={styles.specIconContainer}>{icon}</View>
-    <Text style={styles.specValue}>{value}</Text>
-    <Text style={styles.specLabel}>{label}</Text>
-  </View>
-);
+const SpecCard = ({ icon, label, value }) => {
+  const scaleAnim = useState(new Animated.Value(0))[0];
+
+  useEffect(() => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      tension: 50,
+      friction: 7,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  return (
+    <Animated.View style={[styles.specCard, { transform: [{ scale: scaleAnim }] }]}>
+      <View style={styles.specIconContainer}>
+        <View style={styles.specIconCircle}>
+          {icon}
+        </View>
+      </View>
+      <Text style={styles.specValue}>{value}</Text>
+      <Text style={styles.specLabel}>{label}</Text>
+    </Animated.View>
+  );
+};
 
 export default function PropertyDetailScreen({ navigation, onBack, route }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
+  const [scrollY] = useState(new Animated.Value(0));
+  const fadeAnim = useState(new Animated.Value(0))[0];
+  const slideAnim = useState(new Animated.Value(30))[0];
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   // API Configuration
   const getApiUrl = () => {
@@ -74,7 +116,7 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
 
   const API_BASE_URL = getApiUrl();
 
-  // Extract property data from route params (from agent/builder listings or explore)
+  // Extract property data from route params
   const property = route?.params?.property || {};
   const propertyId = property.id || property.property_id || 'property-123';
   const propertyName = property.title || property.name || 'Modern Luxury Villa';
@@ -85,14 +127,14 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
   const propertyStatus = property.status || 'active';
   const listingType = property.listingType || property.listing_type || 'sale';
 
-  // Property specs (support both API camelCase and snake_case)
+  // Property specs
   const bedrooms = property.bedrooms ?? 4;
   const bathrooms = property.bathrooms ?? 3;
   const area = property.areaSqft ?? property.area ?? property.area_sqft ?? '3,400';
   const builtYear = property.builtYear ?? property.built_year ?? 2021;
   const description = property.description || "Step into luxury with this stunning modern villa. This architectural masterpiece features an open floor plan with floor-to-ceiling windows that flood the space with natural light.";
 
-  // Use images uploaded by the agent/builder (from API or route params)
+  // Images
   const placeholderImage = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800';
   let propertyImages = [placeholderImage];
 
@@ -126,7 +168,6 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
 
   const handleMakeOffer = async () => {
     try {
-      // Get the actual property data from route params or use defaults
       const property = route?.params?.property || {};
       const propertyId = property.id || property.property_id || propertyId;
 
@@ -182,7 +223,6 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
   };
 
   const handleReportProperty = () => {
-    // Direct navigation to ReportPropertyScreen
     if (navigation && navigation.navigate) {
       try {
         navigation.navigate('ReportPropertyScreen', {
@@ -251,186 +291,350 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
     );
   };
 
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 100],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
+      {/* Enhanced Hero Section */}
       <View style={styles.heroContainer}>
         <Image source={{ uri: propertyImages[currentImageIndex] }} style={styles.heroImage} resizeMode="cover" />
+        
+        {/* Gradient Overlay */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.6)', 'transparent', 'rgba(0,0,0,0.4)']}
+          style={styles.heroGradient}
+        />
 
+        {/* Enhanced Top Navigation */}
         <View style={styles.topNav}>
-          <TouchableOpacity style={styles.navButton} onPress={handleBack}>
-            <ArrowLeft size={20} color="#111827" strokeWidth={2} />
+          <TouchableOpacity style={styles.navButton} onPress={handleBack} activeOpacity={0.8}>
+            <ArrowLeft size={22} color="#111827" strokeWidth={2.5} />
           </TouchableOpacity>
+          
           <View style={styles.navCenter}>
-            <View style={styles.homeIcon}>
-              <Home size={20} color="#2D6A4F" strokeWidth={2} />
+            <View style={styles.homeIconContainer}>
+              <LinearGradient
+                colors={['#2D6A4F', '#1e4d38']}
+                style={styles.homeIconGradient}
+              >
+                <Home size={18} color="#fff" strokeWidth={2.5} />
+              </LinearGradient>
             </View>
           </View>
+          
           <View style={styles.navRight}>
-            <TouchableOpacity style={styles.navButton} onPress={() => setIsSaved(!isSaved)}>
-              <Heart size={20} color={isSaved ? '#EF4444' : '#111827'} fill={isSaved ? '#EF4444' : 'none'} strokeWidth={2} />
+            <TouchableOpacity 
+              style={styles.navButton} 
+              onPress={() => setIsSaved(!isSaved)}
+              activeOpacity={0.8}
+            >
+              <Heart 
+                size={22} 
+                color={isSaved ? '#EF4444' : '#111827'} 
+                fill={isSaved ? '#EF4444' : 'none'} 
+                strokeWidth={2.5} 
+              />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.navButton}>
-              <Share2 size={20} color="#111827" strokeWidth={2} />
+            <TouchableOpacity style={styles.navButton} activeOpacity={0.8}>
+              <Share2 size={22} color="#111827" strokeWidth={2.5} />
             </TouchableOpacity>
           </View>
         </View>
 
+        {/* Enhanced Image Counter */}
         <View style={styles.imageCounter}>
-          <Camera size={16} color="#fff" strokeWidth={2} />
+          <Camera size={16} color="#fff" strokeWidth={2.5} />
           <Text style={styles.imageCounterText}>{currentImageIndex + 1} / {propertyImages.length}</Text>
         </View>
 
+        {/* Enhanced Thumbnail Strip */}
         <View style={styles.thumbnailStrip}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbnailContent}>
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.8)']}
+            style={styles.thumbnailGradient}
+          />
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false} 
+            contentContainerStyle={styles.thumbnailContent}
+          >
             {propertyImages.map((image, index) => (
-              <TouchableOpacity key={index} onPress={() => setCurrentImageIndex(index)} style={[styles.thumbnail, currentImageIndex === index && styles.thumbnailActive]}>
+              <TouchableOpacity
+                key={index}
+                onPress={() => setCurrentImageIndex(index)}
+                style={[
+                  styles.thumbnail,
+                  currentImageIndex === index && styles.thumbnailActive
+                ]}
+                activeOpacity={0.8}
+              >
                 <Image source={{ uri: image }} style={styles.thumbnailImage} resizeMode="cover" />
+                {currentImageIndex === index && (
+                  <View style={styles.thumbnailActiveOverlay}>
+                    <CheckCircle size={16} color="#2D6A4F" fill="#fff" strokeWidth={2.5} />
+                  </View>
+                )}
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.propertyHeader}>
-          <View style={styles.badgeRow}>
-            <View style={styles.badgeGreen}>
-              <Text style={styles.badgeGreenText}>{listingType === 'rent' ? 'For Rent' : 'For Sale'}</Text>
+      {/* Animated Content */}
+      <Animated.ScrollView
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
+      >
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          {/* Enhanced Property Header */}
+          <View style={styles.propertyHeader}>
+            <View style={styles.badgeRow}>
+              <LinearGradient
+                colors={['#2D6A4F', '#1e4d38']}
+                style={styles.badgeGreen}
+              >
+                <Text style={styles.badgeGreenText}>
+                  {listingType === 'rent' ? 'For Rent' : 'For Sale'}
+                </Text>
+              </LinearGradient>
+              <View style={styles.badgeBlue}>
+                <View style={styles.statusDot} />
+                <Text style={styles.badgeBlueText}>
+                  {String(propertyStatus).charAt(0).toUpperCase() + String(propertyStatus).slice(1).toLowerCase()}
+                </Text>
+              </View>
+              <View style={styles.verifiedBadge}>
+                <Award size={14} color="#2D6A4F" strokeWidth={2} />
+                <Text style={styles.verifiedText}>Verified</Text>
+              </View>
             </View>
-            <View style={[styles.badgeBlue, styles.badgeStatus]}>
-              <Text style={styles.badgeBlueText}>{String(propertyStatus).charAt(0).toUpperCase() + String(propertyStatus).slice(1).toLowerCase()}</Text>
+            
+            <Text style={styles.title}>{propertyName}</Text>
+            
+            <View style={styles.addressRow}>
+              <View style={styles.addressIconCircle}>
+                <MapPin size={14} color="#2D6A4F" strokeWidth={2} />
+              </View>
+              <Text style={styles.address}>{propertyAddress}</Text>
             </View>
-          </View>
-          <Text style={styles.title}>{propertyName}</Text>
-          <View style={styles.addressRow}>
-            <MapPin size={16} color="#6B7280" strokeWidth={2} />
-            <Text style={styles.address}>{propertyAddress}</Text>
-          </View>
-          <Text style={styles.price}>{propertyPrice}</Text>
-        </View>
-
-        <View style={styles.specsSection}>
-          <View style={styles.specsGrid}>
-            <SpecCard icon={<Bed size={24} color="#2D6A4F" strokeWidth={2} />} label="Bedrooms" value={bedrooms} />
-            <SpecCard icon={<Bath size={24} color="#2D6A4F" strokeWidth={2} />} label="Bathrooms" value={bathrooms} />
-            <SpecCard icon={<Maximize size={24} color="#2D6A4F" strokeWidth={2} />} label="Area" value={area} />
-            <SpecCard icon={<Calendar size={24} color="#2D6A4F" strokeWidth={2} />} label="Built" value={builtYear} />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Description</Text>
-          <Text style={styles.description}>
-            {description}
-          </Text>
-        </View>
-
-        <View style={styles.featuresSection}>
-          <Text style={styles.sectionTitle}>Features & Amenities</Text>
-          <View style={styles.featuresGrid}>
-            <FeatureChip icon={<Droplet size={16} color="#2D6A4F" strokeWidth={2} />} label="Pool" />
-            <FeatureChip icon={<Car size={16} color="#2D6A4F" strokeWidth={2} />} label="3-Car Garage" />
-            <FeatureChip icon={<Flame size={16} color="#2D6A4F" strokeWidth={2} />} label="Fireplace" />
-            <FeatureChip icon={<Wifi size={16} color="#2D6A4F" strokeWidth={2} />} label="Smart Home" />
-            <FeatureChip icon={<Dumbbell size={16} color="#2D6A4F" strokeWidth={2} />} label="Home Gym" />
-            <FeatureChip icon={<Trees size={16} color="#2D6A4F" strokeWidth={2} />} label="Garden" />
-            <FeatureChip icon={<ShieldCheck size={16} color="#2D6A4F" strokeWidth={2} />} label="Security System" />
-            <FeatureChip icon={<Video size={16} color="#2D6A4F" strokeWidth={2} />} label="Home Theater" />
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.locationHeader}>
-            <Text style={styles.sectionTitle}>Location</Text>
-            <TouchableOpacity style={styles.directionsButton}>
-              <Navigation size={16} color="#2D6A4F" strokeWidth={2} />
-              <Text style={styles.directionsText}>Get Directions</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.mapPlaceholder}>
-            <Image source={{ uri: propertyImages[0] }} style={styles.mapImage} blurRadius={10} />
-            <View style={styles.mapOverlay}>
-              <View style={styles.mapLabel}>
-                <MapPin size={20} color="#2D6A4F" strokeWidth={2} />
-                <Text style={styles.mapLabelText} numberOfLines={1}>{propertyAddress || 'View on map'}</Text>
+            
+            <View style={styles.priceContainer}>
+              <Text style={styles.price}>{propertyPrice}</Text>
+              <View style={styles.priceTag}>
+                <TrendingUp size={16} color="#10b981" strokeWidth={2.5} />
+                <Text style={styles.priceChange}>+2.5%</Text>
               </View>
             </View>
           </View>
 
-          <View style={styles.scoreGrid}>
-            <View style={styles.scoreCard}>
-              <Text style={styles.scoreValue}>9.5</Text>
-              <Text style={styles.scoreLabel}>Walkability</Text>
-            </View>
-            <View style={styles.scoreCard}>
-              <Text style={styles.scoreValue}>8.7</Text>
-              <Text style={styles.scoreLabel}>Transit</Text>
-            </View>
-            <View style={styles.scoreCard}>
-              <Text style={styles.scoreValue}>9.2</Text>
-              <Text style={styles.scoreLabel}>Schools</Text>
+          {/* Enhanced Specs Section */}
+          <View style={styles.specsSection}>
+            <View style={styles.specsGrid}>
+              <SpecCard 
+                icon={<Bed size={22} color="#2D6A4F" strokeWidth={2.5} />} 
+                label="Bedrooms" 
+                value={bedrooms} 
+              />
+              <SpecCard 
+                icon={<Bath size={22} color="#2D6A4F" strokeWidth={2.5} />} 
+                label="Bathrooms" 
+                value={bathrooms} 
+              />
+              <SpecCard 
+                icon={<Maximize size={22} color="#2D6A4F" strokeWidth={2.5} />} 
+                label="Area" 
+                value={area} 
+              />
+              <SpecCard 
+                icon={<Calendar size={22} color="#2D6A4F" strokeWidth={2.5} />} 
+                label="Built" 
+                value={builtYear} 
+              />
             </View>
           </View>
-        </View>
 
-        <View style={styles.agentSection}>
-          <Text style={styles.sectionTitle}>Contact Agent</Text>
-          <View style={styles.agentCard}>
-            <View style={styles.agentHeader}>
-              <View style={styles.agentAvatar}>
-                <Text style={styles.agentInitials}>JD</Text>
+          {/* Enhanced Description Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Description</Text>
+              <View style={styles.sectionDivider} />
+            </View>
+            <Text style={styles.description}>{description}</Text>
+          </View>
+
+          {/* Enhanced Features Section */}
+          <View style={styles.featuresSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Features & Amenities</Text>
+              <View style={styles.sectionDivider} />
+            </View>
+            <View style={styles.featuresGrid}>
+              <FeatureChip icon={<Droplet size={16} color="#2D6A4F" strokeWidth={2.5} />} label="Pool" />
+              <FeatureChip icon={<Car size={16} color="#2D6A4F" strokeWidth={2.5} />} label="3-Car Garage" />
+              <FeatureChip icon={<Flame size={16} color="#2D6A4F" strokeWidth={2.5} />} label="Fireplace" />
+              <FeatureChip icon={<Wifi size={16} color="#2D6A4F" strokeWidth={2.5} />} label="Smart Home" />
+              <FeatureChip icon={<Dumbbell size={16} color="#2D6A4F" strokeWidth={2.5} />} label="Home Gym" />
+              <FeatureChip icon={<Trees size={16} color="#2D6A4F" strokeWidth={2.5} />} label="Garden" />
+              <FeatureChip icon={<ShieldCheck size={16} color="#2D6A4F" strokeWidth={2.5} />} label="Security System" />
+              <FeatureChip icon={<Video size={16} color="#2D6A4F" strokeWidth={2.5} />} label="Home Theater" />
+            </View>
+          </View>
+
+          {/* Enhanced Location Section */}
+          <View style={styles.section}>
+            <View style={styles.locationHeader}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Location</Text>
+                <View style={styles.sectionDivider} />
               </View>
-              <View style={styles.agentInfo}>
-                <Text style={styles.agentName}>Jessica Davis</Text>
-                <Text style={styles.agentRole}>Senior Real Estate Agent</Text>
-                <View style={styles.agentRating}>
-                  <Star size={16} color="#F39C12" fill="#F39C12" strokeWidth={2} />
-                  <Text style={styles.agentRatingValue}>4.9</Text>
-                  <Text style={styles.agentRatingCount}>(127 reviews)</Text>
+              <TouchableOpacity style={styles.directionsButton} activeOpacity={0.7}>
+                <Navigation size={16} color="#2D6A4F" strokeWidth={2.5} />
+                <Text style={styles.directionsText}>Get Directions</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.mapPlaceholder}>
+              <Image source={{ uri: propertyImages[0] }} style={styles.mapImage} blurRadius={10} />
+              <LinearGradient
+                colors={['rgba(0,0,0,0.3)', 'rgba(0,0,0,0.6)']}
+                style={styles.mapOverlay}
+              >
+                <View style={styles.mapLabel}>
+                  <MapPin size={20} color="#2D6A4F" strokeWidth={2.5} />
+                  <Text style={styles.mapLabelText} numberOfLines={1}>{propertyAddress}</Text>
+                </View>
+              </LinearGradient>
+            </View>
+
+            <View style={styles.scoreGrid}>
+              <View style={styles.scoreCard}>
+                <View style={styles.scoreCircle}>
+                  <Text style={styles.scoreValue}>9.5</Text>
+                </View>
+                <Text style={styles.scoreLabel}>Walkability</Text>
+              </View>
+              <View style={styles.scoreCard}>
+                <View style={styles.scoreCircle}>
+                  <Text style={styles.scoreValue}>8.7</Text>
+                </View>
+                <Text style={styles.scoreLabel}>Transit</Text>
+              </View>
+              <View style={styles.scoreCard}>
+                <View style={styles.scoreCircle}>
+                  <Text style={styles.scoreValue}>9.2</Text>
+                </View>
+                <Text style={styles.scoreLabel}>Schools</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Enhanced Agent Section */}
+          <View style={styles.agentSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Contact Agent</Text>
+              <View style={styles.sectionDivider} />
+            </View>
+            <View style={styles.agentCard}>
+              <View style={styles.agentHeader}>
+                <LinearGradient
+                  colors={['#2D6A4F', '#1e4d38']}
+                  style={styles.agentAvatar}
+                >
+                  <Text style={styles.agentInitials}>JD</Text>
+                </LinearGradient>
+                <View style={styles.agentInfo}>
+                  <Text style={styles.agentName}>Jessica Davis</Text>
+                  <Text style={styles.agentRole}>Senior Real Estate Agent</Text>
+                  <View style={styles.agentRating}>
+                    <Star size={16} color="#F39C12" fill="#F39C12" strokeWidth={2} />
+                    <Text style={styles.agentRatingValue}>4.9</Text>
+                    <Text style={styles.agentRatingCount}>(127 reviews)</Text>
+                  </View>
                 </View>
               </View>
-            </View>
 
-            <View style={styles.contactButtons}>
-              <TouchableOpacity style={styles.contactButton}>
-                <Phone size={20} color="#2D6A4F" strokeWidth={2} />
-                <Text style={styles.contactButtonText}>Call</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.contactButton}>
-                <Mail size={20} color="#2D6A4F" strokeWidth={2} />
-                <Text style={styles.contactButtonText}>Email</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.contactButton}>
-                <MessageCircle size={20} color="#2D6A4F" strokeWidth={2} />
-                <Text style={styles.contactButtonText}>Chat</Text>
-              </TouchableOpacity>
+              <View style={styles.contactButtons}>
+                <TouchableOpacity style={styles.contactButton} activeOpacity={0.7}>
+                  <View style={styles.contactIconCircle}>
+                    <Phone size={18} color="#2D6A4F" strokeWidth={2.5} />
+                  </View>
+                  <Text style={styles.contactButtonText}>Call</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.contactButton} activeOpacity={0.7}>
+                  <View style={styles.contactIconCircle}>
+                    <Mail size={18} color="#2D6A4F" strokeWidth={2.5} />
+                  </View>
+                  <Text style={styles.contactButtonText}>Email</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.contactButton} activeOpacity={0.7}>
+                  <View style={styles.contactIconCircle}>
+                    <MessageCircle size={18} color="#2D6A4F" strokeWidth={2.5} />
+                  </View>
+                  <Text style={styles.contactButtonText}>Chat</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
 
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
+          <View style={styles.bottomSpacer} />
+        </Animated.View>
+      </Animated.ScrollView>
 
+      {/* Enhanced Bottom CTA */}
       <View style={styles.bottomCTA}>
         <View style={styles.ctaRow}>
-          <TouchableOpacity style={styles.ctaButtonGreen} onPress={handleScheduleViewing}>
-            <Text style={styles.ctaButtonText}>Schedule Viewing</Text>
+          <TouchableOpacity 
+            style={styles.ctaButtonGreen} 
+            onPress={handleScheduleViewing}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#2D6A4F', '#1e4d38']}
+              style={styles.ctaButtonGradient}
+            >
+              <Text style={styles.ctaButtonText}>Schedule Viewing</Text>
+            </LinearGradient>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.ctaButtonDark} onPress={handleMakeOffer}>
-            <Text style={styles.ctaButtonText}>Make an Offer</Text>
+          <TouchableOpacity 
+            style={styles.ctaButtonDark} 
+            onPress={handleMakeOffer}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#111827', '#000000']}
+              style={styles.ctaButtonGradient}
+            >
+              <Text style={styles.ctaButtonText}>Make an Offer</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
         <View style={styles.ctaRow}>
-          <TouchableOpacity style={styles.ctaButtonOutline} onPress={handleVirtualTour}>
-            <Video size={20} color="#2D6A4F" strokeWidth={2} />
+          <TouchableOpacity 
+            style={styles.ctaButtonOutline} 
+            onPress={handleVirtualTour}
+            activeOpacity={0.7}
+          >
+            <Video size={20} color="#2D6A4F" strokeWidth={2.5} />
             <Text style={styles.ctaButtonOutlineText}>Virtual Tour</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.ctaButtonReport} onPress={handleReportProperty} activeOpacity={0.7}>
-            <Flag size={20} color="#DC2626" strokeWidth={2} />
-            <Text style={styles.ctaButtonReportText}>Report Property</Text>
+          <TouchableOpacity 
+            style={styles.ctaButtonReport} 
+            onPress={handleReportProperty} 
+            activeOpacity={0.7}
+          >
+            <Flag size={20} color="#DC2626" strokeWidth={2.5} />
+            <Text style={styles.ctaButtonReportText}>Report</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -439,81 +643,685 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9FAFB' },
-  heroContainer: { height: 384, backgroundColor: '#000', position: 'relative' },
-  heroImage: { width: '100%', height: '100%' },
-  topNav: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 48, paddingBottom: 16, backgroundColor: 'rgba(0,0,0,0.6)' },
-  navButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.95)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  navCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  homeIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.95)', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  navRight: { flexDirection: 'row', gap: 8 },
-  imageCounter: { position: 'absolute', bottom: 76, right: 16, backgroundColor: 'rgba(0,0,0,0.75)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  imageCounterText: { color: '#FFFFFF', fontSize: 14, fontWeight: '500' },
-  thumbnailStrip: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.6)', paddingTop: 32, paddingBottom: 16 },
-  thumbnailContent: { paddingHorizontal: 16, gap: 8 },
-  thumbnail: { width: 64, height: 64, borderRadius: 12, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent', opacity: 0.6, marginRight: 8 },
-  thumbnailActive: { borderColor: '#2D6A4F', opacity: 1, transform: [{ scale: 1.05 }] },
-  thumbnailImage: { width: '100%', height: '100%' },
-  content: { flex: 1 },
-  propertyHeader: { backgroundColor: '#FFFFFF', paddingHorizontal: 24, paddingTop: 20, paddingBottom: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
-  badgeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  badgeGreen: { backgroundColor: '#2D6A4F', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  badgeGreenText: { color: '#FFFFFF', fontSize: 12, fontWeight: '600' },
-  badgeBlue: { backgroundColor: '#E8F5E9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  badgeStatus: {},
-  badgeBlueText: { color: '#2D6A4F', fontSize: 12, fontWeight: '600' },
-  title: { fontSize: 24, fontWeight: '700', color: '#111827', marginBottom: 8 },
-  addressRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, marginBottom: 12 },
-  address: { flex: 1, fontSize: 14, color: '#6B7280', lineHeight: 20 },
-  price: { fontSize: 32, fontWeight: '700', color: '#2D6A4F' },
-  specsSection: { paddingHorizontal: 24, paddingVertical: 16, backgroundColor: '#F9FAFB' },
-  specsGrid: { flexDirection: 'row', gap: 12 },
-  specCard: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
-  specIconContainer: { marginBottom: 8 },
-  specValue: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  specLabel: { fontSize: 12, color: '#6B7280' },
-  section: { backgroundColor: '#FFFFFF', paddingHorizontal: 24, paddingVertical: 20, marginTop: 1 },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#111827', marginBottom: 12 },
-  description: { fontSize: 14, color: '#6B7280', lineHeight: 22 },
-  descriptionSpaced: { marginTop: 12 },
-  featuresSection: { backgroundColor: '#FFFFFF', paddingHorizontal: 24, paddingVertical: 20, marginTop: 1 },
-  featuresGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  featureChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F9FAFB', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
-  featureChipText: { fontSize: 14, color: '#374151', fontWeight: '500' },
-  locationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  directionsButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  directionsText: { fontSize: 14, color: '#2D6A4F', fontWeight: '600' },
-  mapPlaceholder: { height: 192, borderRadius: 16, overflow: 'hidden', backgroundColor: '#E5E7EB', marginBottom: 16, position: 'relative' },
-  mapImage: { width: '100%', height: '100%', opacity: 0.4 },
-  mapOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
-  mapLabel: { backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
-  mapLabelText: { fontSize: 16, color: '#111827', fontWeight: '600' },
-  scoreGrid: { flexDirection: 'row', gap: 12 },
-  scoreCard: { flex: 1, backgroundColor: '#F9FAFB', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E5E7EB' },
-  scoreValue: { fontSize: 20, fontWeight: '700', color: '#111827', marginBottom: 4 },
-  scoreLabel: { fontSize: 12, color: '#6B7280' },
-  agentSection: { backgroundColor: '#FFFFFF', paddingHorizontal: 24, paddingVertical: 20, marginTop: 1 },
-  agentCard: { backgroundColor: '#F9FAFB', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  agentHeader: { flexDirection: 'row', gap: 16, marginBottom: 16 },
-  agentAvatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#2D6A4F', justifyContent: 'center', alignItems: 'center' },
-  agentInitials: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
-  agentInfo: { flex: 1 },
-  agentName: { fontSize: 16, fontWeight: '600', color: '#111827', marginBottom: 4 },
-  agentRole: { fontSize: 14, color: '#6B7280', marginBottom: 8 },
-  agentRating: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  agentRatingValue: { fontSize: 14, color: '#111827', fontWeight: '600' },
-  agentRatingCount: { fontSize: 14, color: '#9CA3AF' },
-  contactButtons: { flexDirection: 'row', gap: 8 },
-  contactButton: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 12, alignItems: 'center', gap: 6, borderWidth: 1, borderColor: '#E5E7EB' },
-  contactButtonText: { fontSize: 12, color: '#374151', fontWeight: '600' },
-  bottomSpacer: { height: 220 },
-  bottomCTA: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#E5E7EB', paddingHorizontal: 24, paddingVertical: 16, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 8 },
-  ctaRow: { flexDirection: 'row', gap: 12, marginBottom: 8 },
-  ctaButtonGreen: { flex: 1, backgroundColor: '#2D6A4F', borderRadius: 12, paddingVertical: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 },
-  ctaButtonDark: { flex: 1, backgroundColor: '#111827', borderRadius: 12, paddingVertical: 16, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 4 },
-  ctaButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  ctaButtonOutline: { flex: 1, borderWidth: 2, borderColor: '#2D6A4F', borderRadius: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  ctaButtonOutlineText: { color: '#2D6A4F', fontSize: 16, fontWeight: '600' },
-  ctaButtonReport: { flex: 1, borderWidth: 2, borderColor: '#DC2626', borderRadius: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  ctaButtonReportText: { color: '#DC2626', fontSize: 16, fontWeight: '600' },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#F9FAFB' 
+  },
+  heroContainer: { 
+    height: 400, 
+    backgroundColor: '#000', 
+    position: 'relative' 
+  },
+  heroImage: { 
+    width: '100%', 
+    height: '100%' 
+  },
+  heroGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  topNav: { 
+    position: 'absolute', 
+    top: 0, 
+    left: 0, 
+    right: 0, 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    paddingHorizontal: 20, 
+    paddingTop: 50, 
+    paddingBottom: 16,
+  },
+  navButton: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    backgroundColor: 'rgba(255,255,255,0.95)', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.15, 
+    shadowRadius: 8, 
+    elevation: 5 
+  },
+  navCenter: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8 
+  },
+  homeIconContainer: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    shadowColor: '#2D6A4F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  homeIconGradient: { 
+    width: 36, 
+    height: 36,
+    justifyContent: 'center', 
+    alignItems: 'center',
+  },
+  navRight: { 
+    flexDirection: 'row', 
+    gap: 10 
+  },
+  imageCounter: { 
+    position: 'absolute', 
+    bottom: 90, 
+    right: 20, 
+    backgroundColor: 'rgba(0,0,0,0.8)', 
+    paddingHorizontal: 14, 
+    paddingVertical: 8, 
+    borderRadius: 24, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  imageCounterText: { 
+    color: '#FFFFFF', 
+    fontSize: 14, 
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  thumbnailStrip: { 
+    position: 'absolute', 
+    bottom: 0, 
+    left: 0, 
+    right: 0,
+    paddingTop: 40, 
+    paddingBottom: 20,
+  },
+  thumbnailGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  thumbnailContent: { 
+    paddingHorizontal: 20, 
+    gap: 12 
+  },
+  thumbnail: { 
+    width: 72, 
+    height: 72, 
+    borderRadius: 16, 
+    overflow: 'hidden', 
+    borderWidth: 3, 
+    borderColor: 'transparent', 
+    opacity: 0.5,
+    position: 'relative',
+  },
+  thumbnailActive: { 
+    borderColor: '#2D6A4F', 
+    opacity: 1, 
+    transform: [{ scale: 1.08 }],
+    shadowColor: '#2D6A4F',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  thumbnailImage: { 
+    width: '100%', 
+    height: '100%' 
+  },
+  thumbnailActiveOverlay: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 2,
+  },
+  content: { 
+    flex: 1 
+  },
+  propertyHeader: { 
+    backgroundColor: '#FFFFFF', 
+    paddingHorizontal: 24, 
+    paddingTop: 24, 
+    paddingBottom: 24, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.08, 
+    shadowRadius: 8, 
+    elevation: 4 
+  },
+  badgeRow: { 
+    flexDirection: 'row', 
+    gap: 8, 
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  badgeGreen: { 
+    paddingHorizontal: 14, 
+    paddingVertical: 7, 
+    borderRadius: 14,
+    shadowColor: '#2D6A4F',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  badgeGreenText: { 
+    color: '#FFFFFF', 
+    fontSize: 12, 
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  badgeBlue: { 
+    backgroundColor: '#E8F5E9', 
+    paddingHorizontal: 14, 
+    paddingVertical: 7, 
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#2D6A4F',
+  },
+  badgeBlueText: { 
+    color: '#2D6A4F', 
+    fontSize: 12, 
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  verifiedBadge: {
+    backgroundColor: 'rgba(45, 106, 79, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  verifiedText: {
+    color: '#2D6A4F',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  title: { 
+    fontSize: 26, 
+    fontWeight: '800', 
+    color: '#111827', 
+    marginBottom: 12,
+    letterSpacing: -0.5,
+    lineHeight: 32,
+  },
+  addressRow: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-start', 
+    gap: 10, 
+    marginBottom: 16 
+  },
+  addressIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(45, 106, 79, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  address: { 
+    flex: 1, 
+    fontSize: 15, 
+    color: '#6B7280', 
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  price: { 
+    fontSize: 34, 
+    fontWeight: '900', 
+    color: '#2D6A4F',
+    letterSpacing: -1,
+  },
+  priceTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 4,
+  },
+  priceChange: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#10b981',
+  },
+  specsSection: { 
+    paddingHorizontal: 24, 
+    paddingVertical: 20, 
+    backgroundColor: '#F9FAFB' 
+  },
+  specsGrid: { 
+    flexDirection: 'row', 
+    gap: 12 
+  },
+  specCard: { 
+    flex: 1, 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 16, 
+    padding: 18, 
+    borderWidth: 1.5, 
+    borderColor: '#E5E7EB', 
+    alignItems: 'center', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.06, 
+    shadowRadius: 8, 
+    elevation: 3 
+  },
+  specIconContainer: { 
+    marginBottom: 10 
+  },
+  specIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(45, 106, 79, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  specValue: { 
+    fontSize: 20, 
+    fontWeight: '800', 
+    color: '#111827', 
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  specLabel: { 
+    fontSize: 12, 
+    color: '#6B7280',
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  section: { 
+    backgroundColor: '#FFFFFF', 
+    paddingHorizontal: 24, 
+    paddingVertical: 24, 
+    marginTop: 2 
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 12,
+  },
+  sectionTitle: { 
+    fontSize: 20, 
+    fontWeight: '800', 
+    color: '#111827',
+    letterSpacing: -0.3,
+  },
+  sectionDivider: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 1,
+  },
+  description: { 
+    fontSize: 15, 
+    color: '#6B7280', 
+    lineHeight: 24,
+    fontWeight: '400',
+  },
+  featuresSection: { 
+    backgroundColor: '#FFFFFF', 
+    paddingHorizontal: 24, 
+    paddingVertical: 24, 
+    marginTop: 2 
+  },
+  featuresGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 10 
+  },
+  featureChip: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 8, 
+    backgroundColor: '#F9FAFB', 
+    paddingHorizontal: 16, 
+    paddingVertical: 12, 
+    borderRadius: 14, 
+    borderWidth: 1.5, 
+    borderColor: '#E5E7EB' 
+  },
+  featureIconWrapper: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(45, 106, 79, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  featureChipText: { 
+    fontSize: 14, 
+    color: '#374151', 
+    fontWeight: '600' 
+  },
+  locationHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 20 
+  },
+  directionsButton: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6,
+    backgroundColor: 'rgba(45, 106, 79, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  directionsText: { 
+    fontSize: 14, 
+    color: '#2D6A4F', 
+    fontWeight: '700' 
+  },
+  mapPlaceholder: { 
+    height: 200, 
+    borderRadius: 20, 
+    overflow: 'hidden', 
+    backgroundColor: '#E5E7EB', 
+    marginBottom: 20, 
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  mapImage: { 
+    width: '100%', 
+    height: '100%', 
+    opacity: 0.5 
+  },
+  mapOverlay: { 
+    ...StyleSheet.absoluteFillObject, 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  mapLabel: { 
+    backgroundColor: '#FFFFFF', 
+    paddingHorizontal: 20, 
+    paddingVertical: 12, 
+    borderRadius: 16, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 10, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.15, 
+    shadowRadius: 12, 
+    elevation: 6,
+    maxWidth: width - 80,
+  },
+  mapLabelText: { 
+    fontSize: 15, 
+    color: '#111827', 
+    fontWeight: '700',
+    flex: 1,
+  },
+  scoreGrid: { 
+    flexDirection: 'row', 
+    gap: 12 
+  },
+  scoreCard: { 
+    flex: 1, 
+    backgroundColor: '#F9FAFB', 
+    borderRadius: 16, 
+    padding: 16, 
+    alignItems: 'center', 
+    borderWidth: 1.5, 
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  scoreCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(45, 106, 79, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  scoreValue: { 
+    fontSize: 22, 
+    fontWeight: '800', 
+    color: '#2D6A4F',
+    letterSpacing: -0.5,
+  },
+  scoreLabel: { 
+    fontSize: 12, 
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  agentSection: { 
+    backgroundColor: '#FFFFFF', 
+    paddingHorizontal: 24, 
+    paddingVertical: 24, 
+    marginTop: 2 
+  },
+  agentCard: { 
+    backgroundColor: '#F9FAFB', 
+    borderRadius: 20, 
+    padding: 20, 
+    borderWidth: 1.5, 
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  agentHeader: { 
+    flexDirection: 'row', 
+    gap: 16, 
+    marginBottom: 20 
+  },
+  agentAvatar: { 
+    width: 68, 
+    height: 68, 
+    borderRadius: 34,
+    justifyContent: 'center', 
+    alignItems: 'center',
+    shadowColor: '#2D6A4F',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  agentInitials: { 
+    fontSize: 22, 
+    fontWeight: '800', 
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  agentInfo: { 
+    flex: 1,
+    justifyContent: 'center',
+  },
+  agentName: { 
+    fontSize: 18, 
+    fontWeight: '700', 
+    color: '#111827', 
+    marginBottom: 4,
+    letterSpacing: -0.3,
+  },
+  agentRole: { 
+    fontSize: 14, 
+    color: '#6B7280', 
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  agentRating: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6 
+  },
+  agentRatingValue: { 
+    fontSize: 15, 
+    color: '#111827', 
+    fontWeight: '700' 
+  },
+  agentRatingCount: { 
+    fontSize: 14, 
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  contactButtons: { 
+    flexDirection: 'row', 
+    gap: 10 
+  },
+  contactButton: { 
+    flex: 1, 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 14, 
+    paddingVertical: 14, 
+    alignItems: 'center', 
+    gap: 8, 
+    borderWidth: 1.5, 
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  contactIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(45, 106, 79, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  contactButtonText: { 
+    fontSize: 13, 
+    color: '#374151', 
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  bottomSpacer: { 
+    height: 240 
+  },
+  bottomCTA: { 
+    position: 'absolute', 
+    bottom: 0, 
+    left: 0, 
+    right: 0, 
+    backgroundColor: '#FFFFFF', 
+    borderTopWidth: 1, 
+    borderTopColor: '#E5E7EB', 
+    paddingHorizontal: 24, 
+    paddingTop: 20,
+    paddingBottom: 24, 
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: -4 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 12, 
+    elevation: 10 
+  },
+  ctaRow: { 
+    flexDirection: 'row', 
+    gap: 12, 
+    marginBottom: 10 
+  },
+  ctaButtonGreen: { 
+    flex: 1,
+    borderRadius: 14, 
+    overflow: 'hidden',
+    shadowColor: '#2D6A4F', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.3, 
+    shadowRadius: 8, 
+    elevation: 6 
+  },
+  ctaButtonDark: { 
+    flex: 1,
+    borderRadius: 14, 
+    overflow: 'hidden',
+    shadowColor: '#000', 
+    shadowOffset: { width: 0, height: 4 }, 
+    shadowOpacity: 0.3, 
+    shadowRadius: 8, 
+    elevation: 6 
+  },
+  ctaButtonGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaButtonText: { 
+    color: '#FFFFFF', 
+    fontSize: 16, 
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  ctaButtonOutline: { 
+    flex: 1, 
+    borderWidth: 2, 
+    borderColor: '#2D6A4F', 
+    borderRadius: 14, 
+    paddingVertical: 14, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    gap: 8,
+    backgroundColor: 'rgba(45, 106, 79, 0.05)',
+  },
+  ctaButtonOutlineText: { 
+    color: '#2D6A4F', 
+    fontSize: 16, 
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  ctaButtonReport: { 
+    flex: 1, 
+    borderWidth: 2, 
+    borderColor: '#DC2626', 
+    borderRadius: 14, 
+    paddingVertical: 14, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    gap: 8,
+    backgroundColor: 'rgba(220, 38, 38, 0.05)',
+  },
+  ctaButtonReportText: { 
+    color: '#DC2626', 
+    fontSize: 16, 
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
 });
