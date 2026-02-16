@@ -360,16 +360,20 @@ export default function BuilderDashboard({
             <Text style={styles.statValue}>{stats.totalListings}</Text>
           </View>
 
-          <View style={styles.statCard}>
+          <TouchableOpacity
+            style={styles.statCard}
+            onPress={() => navigation.navigate('builderInquiries')}
+            activeOpacity={0.7}
+          >
             <View style={styles.statHeader}>
               <View style={[styles.statIcon, { backgroundColor: '#F9731615' }]}>
                 <Users size={20} color="#F97316" strokeWidth={2} />
               </View>
-              <Text style={styles.newBadge}>New</Text>
+              <Text style={styles.newBadge}>View All</Text>
             </View>
             <Text style={styles.statLabel}>Pending Inquiries</Text>
             <Text style={styles.statValue}>{stats.pendingInquiries}</Text>
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.statCard}>
             <View style={styles.statHeader}>
@@ -491,62 +495,6 @@ export default function BuilderDashboard({
           ))}
         </View>
 
-        {/* Pending Inquiries */}
-        {inquiries.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Text style={styles.sectionTitleLarge}>Pending Inquiries</Text>
-                <View style={styles.inquiryBadge}>
-                  <Text style={styles.inquiryBadgeText}>{inquiries.length}</Text>
-                </View>
-              </View>
-            </View>
-
-            {inquiries.map((inquiry) => (
-              <View key={inquiry.id} style={styles.inquiryCard}>
-                <View style={styles.inquiryImageContainer}>
-                  <Image
-                    source={{ uri: inquiry.property_images?.[0] || 'https://via.placeholder.com/100' }}
-                    style={styles.inquiryImage}
-                    resizeMode="cover"
-                  />
-                </View>
-                <View style={styles.inquiryContent}>
-                  <Text style={styles.inquiryPropertyTitle} numberOfLines={1}>
-                    {inquiry.property_title}
-                  </Text>
-                  <View style={styles.inquiryUserRow}>
-                    <User size={14} color="#6B7280" strokeWidth={2} />
-                    <Text style={styles.inquiryUserName}>{inquiry.user_name}</Text>
-                  </View>
-                  <Text style={styles.inquiryMessage} numberOfLines={2}>
-                    {inquiry.initial_message}
-                  </Text>
-                  <Text style={styles.inquiryTime}>
-                    {new Date(inquiry.created_at).toLocaleDateString()}
-                  </Text>
-                  <View style={styles.inquiryActions}>
-                    <TouchableOpacity
-                      style={styles.acceptButton}
-                      onPress={() => handleAcceptInquiry(inquiry.id)}
-                    >
-                      <Check size={16} color="#FFFFFF" strokeWidth={2} />
-                      <Text style={styles.acceptButtonText}>Accept</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.rejectButton}
-                      onPress={() => handleRejectInquiry(inquiry.id)}
-                    >
-                      <X size={16} color="#DC2626" strokeWidth={2} />
-                      <Text style={styles.rejectButtonText}>Reject</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
 
         {/* Recent Listings */}
         <View style={styles.section}>

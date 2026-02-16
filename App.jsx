@@ -14,7 +14,9 @@ import ExploreProperties from './modules/property/screens/ExploreProperties';
 import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
 import ReportPropertyScreen from './modules/property/screens/ReportPropertyScreen';
 import AddProperty from './modules/property/screens/AddProperties';
+import BuilderInquiriesScreen from './modules/builder/screens/BuilderInquiriesScreen';
 import PaymentScreen from './store/PaymentScreen';
+import ChatScreen from './modules/chat/screens/ChatScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
@@ -23,6 +25,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [reportPropertyData, setReportPropertyData] = useState(null);
   const [paymentData, setPaymentData] = useState(null);
+  const [chatData, setChatData] = useState(null);
 
   const [userData, setUserData] = useState({
     name: 'Sarah',
@@ -72,6 +75,14 @@ export default function App() {
         propertyPrice: params.propertyPrice,
       });
     }
+
+    // Handle Chat data
+    if (params.chatId || params.inquiryId) {
+      setChatData({
+        chatId: params.chatId,
+        inquiryId: params.inquiryId,
+      });
+    }
   };
 
   const goBack = () => {
@@ -93,6 +104,7 @@ export default function App() {
     setSelectedProperty(null);
     setReportPropertyData(null);
     setPaymentData(null);
+    setChatData(null);
   };
 
   const navigation = {
@@ -199,14 +211,20 @@ export default function App() {
             navigation={navigation}
             property={selectedProperty}
             onBack={goBack}
+            // route={{
+            //   params: {
+            //     propertyId: selectedProperty?.id || 'property-001',
+            //     propertyName: selectedProperty?.name || 'Modern Luxury Villa',
+            //     propertyAddress: selectedProperty?.address || '1245 Sunset Boulevard, Beverly Hills, CA 90210',
+            //     propertyPrice: selectedProperty?.price || '$789,000',
+            //   }
+            // }}
             route={{
               params: {
-                propertyId: selectedProperty?.id || 'property-001',
-                propertyName: selectedProperty?.name || 'Modern Luxury Villa',
-                propertyAddress: selectedProperty?.address || '1245 Sunset Boulevard, Beverly Hills, CA 90210',
-                propertyPrice: selectedProperty?.price || '$789,000',
+                property: selectedProperty
               }
             }}
+
           />
         );
 
@@ -243,6 +261,14 @@ export default function App() {
               navigateTo('propertyDetail', { property })
             }
             onAddProperty={() => navigateTo('addProperty')}
+          />
+        );
+
+      case 'builderInquiries':
+        return (
+          <BuilderInquiriesScreen
+            navigation={navigation}
+            onBack={goBack}
           />
         );
 
@@ -285,6 +311,21 @@ export default function App() {
                 propertyPrice: paymentData?.propertyPrice || '$789,000',
               },
             }}
+          />
+        );
+
+      case 'chat':
+        return (
+          <ChatScreen
+            navigation={navigation}
+            onBack={goBack}
+            route={{
+              params: {
+                chatId: chatData?.chatId,
+                inquiryId: chatData?.inquiryId
+              }
+            }}
+            user={userData}
           />
         );
 

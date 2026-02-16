@@ -5,9 +5,9 @@ const chat = require("../controllers/chatController")
 
 
 //sending message
-router.post("/:bookingId",protect,chat.sendMessage)
+router.post("/:chatId", protect, chat.sendMessage)
 
 //get messages
-router.get("/:bookingId",protect,chat.getMessages)
+router.get("/:chatId", protect, chat.getMessages)
 
 module.exports = router

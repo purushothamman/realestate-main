@@ -56,7 +56,7 @@ const SpecCard = ({ icon, label, value }) => (
   </View>
 );
 
-export default function PropertyDetailScreen({ navigation, onBack, route }) {
+export default function PropertyDetailScreen({ navigation, onBack, route, property: propFromProps }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -74,8 +74,8 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
 
   const API_BASE_URL = getApiUrl();
 
-  // Extract property data from route params
-  const property = route?.params?.property || {};
+  // Extract property data from route params or props
+  const property = propFromProps || route?.params?.property || {};
   const propertyId = property.id || 'property-123';
   const propertyName = property.title || 'Modern Luxury Villa';
   const propertyAddress = property.address || (property.city ? `${property.city}, ${property.state}` : '1245 Sunset Boulevard, Beverly Hills, CA 90210');
@@ -114,22 +114,86 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
     }
   };
 
+  // const handleMakeOffer = async () => {
+  //   try {
+  //     // Get the actual property data from route params or use defaults
+  //     //const property = route?.params?.property || {};
+  //     //const propertyId = property.id || property.property_id || propertyId;
+  //     // const property = route?.params?.property;
+
+  //     if (!property || !propertyId) {
+  //       Alert.alert('Error', 'Property information is missing');
+  //       return;
+  //     }
+
+  //     const token = await AsyncStorage.getItem('authToken');
+  //     if (!token) {
+  //       Alert.alert('Authentication Required', 'Please log in to make an offer');
+  //       return;
+  //     }
+
+  //     const response = await fetch(`${API_BASE_URL}/inquiries/create`, {
+  //       method: 'POST',
+  //       headers: {
+  //         'Authorization': `Bearer ${token}`,
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: JSON.stringify({
+  //         property_id: propertyId,
+  //         initial_message: `I am interested in ${propertyName}. I would like to discuss this property with you.`
+  //       })
+  //     });
+
+  //     const data = await response.json();
+
+  //     if (response.ok && data.success) {
+  //       Alert.alert(
+  //         'Inquiry Sent! 🎉',
+  //         'Your inquiry has been sent to the builder. Redirecting you to the chat...',
+  //         [
+  //           {
+  //             text: 'OK',
+  //             onPress: () => {
+  //               if (navigation && navigation.navigate) {
+  //                 navigation.navigate('chat', {
+  //                   chatId: data.chat_id,
+  //                   inquiryId: data.inquiry_id
+  //                 });
+  //               } else {
+  //                 Alert.alert('Error', 'Navigation not available');
+  //               }
+  //             }
+  //           }
+  //         ]
+  //       );
+  //     } else {
+  //       Alert.alert('Error', data.message || 'Failed to send inquiry');
+  //     }
+  //   } catch (error) {
+  //     console.error('Make offer error:', error);
+  //     Alert.alert('Error', 'Failed to send inquiry. Please try again.');
+  //   }
+  // };
+
   const handleMakeOffer = async () => {
     try {
-      // Get the actual property data from route params or use defaults
-      const property = route?.params?.property || {};
-      const propertyId = property.id || property.property_id || propertyId;
+      console.log("📌 PROPERTY OBJECT:", property);
+      console.log("📌 PROPERTY ID:", propertyId);
 
-      if (!propertyId) {
+      if (!property || !propertyId) {
         Alert.alert('Error', 'Property information is missing');
         return;
       }
 
       const token = await AsyncStorage.getItem('authToken');
+      console.log("📌 TOKEN:", token);
+
       if (!token) {
         Alert.alert('Authentication Required', 'Please log in to make an offer');
         return;
       }
+
+      console.log("📌 Sending request to:", `${API_BASE_URL}/inquiries/create`);
 
       const response = await fetch(`${API_BASE_URL}/inquiries/create`, {
         method: 'POST',
@@ -143,30 +207,25 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
         })
       });
 
-      const data = await response.json();
+      console.log("📌 RESPONSE STATUS:", response.status);
 
-      if (response.ok && data.success) {
-        Alert.alert(
-          'Inquiry Sent! 🎉',
-          'Your inquiry has been sent to the builder. They will review and respond soon. You can chat with them once they accept your inquiry.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                if (navigation && navigation.goBack) {
-                  navigation.goBack();
-                } else if (onBack) {
-                  onBack();
-                }
-              }
-            }
-          ]
-        );
-      } else {
-        Alert.alert('Error', data.message || 'Failed to send inquiry');
+      const data = await response.json();
+      console.log("📌 RESPONSE BODY:", data);
+
+      if (!response.ok) {
+        Alert.alert('Backend Error', data.message || 'Unknown error');
+        return;
       }
+
+      if (data.success) {
+        navigation.navigate('chat', {
+          chatId: data.chat_id,
+          inquiryId: data.inquiry_id
+        });
+      }
+
     } catch (error) {
-      console.error('Make offer error:', error);
+      console.error('❌ Make offer error:', error);
       Alert.alert('Error', 'Failed to send inquiry. Please try again.');
     }
   };

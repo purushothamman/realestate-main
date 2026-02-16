@@ -211,7 +211,8 @@ exports.getAllProperties = async (req, res) => {
                 ) as is_favorited
             FROM properties p
             LEFT JOIN users u ON p.uploaded_by = u.id
-            WHERE p.is_active = TRUE AND p.status = 'active'
+            LEFT JOIN property_images pi ON p.id = pi.property_id AND pi.is_primary = TRUE
+            WHERE p.status = 'active'
         `;
 
         const params = [req.user?.id || 0];
@@ -247,6 +248,7 @@ exports.getAllProperties = async (req, res) => {
         }
 
         query += ` 
+            GROUP BY p.id
             ORDER BY p.created_at DESC
             LIMIT ? OFFSET ?
         `;
@@ -274,6 +276,8 @@ exports.getAllProperties = async (req, res) => {
             isFavorited: Boolean(prop.is_favorited),
             viewCount: prop.view_count,
             favoriteCount: prop.favorite_count,
+            image: prop.image_url,
+            imageUrl: prop.image_url,
             owner: {
                 name: prop.owner_name,
                 email: prop.owner_email,
@@ -309,13 +313,19 @@ exports.getPropertyById = async (req, res) => {
                 u.email as owner_email,
                 u.phone as owner_phone,
                 u.profile_image as owner_image,
+                u.role as owner_type,
                 EXISTS(
                     SELECT 1 FROM favorites 
-                    WHERE property_id = p.property_id AND user_id = ?
-                ) as is_favorited
+                    WHERE property_id = p.id AND user_id = ?
+                ) as is_favorited,
+                JSON_ARRAYAGG(DISTINCT pi.image_url) as images,
+                JSON_ARRAYAGG(DISTINCT JSON_OBJECT('name', pf.feature_name, 'value', pf.feature_value)) as features
             FROM properties p
-            LEFT JOIN users u ON p.owner_id = u.id
-            WHERE p.property_id = ? AND p.is_active = TRUE`,
+            LEFT JOIN users u ON p.uploaded_by = u.id
+            LEFT JOIN property_images pi ON p.id = pi.property_id
+            LEFT JOIN property_features pf ON p.id = pf.property_id
+            WHERE p.id = ? AND p.is_active = TRUE
+            GROUP BY p.id`,
             [req.user?.id || 0, id]
         );
 
@@ -328,13 +338,17 @@ exports.getPropertyById = async (req, res) => {
 
         const property = properties[0];
 
+        // Parse images and features (handle nulls from left join)
+        const parsedImages = property.images ? property.images.filter(img => img !== null) : [];
+        const parsedFeatures = property.features ? property.features.filter(f => f.name !== null) : [];
+
         res.json({
             success: true,
             property: {
-                id: property.property_id,
+                id: property.id,
                 title: property.title,
                 price: property.price,
-                purpose: property.purpose,
+                purpose: property.purpose || property.listing_type,
                 propertyType: property.property_type,
                 address: property.address,
                 city: property.city,
@@ -350,6 +364,9 @@ exports.getPropertyById = async (req, res) => {
                 isFavorited: Boolean(property.is_favorited),
                 createdAt: property.created_at,
                 updatedAt: property.updated_at,
+                images: parsedImages,
+                image: parsedImages[0] || null, 
+                features: parsedFeatures,
                 owner: {
                     name: property.owner_name,
                     email: property.owner_email,

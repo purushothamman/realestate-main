@@ -29,12 +29,31 @@ exports.createInquiry = async (req, res) => {
             [property_id, userId]
         );
 
+        // if (existingInquiry && existingInquiry.length > 0) {
+        //     return res.status(400).json({
+        //         success: false,
+        //         message: 'You already have an active inquiry for this property'
+        //     });
+        // }
+
         if (existingInquiry && existingInquiry.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'You already have an active inquiry for this property'
+
+            // Get existing chat
+            const [existingChat] = await pool.query(
+                'SELECT id FROM chats WHERE inquiry_id = ? LIMIT 1',
+                [existingInquiry[0].id]
+            );
+
+            return res.json({
+                success: true,
+                message: 'Inquiry already exists',
+                inquiry_id: existingInquiry[0].id,
+                chat_id: existingChat[0]?.id
             });
         }
+
+
+
 
         // Create inquiry
         const [result] = await pool.query(
@@ -116,10 +135,45 @@ exports.getBuilderInquiries = async (req, res) => {
         const [inquiries] = await pool.query(query, params);
 
         // Parse JSON aggregated images
-        const formattedInquiries = inquiries.map(inquiry => ({
-            ...inquiry,
-            property_images: inquiry.property_images ? JSON.parse(inquiry.property_images).filter(img => img !== null) : []
-        }));
+        //         const formattedInquiries = inquiries.map(inquiry => ({
+        //             ...inquiry,
+        //             property_images: inquiry.property_images ? JSON.parse(inquiry.property_images).filter(img => img !== null) : []
+        //         }));
+
+        //         res.json({
+        //             success: true,
+        //             inquiries: formattedInquiries
+        //         });
+
+        //     } catch (error) {
+        //         console.error('Get builder inquiries error:', error);
+        //         res.status(500).json({ success: false, message: error.message });
+        //     }
+        // };
+
+        const formattedInquiries = inquiries.map(inquiry => {
+            let images = [];
+
+            try {
+                if (inquiry.property_images) {
+                    const parsed = typeof inquiry.property_images === 'string'
+                        ? JSON.parse(inquiry.property_images)
+                        : inquiry.property_images;
+
+                    if (Array.isArray(parsed)) {
+                        images = parsed.filter(img => img !== null);
+                    }
+                }
+            } catch (err) {
+                console.log("⚠️ Image parse error for inquiry:", inquiry.id);
+                images = [];
+            }
+
+            return {
+                ...inquiry,
+                property_images: images
+            };
+        });
 
         res.json({
             success: true,

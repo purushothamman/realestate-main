@@ -16,10 +16,17 @@ exports.getDashboard = async (req, res) => {
             [builderId]
         );
 
+        // Pending Inquiries Count
+        const [pendingRows] = await pool.query(
+            "SELECT COUNT(*) as pending FROM inquiries WHERE builder_id = ? AND status = 'pending'",
+            [builderId]
+        );
+
         // Get all properties with full details
         const [properties] = await pool.query(
             `SELECT p.*, 
-            (SELECT image_url FROM property_images pi WHERE pi.property_id = p.id LIMIT 1) as image_url
+            (SELECT image_url FROM property_images pi WHERE pi.property_id = p.id LIMIT 1) as image_url,
+            (SELECT COUNT(*) FROM inquiries i WHERE i.property_id = p.id) as inquiry_count
        FROM properties p
        WHERE uploaded_by = ?
        ORDER BY created_at DESC`,
@@ -46,14 +53,14 @@ exports.getDashboard = async (req, res) => {
             image: p.image_url,
             images: p.image_url ? [p.image_url] : [],
             // Temporary fields
-            progress: 100,
+            progress: p.status === 'sold' ? 100 : (p.status === 'active' ? 50 : 0),
             deadline: new Date(p.created_at).toLocaleDateString('en-US', {
                 month: 'short',
                 day: 'numeric',
                 year: 'numeric'
             }),
-            views: 0,
-            inquiries: 0
+            views: p.view_count || 0,
+            inquiries: p.inquiry_count || 0
         }));
 
         res.json({
@@ -61,8 +68,8 @@ exports.getDashboard = async (req, res) => {
             stats: {
                 totalListings: totalRows[0].total,
                 activeProjects: activeRows[0].active,
-                pendingInquiries: 0, // TODO: implement inquiries count
-                upcomingDeadlines: 0 // TODO: implement deadlines count
+                pendingInquiries: pendingRows[0].pending,
+                upcomingDeadlines: activeRows[0].active // Approximation
             },
             recentListings: formattedProperties.slice(0, 5),
             activeListings: formattedProperties.filter(p => p.status === 'active').slice(0, 3)
