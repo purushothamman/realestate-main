@@ -780,30 +780,32 @@ module.exports.register = async (req, res) => {
         }
 
         // For builders, check if GST or PAN already exists
-        const [existingGst] = await connection.query(
-            "SELECT user_id FROM builders WHERE gst_no = ?",
-            [gstNo.trim()]
-        );
+        if (role === "builder") {
+            const [existingGst] = await connection.query(
+                "SELECT user_id FROM builders WHERE gst_no = ?",
+                [gstNo.trim()]
+            );
 
-        if (existingGst.length > 0) {
-            await connection.rollback();
-            connection.release();
-            return res.status(409).json({
-                message: "This GST number is already registered."
-            });
-        }
+            if (existingGst.length > 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(409).json({
+                    message: "This GST number is already registered."
+                });
+            }
 
-        const [existingPan] = await connection.query(
-            "SELECT user_id FROM builders WHERE pan_no = ?",
-            [panNo.trim()]
-        );
+            const [existingPan] = await connection.query(
+                "SELECT user_id FROM builders WHERE pan_no = ?",
+                [panNo.trim()]
+            );
 
-        if (existingPan.length > 0) {
-            await connection.rollback();
-            connection.release();
-            return res.status(409).json({
-                message: "This PAN number is already registered."
-            });
+            if (existingPan.length > 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(409).json({
+                    message: "This PAN number is already registered."
+                });
+            }
         }
 
         console.log("Register payload:", {

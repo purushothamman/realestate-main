@@ -35,7 +35,9 @@ import {
   ArrowLeft,
   AlertCircle,
   XCircle,
+  LayoutDashboard,
 } from 'lucide-react-native';
+import UserNavigator from '../../../navigation/UserNavigator';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -55,6 +57,7 @@ const ProfileScreen = ({
   onLogout = () => { },
   onChangePassword = () => { },
   onBack = () => { },
+  navigation,
 }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [userData, setUserData] = useState(null);
@@ -205,6 +208,12 @@ const ProfileScreen = ({
 
   // ... (stats and quickActions setup remains similar) ...
 
+  // Handle Tab Navigation
+  const handleTabPress = (tab) => {
+    if (tab === 'profile') return;
+    navigation.navigate('home');
+  };
+
   // Ensure stats object exists
   const stats = userData.stats || {
     totalProperties: 0,
@@ -213,6 +222,22 @@ const ProfileScreen = ({
   };
 
   const quickActions = [
+    // Dashboard action - only for agent and builder
+    ...(userData.role === 'agent' || userData.role === 'builder'
+      ? [{
+        icon: LayoutDashboard,
+        label: 'Dashboard',
+        value: null,
+        color: '#3B82F6',
+        action: () => {
+          if (userData.role === 'agent') {
+            navigation?.navigate('agentDashboard');
+          } else if (userData.role === 'builder') {
+            navigation?.navigate('builderDashboard');
+          }
+        },
+      }]
+      : []),
     {
       icon: Home,
       label: 'My Properties',
@@ -324,6 +349,36 @@ const ProfileScreen = ({
           </View>
         </View>
 
+        {/* Dashboard Access Card - NEW */}
+        {(userData.role === 'agent' || userData.role === 'builder') && (
+          <TouchableOpacity
+            style={styles.dashboardCard}
+            onPress={() => {
+              if (userData.role === 'agent') {
+                navigation?.navigate('agentDashboard');
+              } else if (userData.role === 'builder') {
+                navigation?.navigate('builderDashboard');
+              }
+            }}
+            activeOpacity={0.9}
+          >
+            <View style={styles.dashboardCardContent}>
+              <View style={styles.dashboardIconContainer}>
+                <LayoutDashboard size={24} color="#FFFFFF" />
+              </View>
+              <View style={styles.dashboardTextContainer}>
+                <Text style={styles.dashboardTitle}>
+                  {userData.role === 'agent' ? 'Agent Dashboard' : 'Builder Dashboard'}
+                </Text>
+                <Text style={styles.dashboardSubtitle}>
+                  Manage your listings and leads
+                </Text>
+              </View>
+              <ChevronRight size={20} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Quick Actions */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Quick Actions</Text>
@@ -424,6 +479,12 @@ const ProfileScreen = ({
           <Text style={styles.versionText}>© 2025 EstateHub. All rights reserved.</Text>
         </View>
       </ScrollView>
+
+      {/* Bottom Navigation */}
+      <UserNavigator
+        activeTab="profile"
+        onTabPress={handleTabPress}
+      />
     </View>
   );
 };
@@ -710,6 +771,44 @@ const styles = StyleSheet.create({
     fontSize: isSmallDevice ? 11 : 12,
     color: '#9CA3AF',
     marginTop: 4,
+  },
+  dashboardCard: {
+    backgroundColor: '#2D6A4F',
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  dashboardCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  dashboardIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dashboardTextContainer: {
+    flex: 1,
+  },
+  dashboardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  dashboardSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
 });
 

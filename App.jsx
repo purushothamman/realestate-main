@@ -15,6 +15,7 @@ import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
 import ReportPropertyScreen from './modules/property/screens/ReportPropertyScreen';
 import AddProperty from './modules/property/screens/AddProperties';
 import PaymentScreen from './store/PaymentScreen';
+import AgentDashboard from './modules/agent/AgentDashboardScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
@@ -125,11 +126,7 @@ export default function App() {
             onBack={goBack}
             onNavigateToLoginSuccess={(user) => {
               if (user) setUserData(user);
-              if (user?.role === 'builder' || user?.role === 'developer') {
-                navigateTo('builderDashboard');
-              } else {
-                navigateTo('home');
-              }
+              navigateTo('home');
             }}
             onForgotPassword={() => navigateTo('forgotPassword')}
             onRegister={() => navigateTo('register')}
@@ -243,6 +240,15 @@ export default function App() {
               navigateTo('propertyDetail', { property })
             }
             onAddProperty={() => navigateTo('addProperty')}
+          />
+        );
+
+      case 'agentDashboard':
+        return (
+          <AgentDashboard
+            navigation={navigation}
+            agentName={userData.name}
+            onBack={goBack}
           />
         );
 

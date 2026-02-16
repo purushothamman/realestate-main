@@ -602,13 +602,10 @@ export default function LoginScreen({
         switch (userRole.toLowerCase()) {
           case 'buyer':
           case 'user':
-            console.log('→ Navigating to Home');
-            navigation.replace('Home', { user: userData });
-            break;
           case 'builder':
           case 'developer':
-            console.log('→ Navigating to BuilderDashboard');
-            navigation.replace('BuilderDashboard', { user: userData });
+            console.log('→ Navigating to Home');
+            navigation.replace('Home', { user: userData });
             break;
           case 'agent':
           case 'realtor':

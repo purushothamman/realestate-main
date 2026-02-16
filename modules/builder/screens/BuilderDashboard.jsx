@@ -10,6 +10,7 @@ import {
   StatusBar,
   ActivityIndicator,
   Platform,
+  SafeAreaView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -280,9 +281,12 @@ export default function BuilderDashboard({
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
-
+    <SafeAreaView style={styles.container}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="transparent"
+        translucent
+      />
       {/* Fixed Header with Background */}
       <View style={styles.headerContainer}>
         <ImageBackground
@@ -399,7 +403,7 @@ export default function BuilderDashboard({
             activeOpacity={0.8}
           >
             <Building2 size={20} color="#FFFFFF" strokeWidth={2} />
-            <Text style={styles.secondaryButtonText}>Create Project</Text>
+            <Text style={styles.secondaryButtonText}>Assign Agent</Text>
           </TouchableOpacity>
         </View>
 
@@ -634,7 +638,47 @@ export default function BuilderDashboard({
           </View>
         </View>
       </ScrollView>
-    </View>
+
+      {/* Bottom Nav */}
+      <View style={styles.bottomNav}>
+        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('builderDashboard')}>
+          <Home size={24} color="#2D6A4F" />
+          <Text style={styles.navTextActive}>Dashboard</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => {/* Navigate to listings */ }}
+        >
+          <Building2 size={24} color="#9ca3af" />
+          <Text style={styles.navTextInactive}>Projects</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => {/* Navigate to leads */ }}
+        >
+          <Users size={24} color="#9ca3af" />
+          <Text style={styles.navTextInactive}>Leads</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => {/* Navigate to analytics */ }}
+        >
+          <BarChart3 size={24} color="#9ca3af" />
+          <Text style={styles.navTextInactive}>Analytics</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.navItem}
+          onPress={() => navigation.navigate('profile')}
+        >
+          <User size={24} color="#9ca3af" />
+          <Text style={styles.navTextInactive}>Profile</Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -644,8 +688,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   headerContainer: {
-    height: 208,
+    height: 280, // Increased height
     overflow: 'hidden',
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   headerImage: {
     width: '100%',
@@ -659,6 +705,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     paddingTop: 32,
+    paddingBottom: 40, // Added padding at bottom to push text up
   },
   topBar: {
     flexDirection: 'row',
@@ -725,28 +772,29 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollViewContent: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 24,
-    marginTop: -40,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 40,
+    marginTop: -40, // Reduced negative margin
   },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between', // Better spacing
     marginBottom: 24,
+    gap: 16, // Consistent gap
   },
   statCard: {
-    flex: 1,
-    minWidth: '47%',
+    width: (width - 56) / 2, // Calculated width (20 padding * 2 + 16 gap) / 2
+    minWidth: '45%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20, // Softer corners
     padding: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 12, // Softer shadow
+    elevation: 4,
   },
   statHeader: {
     flexDirection: 'row',
@@ -767,60 +815,71 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   statLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '500',
+    marginBottom: 6,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
-    color: '#111827',
+    color: '#1e293b',
   },
   actionsGrid: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 16, // Increased gap
     marginBottom: 24,
   },
   primaryButton: {
     flex: 1,
-    height: 56,
+    height: 60, // Taller buttons
     backgroundColor: '#2D6A4F',
-    borderRadius: 12,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 10,
+    shadowColor: '#2D6A4F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
   },
   secondaryButton: {
     flex: 1,
-    height: 56,
+    height: 60, // Taller buttons
     backgroundColor: '#3B82F6',
-    borderRadius: 12,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 10,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   secondaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
   },
   quickAccessCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderRadius: 24,
+    padding: 20,
     marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
   sectionTitle: {
     fontSize: 16,
@@ -830,19 +889,18 @@ const styles = StyleSheet.create({
   },
   quickAccessGrid: {
     flexDirection: 'row',
-    gap: 16,
+    justifyContent: 'space-between', // Evenly spaced
+    marginTop: 16,
   },
   quickAccessItem: {
-    flex: 1,
     alignItems: 'center',
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
+    gap: 10,
+    width: '30%', // Fixed width for alignment
   },
   quickAccessIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 60, // Larger touch target
+    height: 60,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1212,6 +1270,37 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontSize: 14,
     fontWeight: '600',
+  },
+  rejectButtonText: {
+    color: '#DC2626',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Bottom Nav
+  bottomNav: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    width: '100%',
+  },
+  navItem: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  navTextActive: {
+    fontSize: 12,
+    color: '#2D6A4F',
+    fontWeight: '600',
+  },
+  navTextInactive: {
+    fontSize: 12,
+    color: '#9ca3af',
+    fontWeight: '500',
   },
 });
 
