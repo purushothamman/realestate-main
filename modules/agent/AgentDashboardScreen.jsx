@@ -37,18 +37,56 @@ import {
     Edit,
     CheckCircle,
     Clock,
-    Target
+    Target,
+    ArrowUpRight,
+    Sparkles,
+    Award,
+    ChevronRight,
+    Activity
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
 // API Configuration
-const API_BASE_URL = 'http://localhost:5000/api'; // Change this to your backend URL
+const API_BASE_URL = 'http://localhost:5000/api';
+
+const AnimatedKPICard = ({ icon, label, value, trend, trendValue, color, delay = 0 }) => {
+    const scaleAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.spring(scaleAnim, {
+            toValue: 1,
+            tension: 50,
+            friction: 7,
+            delay: delay,
+            useNativeDriver: true,
+        }).start();
+    }, []);
+
+    return (
+        <Animated.View style={[styles.kpiCard, { transform: [{ scale: scaleAnim }] }]}>
+            <View style={styles.kpiHeader}>
+                <View style={[styles.kpiIcon, { backgroundColor: `${color}15` }]}>
+                    {icon}
+                </View>
+                {trend && (
+                    <View style={styles.kpiTrendContainer}>
+                        <TrendingUp width={14} height={14} color="#10b981" strokeWidth={2.5} />
+                        <Text style={styles.kpiTrendText}>{trendValue}</Text>
+                    </View>
+                )}
+            </View>
+            <Text style={styles.kpiLabel}>{label}</Text>
+            <Text style={styles.kpiValue}>{value}</Text>
+        </Animated.View>
+    );
+};
 
 const AgentDashboard = ({ navigation, route }) => {
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(20)).current;
+    const scrollY = useRef(new Animated.Value(0)).current;
 
     // State management
     const [loading, setLoading] = useState(true);
@@ -102,23 +140,20 @@ const AgentDashboard = ({ navigation, route }) => {
         try {
             setLoading(true);
 
-            // Fetch properties from the new endpoint
             const propertiesResponse = await apiRequest('/properties/my-properties');
 
-            // Update state with fetched data
             if (propertiesResponse.success) {
                 setActiveListings(propertiesResponse.properties || []);
 
-                // Calculate stats from properties
                 const properties = propertiesResponse.properties || [];
                 setStats({
                     totalListings: properties.length,
-                    activeLeads: Math.floor(properties.length * 1.5), // Mock data
-                    siteVisits: Math.floor(properties.length * 2), // Mock data
-                    dealsClosed: Math.floor(properties.length * 0.3), // Mock data
-                    newLeads: 3, // Mock data
-                    conversionRate: 15, // Mock data
-                    monthlyRevenue: properties.reduce((sum, p) => sum + (p.price * 0.03), 0) // 3% commission
+                    activeLeads: Math.floor(properties.length * 1.5),
+                    siteVisits: Math.floor(properties.length * 2),
+                    dealsClosed: Math.floor(properties.length * 0.3),
+                    newLeads: 3,
+                    conversionRate: 15,
+                    monthlyRevenue: properties.reduce((sum, p) => sum + (p.price * 0.03), 0)
                 });
             }
 
@@ -159,9 +194,9 @@ const AgentDashboard = ({ navigation, route }) => {
         const seconds = Math.floor((now - then) / 1000);
 
         if (seconds < 60) return 'Just now';
-        if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
-        if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
-        if (seconds < 604800) return `${Math.floor(seconds / 86400)} days ago`;
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+        if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
         return then.toLocaleDateString();
     };
 
@@ -175,7 +210,6 @@ const AgentDashboard = ({ navigation, route }) => {
                 {
                     text: 'Call',
                     onPress: () => {
-                        // Add actual phone call functionality
                         console.log('Calling:', lead.phone);
                     }
                 }
@@ -183,18 +217,9 @@ const AgentDashboard = ({ navigation, route }) => {
         );
     };
 
-    // Handle property view
-    const handleViewProperty = (property) => {
-        // Navigate to property details
-        // navigation.navigate('PropertyDetails', { propertyId: property._id });
-        console.log('View property:', property._id);
-    };
-
     useEffect(() => {
-        // Initial data fetch
         fetchDashboardData();
 
-        // Animate on mount
         Animated.parallel([
             Animated.timing(fadeAnim, {
                 toValue: 1,
@@ -235,6 +260,12 @@ const AgentDashboard = ({ navigation, route }) => {
         return status.charAt(0).toUpperCase() + status.slice(1);
     };
 
+    const headerOpacity = scrollY.interpolate({
+        inputRange: [0, 100],
+        outputRange: [1, 0.9],
+        extrapolate: 'clamp',
+    });
+
     if (loading && !stats) {
         return (
             <View style={[styles.container, styles.centerContent]}>
@@ -248,22 +279,25 @@ const AgentDashboard = ({ navigation, route }) => {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
 
-            {/* Fixed Header */}
+            {/* Enhanced Fixed Header */}
             <Animated.View
                 style={[
                     styles.header,
                     {
-                        opacity: fadeAnim,
+                        opacity: headerOpacity,
                         transform: [{ translateY: slideAnim }]
                     }
                 ]}
             >
-                {/* Top Bar */}
+                {/* Enhanced Top Bar */}
                 <View style={styles.topBar}>
                     <View style={styles.topBarLeft}>
-                        <View style={styles.appIcon}>
-                            <Building2 width={20} height={20} color="#ffffff" />
-                        </View>
+                        <LinearGradient
+                            colors={['#2D6A4F', '#1e4d38']}
+                            style={styles.appIcon}
+                        >
+                            <Building2 width={22} height={22} color="#ffffff" strokeWidth={2.5} />
+                        </LinearGradient>
                         <View>
                             <Text style={styles.appName}>EstateHub</Text>
                             <Text style={styles.appTagline}>Agent Portal</Text>
@@ -271,67 +305,89 @@ const AgentDashboard = ({ navigation, route }) => {
                     </View>
 
                     <View style={styles.topBarRight}>
-                        <TouchableOpacity style={styles.notificationButton}>
-                            <Bell width={24} height={24} color="#6b7280" />
-                            <View style={styles.notificationBadge}>
-                                <Text style={styles.notificationBadgeText}>
-                                    {stats?.newLeads || 0}
-                                </Text>
+                        <TouchableOpacity style={styles.notificationButton} activeOpacity={0.7}>
+                            <View style={styles.notificationIconBg}>
+                                <Bell width={20} height={20} color="#6b7280" strokeWidth={2.5} />
                             </View>
+                            {(stats?.newLeads || 0) > 0 && (
+                                <View style={styles.notificationBadge}>
+                                    <Text style={styles.notificationBadgeText}>
+                                        {stats?.newLeads || 0}
+                                    </Text>
+                                </View>
+                            )}
                         </TouchableOpacity>
-                        <TouchableOpacity>
-                            <Settings width={24} height={24} color="#6b7280" />
+                        <TouchableOpacity style={styles.settingsButton} activeOpacity={0.7}>
+                            <Settings width={20} height={20} color="#6b7280" strokeWidth={2.5} />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Agent Overview */}
-                <LinearGradient
-                    colors={['#2D6A4F', '#245A42']}
-                    style={styles.agentOverview}
-                >
-                    <Image
-                        source={{
-                            uri: agentData?.avatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200'
-                        }}
-                        style={styles.agentAvatar}
-                    />
-                    <View style={styles.agentInfo}>
-                        <Text style={styles.agentName}>
-                            {agentData?.name || 'Agent Name'}
-                        </Text>
-                        <Text style={styles.agentTitle}>
-                            {agentData?.title || 'Real Estate Agent'}
-                        </Text>
-                        <View style={styles.agentBadges}>
-                            {agentData?.verified && (
-                                <View style={styles.agentBadge}>
-                                    <CheckCircle width={12} height={12} color="rgba(255,255,255,0.8)" />
-                                    <Text style={styles.agentBadgeText}>Verified</Text>
-                                </View>
-                            )}
-                            <View style={styles.agentBadge}>
-                                <Target width={12} height={12} color="rgba(255,255,255,0.8)" />
-                                <Text style={styles.agentBadgeText}>
-                                    {stats?.conversionRate || 0}% CVR
+                {/* Enhanced Agent Overview */}
+                <View style={styles.agentOverviewContainer}>
+                    <LinearGradient
+                        colors={['#2D6A4F', '#1e4d38']}
+                        style={styles.agentOverview}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                    >
+                        <View style={styles.agentAvatarContainer}>
+                            <Image
+                                source={{
+                                    uri: agentData?.avatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200'
+                                }}
+                                style={styles.agentAvatar}
+                            />
+                            <View style={styles.onlineIndicator} />
+                        </View>
+                        <View style={styles.agentInfo}>
+                            <View style={styles.agentNameRow}>
+                                <Text style={styles.agentName}>
+                                    {agentData?.name || 'Agent Name'}
                                 </Text>
+                                <Award width={16} height={16} color="#fbbf24" fill="#fbbf24" />
+                            </View>
+                            <Text style={styles.agentTitle}>
+                                {agentData?.title || 'Real Estate Agent'}
+                            </Text>
+                            <View style={styles.agentBadges}>
+                                {agentData?.verified !== false && (
+                                    <View style={styles.agentBadge}>
+                                        <CheckCircle width={12} height={12} color="rgba(255,255,255,0.9)" strokeWidth={2.5} />
+                                        <Text style={styles.agentBadgeText}>Verified</Text>
+                                    </View>
+                                )}
+                                <View style={styles.agentBadge}>
+                                    <Target width={12} height={12} color="rgba(255,255,255,0.9)" strokeWidth={2.5} />
+                                    <Text style={styles.agentBadgeText}>
+                                        {stats?.conversionRate || 0}% CVR
+                                    </Text>
+                                </View>
                             </View>
                         </View>
-                    </View>
-                </LinearGradient>
+                        <View style={styles.sparkleIcon}>
+                            <Sparkles width={20} height={20} color="rgba(255,255,255,0.6)" />
+                        </View>
+                    </LinearGradient>
+                </View>
 
-                {/* Screen Title */}
+                {/* Enhanced Screen Title */}
                 <View style={styles.screenTitle}>
-                    <Text style={styles.screenTitleText}>Agent Dashboard</Text>
-                    <Text style={styles.screenSubtitle}>Manage your listings, leads, and performance</Text>
+                    <Text style={styles.screenTitleText}>Dashboard</Text>
+                    <Text style={styles.screenSubtitle}>Track your performance and manage listings</Text>
                 </View>
             </Animated.View>
 
             {/* Scrollable Content */}
-            <ScrollView
+            <Animated.ScrollView
                 style={styles.scrollView}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
+                onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+                    { useNativeDriver: true }
+                )}
+                scrollEventThrottle={16}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -340,380 +396,419 @@ const AgentDashboard = ({ navigation, route }) => {
                     />
                 }
             >
-                {/* Performance KPIs */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Performance Snapshot</Text>
-
-                    <View style={styles.kpiGrid}>
-                        <View style={styles.kpiCard}>
-                            <View style={styles.kpiHeader}>
-                                <View style={[styles.kpiIcon, { backgroundColor: 'rgba(45, 106, 79, 0.1)' }]}>
-                                    <FileText width={20} height={20} color="#2D6A4F" />
-                                </View>
-                                <TrendingUp width={16} height={16} color="#10b981" />
+                <Animated.View style={{ opacity: fadeAnim }}>
+                    {/* Enhanced Performance KPIs */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeaderRow}>
+                            <View style={styles.sectionTitleContainer}>
+                                <Activity width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
+                                <Text style={styles.sectionTitle}>Performance Snapshot</Text>
                             </View>
-                            <Text style={styles.kpiLabel}>Total Listings</Text>
-                            <Text style={styles.kpiValue}>{stats?.totalListings || 0}</Text>
                         </View>
 
-                        <View style={styles.kpiCard}>
-                            <View style={styles.kpiHeader}>
-                                <View style={[styles.kpiIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-                                    <Users width={20} height={20} color="#3b82f6" />
-                                </View>
-                                <Text style={styles.kpiTrend}>+{stats?.newLeads || 0}</Text>
-                            </View>
-                            <Text style={styles.kpiLabel}>Active Leads</Text>
-                            <Text style={styles.kpiValue}>{stats?.activeLeads || 0}</Text>
+                        <View style={styles.kpiGrid}>
+                            <AnimatedKPICard
+                                icon={<FileText width={22} height={22} color="#2D6A4F" strokeWidth={2.5} />}
+                                label="Total Listings"
+                                value={stats?.totalListings || 0}
+                                trend={true}
+                                trendValue="+3"
+                                color="#2D6A4F"
+                                delay={0}
+                            />
+                            <AnimatedKPICard
+                                icon={<Users width={22} height={22} color="#3b82f6" strokeWidth={2.5} />}
+                                label="Active Leads"
+                                value={stats?.activeLeads || 0}
+                                trend={true}
+                                trendValue={`+${stats?.newLeads || 0}`}
+                                color="#3b82f6"
+                                delay={100}
+                            />
+                            <AnimatedKPICard
+                                icon={<Calendar width={22} height={22} color="#a855f7" strokeWidth={2.5} />}
+                                label="Site Visits"
+                                value={stats?.siteVisits || 0}
+                                trend={false}
+                                color="#a855f7"
+                                delay={200}
+                            />
+                            <AnimatedKPICard
+                                icon={<CheckCircle width={22} height={22} color="#10b981" strokeWidth={2.5} />}
+                                label="Deals Closed"
+                                value={stats?.dealsClosed || 0}
+                                trend={true}
+                                trendValue="+2"
+                                color="#10b981"
+                                delay={300}
+                            />
                         </View>
 
-                        <View style={styles.kpiCard}>
-                            <View style={styles.kpiHeader}>
-                                <View style={[styles.kpiIcon, { backgroundColor: 'rgba(168, 85, 247, 0.1)' }]}>
-                                    <Calendar width={20} height={20} color="#a855f7" />
-                                </View>
-                                <Clock width={16} height={16} color="#a855f7" />
-                            </View>
-                            <Text style={styles.kpiLabel}>Site Visits Scheduled</Text>
-                            <Text style={styles.kpiValue}>{stats?.siteVisits || 0}</Text>
-                        </View>
-
-                        <View style={styles.kpiCard}>
-                            <View style={styles.kpiHeader}>
-                                <View style={[styles.kpiIcon, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                                    <CheckCircle width={20} height={20} color="#10b981" />
-                                </View>
-                                <TrendingUp width={16} height={16} color="#10b981" />
-                            </View>
-                            <Text style={styles.kpiLabel}>Deals Closed</Text>
-                            <Text style={styles.kpiValue}>{stats?.dealsClosed || 0}</Text>
-                        </View>
-                    </View>
-
-                    {/* Revenue Card */}
-                    <LinearGradient
-                        colors={['#3b82f6', '#9333ea']}
-                        style={styles.revenueCard}
-                    >
-                        <View>
-                            <Text style={styles.revenueLabel}>Monthly Revenue</Text>
-                            <Text style={styles.revenueValue}>
-                                {formatPrice(stats?.monthlyRevenue || 0)}
-                            </Text>
-                        </View>
-                        <View style={styles.revenueIcon}>
-                            <DollarSign width={24} height={24} color="#ffffff" />
-                        </View>
-                    </LinearGradient>
-                </View>
-
-                {/* Quick Actions */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Quick Actions</Text>
-
-                    <View style={styles.actionsGrid}>
-                        <TouchableOpacity
-                            style={styles.actionPrimary}
-                            activeOpacity={0.8}
-                            onPress={() => navigation.navigate('addPropertyAgent')}
-                        >
-                            <View style={styles.actionIconPrimary}>
-                                <Plus width={24} height={24} color="#ffffff" />
-                            </View>
-                            <Text style={styles.actionTextPrimary}>Add New Property</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.actionSecondary}
-                            activeOpacity={0.8}
-                            onPress={() => {/* Navigate to leads */ }}
-                        >
-                            <View style={[styles.actionIconSecondary, { backgroundColor: '#eff6ff' }]}>
-                                <Phone width={24} height={24} color="#3b82f6" />
-                            </View>
-                            <Text style={styles.actionTextSecondary}>Contact Leads</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.actionSecondary}
-                            activeOpacity={0.8}
-                            onPress={() => {/* Navigate to listings */ }}
-                        >
-                            <View style={[styles.actionIconSecondary, { backgroundColor: '#faf5ff' }]}>
-                                <Building2 width={24} height={24} color="#a855f7" />
-                            </View>
-                            <Text style={styles.actionTextSecondary}>Manage Listings</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.actionSecondary}
-                            activeOpacity={0.8}
-                            onPress={() => {/* Navigate to analytics */ }}
-                        >
-                            <View style={[styles.actionIconSecondary, { backgroundColor: '#f0fdf4' }]}>
-                                <BarChart3 width={24} height={24} color="#10b981" />
-                            </View>
-                            <Text style={styles.actionTextSecondary}>View Reports</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* Recent Leads Section */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Recent Leads</Text>
-                        <TouchableOpacity onPress={() => {/* Navigate to all leads */ }}>
-                            <Text style={styles.viewAllButton}>View All</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.leadsList}>
-                        {recentLeads.length > 0 ? (
-                            recentLeads.map((lead) => {
-                                const statusStyle = getStatusStyle(lead.status);
-
-                                return (
-                                    <View key={lead._id} style={styles.leadCard}>
-                                        <View style={styles.leadHeader}>
-                                            <View style={styles.leadInfo}>
-                                                <Text style={styles.leadName}>{lead.clientName}</Text>
-                                                <Text style={styles.leadProperty} numberOfLines={1}>
-                                                    {lead.property?.title || 'Property'}
-                                                </Text>
-                                                <Text style={styles.leadBudget}>
-                                                    {formatBudgetRange(lead.budgetRange)}
-                                                </Text>
-                                            </View>
-                                            <View style={[
-                                                styles.statusBadge,
-                                                {
-                                                    backgroundColor: statusStyle.bg,
-                                                    borderColor: statusStyle.border
-                                                }
-                                            ]}>
-                                                <Text style={[styles.statusText, { color: statusStyle.text }]}>
-                                                    {getStatusLabel(lead.status)}
-                                                </Text>
-                                            </View>
-                                        </View>
-
-                                        <View style={styles.leadFooter}>
-                                            <Text style={styles.leadDate}>
-                                                {formatTimeAgo(lead.createdAt)}
-                                            </Text>
-                                            <View style={styles.leadActions}>
-                                                <TouchableOpacity
-                                                    style={styles.leadActionPrimary}
-                                                    onPress={() => handleContactLead(lead)}
-                                                >
-                                                    <Phone width={16} height={16} color="#ffffff" />
-                                                </TouchableOpacity>
-                                                <TouchableOpacity style={styles.leadActionSecondary}>
-                                                    <MessageSquare width={16} height={16} color="#374151" />
-                                                </TouchableOpacity>
-                                                <TouchableOpacity
-                                                    style={styles.leadActionSecondary}
-                                                    onPress={() => {/* Navigate to lead details */ }}
-                                                >
-                                                    <Eye width={16} height={16} color="#374151" />
-                                                </TouchableOpacity>
-                                            </View>
-                                        </View>
+                        {/* Enhanced Revenue Card */}
+                        <View style={styles.revenueCardContainer}>
+                            <LinearGradient
+                                colors={['#3b82f6', '#8b5cf6']}
+                                style={styles.revenueCard}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            >
+                                <View style={styles.revenueLeft}>
+                                    <Text style={styles.revenueLabel}>Monthly Revenue</Text>
+                                    <Text style={styles.revenueValue}>
+                                        {formatPrice(stats?.monthlyRevenue || 0)}
+                                    </Text>
+                                    <View style={styles.revenueChange}>
+                                        <ArrowUpRight width={14} height={14} color="#fff" strokeWidth={3} />
+                                        <Text style={styles.revenueChangeText}>+12.5% from last month</Text>
                                     </View>
-                                );
-                            })
-                        ) : (
-                            <Text style={styles.emptyText}>No recent leads</Text>
-                        )}
-                    </View>
-                </View>
-
-                {/* My Listings Overview */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>My Listings</Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('myListings')}>
-                            <Text style={styles.viewAllButton}>View All</Text>
-                        </TouchableOpacity>
+                                </View>
+                                <View style={styles.revenueIcon}>
+                                    <DollarSign width={28} height={28} color="#ffffff" strokeWidth={2.5} />
+                                </View>
+                            </LinearGradient>
+                        </View>
                     </View>
 
-                    <View style={styles.listingsList}>
-                        {activeListings.length > 0 ? (
-                            activeListings.slice(0, 5).map((listing) => {
-                                const statusStyle = getStatusStyle(listing.status);
+                    {/* Enhanced Quick Actions */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeaderRow}>
+                            <View style={styles.sectionTitleContainer}>
+                                <Sparkles width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
+                                <Text style={styles.sectionTitle}>Quick Actions</Text>
+                            </View>
+                        </View>
 
-                                return (
-                                    <TouchableOpacity
-                                        key={listing.id}
-                                        style={styles.listingCard}
-                                        onPress={() => navigation.navigate('PropertyDetailScreen', { property: listing })}
-                                    >
-                                        <Image
-                                            source={{ uri: listing.primaryImage || 'https://images.unsplash.com/photo-1640109478916-f445f8f19b11?w=800' }}
-                                            style={styles.listingImage}
-                                        />
-                                        <View style={styles.listingContent}>
-                                            <View style={styles.listingHeader}>
-                                                <View style={styles.listingInfo}>
-                                                    <Text style={styles.listingTitle} numberOfLines={1}>
-                                                        {listing.title}
+                        <View style={styles.actionsGrid}>
+                            <TouchableOpacity
+                                style={styles.actionPrimary}
+                                activeOpacity={0.8}
+                                onPress={() => navigation.navigate('addPropertyAgent')}
+                            >
+                                <LinearGradient
+                                    colors={['#2D6A4F', '#1e4d38']}
+                                    style={styles.actionPrimaryGradient}
+                                >
+                                    <View style={styles.actionIconPrimary}>
+                                        <Plus width={24} height={24} color="#ffffff" strokeWidth={3} />
+                                    </View>
+                                    <Text style={styles.actionTextPrimary}>Add Property</Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.actionSecondary}
+                                activeOpacity={0.8}
+                            >
+                                <View style={[styles.actionIconSecondary, { backgroundColor: '#eff6ff' }]}>
+                                    <Phone width={22} height={22} color="#3b82f6" strokeWidth={2.5} />
+                                </View>
+                                <Text style={styles.actionTextSecondary}>Contact Leads</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.actionSecondary}
+                                activeOpacity={0.8}
+                            >
+                                <View style={[styles.actionIconSecondary, { backgroundColor: '#faf5ff' }]}>
+                                    <Building2 width={22} height={22} color="#a855f7" strokeWidth={2.5} />
+                                </View>
+                                <Text style={styles.actionTextSecondary}>Manage Listings</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.actionSecondary}
+                                activeOpacity={0.8}
+                            >
+                                <View style={[styles.actionIconSecondary, { backgroundColor: '#f0fdf4' }]}>
+                                    <BarChart3 width={22} height={22} color="#10b981" strokeWidth={2.5} />
+                                </View>
+                                <Text style={styles.actionTextSecondary}>View Reports</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Enhanced Recent Leads Section */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <View style={styles.sectionTitleContainer}>
+                                <Users width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
+                                <Text style={styles.sectionTitle}>Recent Leads</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => { }}>
+                                <View style={styles.viewAllButton}>
+                                    <Text style={styles.viewAllButtonText}>View All</Text>
+                                    <ChevronRight width={16} height={16} color="#2D6A4F" strokeWidth={2.5} />
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.leadsList}>
+                            {recentLeads.length > 0 ? (
+                                recentLeads.map((lead) => {
+                                    const statusStyle = getStatusStyle(lead.status);
+
+                                    return (
+                                        <View key={lead._id} style={styles.leadCard}>
+                                            <View style={styles.leadHeader}>
+                                                <View style={styles.leadInfo}>
+                                                    <Text style={styles.leadName}>{lead.clientName}</Text>
+                                                    <Text style={styles.leadProperty} numberOfLines={1}>
+                                                        {lead.property?.title || 'Property'}
                                                     </Text>
-                                                    <View style={styles.listingLocation}>
-                                                        <MapPin width={12} height={12} color="#9ca3af" />
-                                                        <Text style={styles.listingLocationText} numberOfLines={1}>
-                                                            {listing.address}, {listing.city}
-                                                        </Text>
-                                                    </View>
+                                                    <Text style={styles.leadBudget}>
+                                                        {formatBudgetRange(lead.budgetRange)}
+                                                    </Text>
                                                 </View>
+                                                <View style={[
+                                                    styles.statusBadge,
+                                                    {
+                                                        backgroundColor: statusStyle.bg,
+                                                        borderColor: statusStyle.border
+                                                    }
+                                                ]}>
+                                                    <View style={[styles.statusDot, { backgroundColor: statusStyle.text }]} />
+                                                    <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                                                        {getStatusLabel(lead.status)}
+                                                    </Text>
+                                                </View>
+                                            </View>
+
+                                            <View style={styles.leadFooter}>
+                                                <Text style={styles.leadDate}>
+                                                    {formatTimeAgo(lead.createdAt)}
+                                                </Text>
+                                                <View style={styles.leadActions}>
+                                                    <TouchableOpacity
+                                                        style={styles.leadActionPrimary}
+                                                        onPress={() => handleContactLead(lead)}
+                                                    >
+                                                        <Phone width={16} height={16} color="#ffffff" strokeWidth={2.5} />
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity style={styles.leadActionSecondary}>
+                                                        <MessageSquare width={16} height={16} color="#374151" strokeWidth={2.5} />
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity style={styles.leadActionSecondary}>
+                                                        <Eye width={16} height={16} color="#374151" strokeWidth={2.5} />
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    );
+                                })
+                            ) : (
+                                <View style={styles.emptyState}>
+                                    <View style={styles.emptyIconContainer}>
+                                        <Users width={32} height={32} color="#d1d5db" />
+                                    </View>
+                                    <Text style={styles.emptyText}>No recent leads</Text>
+                                    <Text style={styles.emptySubtext}>New leads will appear here</Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+
+                    {/* Enhanced My Listings Overview */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <View style={styles.sectionTitleContainer}>
+                                <Building2 width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
+                                <Text style={styles.sectionTitle}>My Listings</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => navigation.navigate('myListings')}>
+                                <View style={styles.viewAllButton}>
+                                    <Text style={styles.viewAllButtonText}>View All</Text>
+                                    <ChevronRight width={16} height={16} color="#2D6A4F" strokeWidth={2.5} />
+                                </View>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.listingsList}>
+                            {activeListings.length > 0 ? (
+                                activeListings.slice(0, 5).map((listing) => {
+                                    const statusStyle = getStatusStyle(listing.status);
+
+                                    return (
+                                        <TouchableOpacity
+                                            key={listing.id}
+                                            style={styles.listingCard}
+                                            onPress={() => navigation.navigate('PropertyDetailScreen', { property: listing })}
+                                            activeOpacity={0.9}
+                                        >
+                                            <View style={styles.listingImageContainer}>
+                                                <Image
+                                                    source={{ uri: listing.primaryImage || 'https://images.unsplash.com/photo-1640109478916-f445f8f19b11?w=800' }}
+                                                    style={styles.listingImage}
+                                                />
+                                                <LinearGradient
+                                                    colors={['transparent', 'rgba(0,0,0,0.3)']}
+                                                    style={styles.listingImageGradient}
+                                                />
                                                 <View style={[
                                                     styles.listingStatusBadge,
                                                     { backgroundColor: statusStyle.bg }
                                                 ]}>
+                                                    <View style={[styles.statusDot, { backgroundColor: statusStyle.text }]} />
                                                     <Text style={[styles.listingStatusText, { color: statusStyle.text }]}>
                                                         {listing.status || 'Active'}
                                                     </Text>
                                                 </View>
                                             </View>
+                                            <View style={styles.listingContent}>
+                                                <View style={styles.listingHeader}>
+                                                    <View style={styles.listingInfo}>
+                                                        <Text style={styles.listingTitle} numberOfLines={1}>
+                                                            {listing.title}
+                                                        </Text>
+                                                        <View style={styles.listingLocation}>
+                                                            <View style={styles.locationIconCircle}>
+                                                                <MapPin width={10} height={10} color="#2D6A4F" strokeWidth={2.5} />
+                                                            </View>
+                                                            <Text style={styles.listingLocationText} numberOfLines={1}>
+                                                                {listing.address}, {listing.city}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                </View>
 
-                                            <View style={styles.listingFooter}>
-                                                <Text style={styles.listingPrice}>
-                                                    {formatPrice(listing.price)}
-                                                </Text>
-                                                <View style={styles.listingActions}>
-                                                    <TouchableOpacity onPress={(e) => {
-                                                        e.stopPropagation();
-                                                        /* Edit property */
-                                                    }}>
-                                                        <Edit width={16} height={16} color="#9ca3af" />
-                                                    </TouchableOpacity>
-                                                    <TouchableOpacity>
-                                                        <Eye width={16} height={16} color="#9ca3af" />
-                                                    </TouchableOpacity>
-                                                    <TouchableOpacity>
-                                                        <Share2 width={16} height={16} color="#9ca3af" />
-                                                    </TouchableOpacity>
+                                                <View style={styles.listingFooter}>
+                                                    <Text style={styles.listingPrice}>
+                                                        {formatPrice(listing.price)}
+                                                    </Text>
+                                                    <View style={styles.listingActions}>
+                                                        <TouchableOpacity 
+                                                            style={styles.listingActionButton}
+                                                            onPress={(e) => {
+                                                                e.stopPropagation();
+                                                            }}
+                                                        >
+                                                            <Edit width={16} height={16} color="#6b7280" strokeWidth={2.5} />
+                                                        </TouchableOpacity>
+                                                        <TouchableOpacity style={styles.listingActionButton}>
+                                                            <Share2 width={16} height={16} color="#6b7280" strokeWidth={2.5} />
+                                                        </TouchableOpacity>
+                                                    </View>
                                                 </View>
                                             </View>
-                                        </View>
-                                    </TouchableOpacity>
-                                );
-                            })
-                        ) : (
-                            <Text style={styles.emptyText}>No active listings</Text>
-                        )}
-                    </View>
-                </View>
-
-                {/* Insights Section */}
-                <View style={styles.section}>
-                    <View style={styles.insightsCard}>
-                        <Text style={styles.sectionTitle}>Quick Insights</Text>
-
-                        <View style={styles.insightsList}>
-                            <View style={[styles.insightItem, { backgroundColor: '#f0fdf4' }]}>
-                                <View style={styles.insightLeft}>
-                                    <View style={[styles.insightIcon, { backgroundColor: '#dcfce7' }]}>
-                                        <TrendingUp width={20} height={20} color="#16a34a" />
+                                        </TouchableOpacity>
+                                    );
+                                })
+                            ) : (
+                                <View style={styles.emptyState}>
+                                    <View style={styles.emptyIconContainer}>
+                                        <Building2 width={32} height={32} color="#d1d5db" />
                                     </View>
-                                    <View>
-                                        <Text style={styles.insightTitle}>Trending Properties</Text>
-                                        <Text style={styles.insightSubtitle}>
-                                            {stats?.activeListings || 0} properties
-                                        </Text>
-                                    </View>
+                                    <Text style={styles.emptyText}>No active listings</Text>
+                                    <Text style={styles.emptySubtext}>Add your first property to get started</Text>
                                 </View>
-                                <TouchableOpacity onPress={() => {/* View trending */ }}>
-                                    <Text style={styles.insightAction}>View</Text>
-                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+
+                    {/* Enhanced Insights Section */}
+                    <View style={styles.section}>
+                        <View style={styles.insightsCard}>
+                            <View style={styles.sectionTitleContainer}>
+                                <BarChart3 width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
+                                <Text style={styles.sectionTitle}>Quick Insights</Text>
                             </View>
 
-                            <View style={[styles.insightItem, { backgroundColor: '#eff6ff' }]}>
-                                <View style={styles.insightLeft}>
-                                    <View style={[styles.insightIcon, { backgroundColor: '#dbeafe' }]}>
-                                        <Target width={20} height={20} color="#2563eb" />
-                                    </View>
-                                    <View>
-                                        <Text style={styles.insightTitle}>Lead Conversion Rate</Text>
-                                        <View style={styles.conversionBar}>
-                                            <View style={styles.conversionBarBg}>
-                                                <View
-                                                    style={[
-                                                        styles.conversionBarFill,
-                                                        { width: `${stats?.conversionRate || 0}%` }
-                                                    ]}
-                                                />
-                                            </View>
-                                            <Text style={styles.conversionPercent}>
-                                                {stats?.conversionRate || 0}%
+                            <View style={styles.insightsList}>
+                                <TouchableOpacity style={[styles.insightItem, { backgroundColor: '#f0fdf4' }]}>
+                                    <View style={styles.insightLeft}>
+                                        <View style={[styles.insightIcon, { backgroundColor: '#dcfce7' }]}>
+                                            <TrendingUp width={20} height={20} color="#16a34a" strokeWidth={2.5} />
+                                        </View>
+                                        <View style={styles.insightTextContainer}>
+                                            <Text style={styles.insightTitle}>Trending Properties</Text>
+                                            <Text style={styles.insightSubtitle}>
+                                                {stats?.totalListings || 0} properties performing well
                                             </Text>
                                         </View>
                                     </View>
-                                </View>
-                            </View>
+                                    <ChevronRight width={20} height={20} color="#16a34a" strokeWidth={2.5} />
+                                </TouchableOpacity>
 
-                            <View style={[styles.insightItem, { backgroundColor: '#faf5ff' }]}>
-                                <View style={styles.insightLeft}>
-                                    <View style={[styles.insightIcon, { backgroundColor: '#f3e8ff' }]}>
-                                        <BarChart3 width={20} height={20} color="#9333ea" />
-                                    </View>
-                                    <View>
-                                        <Text style={styles.insightTitle}>High-Performing Listings</Text>
-                                        <Text style={styles.insightSubtitle}>
-                                            {stats?.activeListings || 0} properties
-                                        </Text>
+                                <View style={[styles.insightItem, { backgroundColor: '#eff6ff' }]}>
+                                    <View style={styles.insightLeft}>
+                                        <View style={[styles.insightIcon, { backgroundColor: '#dbeafe' }]}>
+                                            <Target width={20} height={20} color="#2563eb" strokeWidth={2.5} />
+                                        </View>
+                                        <View style={styles.insightTextContainer}>
+                                            <Text style={styles.insightTitle}>Lead Conversion Rate</Text>
+                                            <View style={styles.conversionBar}>
+                                                <View style={styles.conversionBarBg}>
+                                                    <View
+                                                        style={[
+                                                            styles.conversionBarFill,
+                                                            { width: `${stats?.conversionRate || 0}%` }
+                                                        ]}
+                                                    />
+                                                </View>
+                                                <Text style={styles.conversionPercent}>
+                                                    {stats?.conversionRate || 0}%
+                                                </Text>
+                                            </View>
+                                        </View>
                                     </View>
                                 </View>
-                                <TouchableOpacity onPress={() => {/* View high performing */ }}>
-                                    <Text style={styles.insightAction}>View</Text>
+
+                                <TouchableOpacity style={[styles.insightItem, { backgroundColor: '#faf5ff' }]}>
+                                    <View style={styles.insightLeft}>
+                                        <View style={[styles.insightIcon, { backgroundColor: '#f3e8ff' }]}>
+                                            <Award width={20} height={20} color="#9333ea" strokeWidth={2.5} />
+                                        </View>
+                                        <View style={styles.insightTextContainer}>
+                                            <Text style={styles.insightTitle}>High-Performing Listings</Text>
+                                            <Text style={styles.insightSubtitle}>
+                                                Top {Math.min(3, stats?.totalListings || 0)} properties this month
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <ChevronRight width={20} height={20} color="#9333ea" strokeWidth={2.5} />
                                 </TouchableOpacity>
                             </View>
                         </View>
                     </View>
-                </View>
-            </ScrollView>
 
-            {/* Floating Add Button */}
+                    <View style={{ height: 20 }} />
+                </Animated.View>
+            </Animated.ScrollView>
+
+            {/* Enhanced Floating Add Button */}
             <TouchableOpacity
                 style={styles.fab}
                 activeOpacity={0.8}
                 onPress={() => navigation.navigate('addPropertyAgent')}
             >
                 <LinearGradient
-                    colors={['#2D6A4F', '#245A42']}
+                    colors={['#2D6A4F', '#1e4d38']}
                     style={styles.fabGradient}
                 >
-                    <Plus width={24} height={24} color="#ffffff" />
+                    <Plus width={28} height={28} color="#ffffff" strokeWidth={3} />
                 </LinearGradient>
             </TouchableOpacity>
 
-            {/* Bottom Navigation */}
+            {/* Enhanced Bottom Navigation */}
             <View style={styles.bottomNav}>
                 <TouchableOpacity style={styles.navItem}>
-                    <Home width={24} height={24} color="#2D6A4F" />
+                    <View style={styles.navIconActive}>
+                        <Home width={22} height={22} color="#2D6A4F" strokeWidth={2.5} />
+                    </View>
                     <Text style={styles.navTextActive}>Dashboard</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={styles.navItem}
-                    onPress={() => {/* Navigate to listings */ }}
-                >
-                    <Building2 width={24} height={24} color="#9ca3af" />
+                <TouchableOpacity style={styles.navItem}>
+                    <Building2 width={22} height={22} color="#9ca3af" strokeWidth={2.5} />
                     <Text style={styles.navTextInactive}>Listings</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={styles.navItem}
-                    onPress={() => {/* Navigate to leads */ }}
-                >
-                    <Users width={24} height={24} color="#9ca3af" />
+                <TouchableOpacity style={styles.navItem}>
+                    <Users width={22} height={22} color="#9ca3af" strokeWidth={2.5} />
                     <Text style={styles.navTextInactive}>Leads</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={styles.navItem}
-                    onPress={() => {/* Navigate to analytics */ }}
-                >
-                    <BarChart3 width={24} height={24} color="#9ca3af" />
+                <TouchableOpacity style={styles.navItem}>
+                    <BarChart3 width={22} height={22} color="#9ca3af" strokeWidth={2.5} />
                     <Text style={styles.navTextInactive}>Analytics</Text>
                 </TouchableOpacity>
 
@@ -721,7 +816,7 @@ const AgentDashboard = ({ navigation, route }) => {
                     style={styles.navItem}
                     onPress={() => navigation.navigate('profile')}
                 >
-                    <User width={24} height={24} color="#9ca3af" />
+                    <User width={22} height={22} color="#9ca3af" strokeWidth={2.5} />
                     <Text style={styles.navTextInactive}>Profile</Text>
                 </TouchableOpacity>
             </View>
@@ -741,32 +836,52 @@ const styles = StyleSheet.create({
     loadingText: {
         marginTop: 16,
         fontSize: 16,
-        color: '#6b7280'
+        color: '#6b7280',
+        fontWeight: '500'
+    },
+    emptyState: {
+        alignItems: 'center',
+        paddingVertical: 48,
+        paddingHorizontal: 32,
+    },
+    emptyIconContainer: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: '#f3f4f6',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
     },
     emptyText: {
-        textAlign: 'center',
-        padding: 32,
+        fontSize: 16,
+        color: '#6b7280',
+        fontWeight: '600',
+        marginBottom: 4,
+    },
+    emptySubtext: {
         fontSize: 14,
-        color: '#9ca3af'
+        color: '#9ca3af',
+        textAlign: 'center',
     },
 
-    // Header
+    // Enhanced Header
     header: {
         backgroundColor: '#ffffff',
         paddingHorizontal: 24,
-        paddingTop: 32,
+        paddingTop: 16,
         paddingBottom: 24,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 4
     },
     topBar: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 24
+        marginBottom: 20
     },
     topBarLeft: {
         flexDirection: 'row',
@@ -774,21 +889,28 @@ const styles = StyleSheet.create({
         gap: 12
     },
     appIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        backgroundColor: '#2D6A4F',
+        width: 44,
+        height: 44,
+        borderRadius: 14,
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
+        shadowColor: '#2D6A4F',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
     },
     appName: {
-        fontSize: 18,
+        fontSize: 19,
         color: '#111827',
-        fontWeight: '600'
+        fontWeight: '700',
+        letterSpacing: -0.3,
     },
     appTagline: {
         fontSize: 12,
-        color: '#9ca3af'
+        color: '#9ca3af',
+        fontWeight: '500',
+        marginTop: 2,
     },
     topBarRight: {
         flexDirection: 'row',
@@ -798,80 +920,143 @@ const styles = StyleSheet.create({
     notificationButton: {
         position: 'relative'
     },
+    notificationIconBg: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: '#f9fafb',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    settingsButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: '#f9fafb',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     notificationBadge: {
         position: 'absolute',
-        top: -4,
-        right: -4,
-        minWidth: 20,
-        height: 20,
-        borderRadius: 10,
+        top: -2,
+        right: -2,
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
         backgroundColor: '#ef4444',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 4
+        paddingHorizontal: 4,
+        borderWidth: 2,
+        borderColor: '#fff',
     },
     notificationBadgeText: {
         color: '#ffffff',
-        fontSize: 12,
-        fontWeight: 'bold'
+        fontSize: 10,
+        fontWeight: '800',
+        letterSpacing: -0.3,
     },
 
-    // Agent Overview
+    // Enhanced Agent Overview
+    agentOverviewContainer: {
+        marginBottom: 20,
+        borderRadius: 20,
+        overflow: 'hidden',
+        shadowColor: '#2D6A4F',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 6,
+    },
     agentOverview: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 16,
-        borderRadius: 16,
-        padding: 16,
-        marginBottom: 24
+        padding: 20,
+        position: 'relative',
+    },
+    agentAvatarContainer: {
+        position: 'relative',
     },
     agentAvatar: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
+        width: 68,
+        height: 68,
+        borderRadius: 34,
+        borderWidth: 3,
+        borderColor: '#ffffff',
+    },
+    onlineIndicator: {
+        position: 'absolute',
+        bottom: 2,
+        right: 2,
+        width: 14,
+        height: 14,
+        borderRadius: 7,
+        backgroundColor: '#10b981',
         borderWidth: 2,
-        borderColor: '#ffffff'
+        borderColor: '#fff',
     },
     agentInfo: {
         flex: 1
     },
+    agentNameRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: 4,
+    },
     agentName: {
         fontSize: 18,
         color: '#ffffff',
-        fontWeight: '600',
-        marginBottom: 4
+        fontWeight: '700',
+        letterSpacing: -0.3,
     },
     agentTitle: {
-        fontSize: 12,
-        color: 'rgba(255, 255, 255, 0.8)',
-        marginBottom: 8
+        fontSize: 13,
+        color: 'rgba(255, 255, 255, 0.85)',
+        marginBottom: 10,
+        fontWeight: '500',
     },
     agentBadges: {
         flexDirection: 'row',
-        gap: 16
+        gap: 12
     },
     agentBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4
+        gap: 4,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
     },
     agentBadgeText: {
         fontSize: 12,
-        color: 'rgba(255, 255, 255, 0.8)'
+        color: 'rgba(255, 255, 255, 0.95)',
+        fontWeight: '600',
+        letterSpacing: 0.3,
+    },
+    sparkleIcon: {
+        position: 'absolute',
+        top: 20,
+        right: 20,
     },
 
     // Screen Title
     screenTitle: {
-        gap: 4
+        gap: 6
     },
     screenTitleText: {
-        fontSize: 20,
+        fontSize: 22,
         color: '#111827',
-        fontWeight: 'bold'
+        fontWeight: '800',
+        letterSpacing: -0.5,
     },
     screenSubtitle: {
         fontSize: 14,
-        color: '#6b7280'
+        color: '#6b7280',
+        fontWeight: '500',
+        lineHeight: 20,
     },
 
     // Scroll View
@@ -885,7 +1070,10 @@ const styles = StyleSheet.create({
 
     // Section
     section: {
-        marginBottom: 24
+        marginBottom: 28
+    },
+    sectionHeaderRow: {
+        marginBottom: 16
     },
     sectionHeader: {
         flexDirection: 'row',
@@ -893,18 +1081,34 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 16
     },
+    sectionTitleContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
     sectionTitle: {
-        fontSize: 16,
+        fontSize: 17,
         color: '#111827',
-        fontWeight: '600'
+        fontWeight: '700',
+        letterSpacing: -0.3,
     },
     viewAllButton: {
-        fontSize: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(45, 106, 79, 0.1)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+    },
+    viewAllButtonText: {
+        fontSize: 13,
         color: '#2D6A4F',
-        fontWeight: '500'
+        fontWeight: '700',
+        letterSpacing: 0.2,
     },
 
-    // KPI Grid
+    // Enhanced KPI Grid
     kpiGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -912,80 +1116,114 @@ const styles = StyleSheet.create({
         marginBottom: 20
     },
     kpiCard: {
-        width: '48%', // 2 cards per row with space between
+        width: '48%',
         backgroundColor: '#ffffff',
-        borderRadius: 20, // Softer corners
-        padding: 16,
+        borderRadius: 20,
+        padding: 18,
         marginBottom: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.08,
-        shadowRadius: 10,
-        elevation: 4
+        shadowRadius: 12,
+        elevation: 5,
+        borderWidth: 1,
+        borderColor: '#f3f4f6',
     },
     kpiHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 8
+        marginBottom: 12
     },
     kpiIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
+        width: 44,
+        height: 44,
+        borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center'
     },
-    kpiTrend: {
-        fontSize: 12,
-        color: '#3b82f6',
-        fontWeight: '600'
+    kpiTrendContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 10,
+    },
+    kpiTrendText: {
+        fontSize: 11,
+        color: '#10b981',
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     kpiLabel: {
         fontSize: 13,
         color: '#64748b',
-        fontWeight: '500',
-        marginBottom: 6
+        fontWeight: '600',
+        marginBottom: 8,
+        letterSpacing: 0.2,
     },
     kpiValue: {
-        fontSize: 26,
+        fontSize: 28,
         color: '#1e293b',
-        fontWeight: '700'
+        fontWeight: '800',
+        letterSpacing: -1,
     },
 
-    // Revenue Card
+    // Enhanced Revenue Card
+    revenueCardContainer: {
+        borderRadius: 20,
+        overflow: 'hidden',
+        shadowColor: '#3b82f6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
+        elevation: 8,
+    },
     revenueCard: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        borderRadius: 16,
-        padding: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3
+        padding: 24,
+    },
+    revenueLeft: {
+        flex: 1,
     },
     revenueLabel: {
-        fontSize: 12,
-        color: 'rgba(255, 255, 255, 0.8)',
-        marginBottom: 4
+        fontSize: 13,
+        color: 'rgba(255, 255, 255, 0.9)',
+        marginBottom: 8,
+        fontWeight: '600',
+        letterSpacing: 0.5,
     },
     revenueValue: {
-        fontSize: 30,
+        fontSize: 34,
         color: '#ffffff',
-        fontWeight: 'bold'
+        fontWeight: '900',
+        marginBottom: 8,
+        letterSpacing: -1,
+    },
+    revenueChange: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    revenueChangeText: {
+        fontSize: 13,
+        color: 'rgba(255, 255, 255, 0.9)',
+        fontWeight: '600',
     },
     revenueIcon: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
+        width: 56,
+        height: 56,
+        borderRadius: 16,
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
         justifyContent: 'center',
         alignItems: 'center'
     },
 
-    // Actions Grid
+    // Enhanced Actions Grid
     actionsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -994,21 +1232,23 @@ const styles = StyleSheet.create({
     actionPrimary: {
         flex: 1,
         minWidth: '47%',
-        backgroundColor: '#2D6A4F',
-        borderRadius: 12,
-        padding: 16,
+        borderRadius: 16,
+        overflow: 'hidden',
+        shadowColor: '#2D6A4F',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 6,
+    },
+    actionPrimaryGradient: {
+        padding: 20,
         alignItems: 'center',
-        gap: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2
+        gap: 10,
     },
     actionIconPrimary: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
+        width: 52,
+        height: 52,
+        borderRadius: 16,
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
         justifyContent: 'center',
         alignItems: 'center'
@@ -1017,23 +1257,29 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#ffffff',
         textAlign: 'center',
-        fontWeight: '500'
+        fontWeight: '700',
+        letterSpacing: 0.2,
     },
     actionSecondary: {
         flex: 1,
         minWidth: '47%',
         backgroundColor: '#ffffff',
-        borderRadius: 12,
-        padding: 16,
+        borderRadius: 16,
+        padding: 20,
         alignItems: 'center',
-        gap: 8,
-        borderWidth: 1,
-        borderColor: '#e5e7eb'
+        gap: 10,
+        borderWidth: 1.5,
+        borderColor: '#f3f4f6',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        elevation: 2,
     },
     actionIconSecondary: {
-        width: 48,
-        height: 48,
-        borderRadius: 12,
+        width: 52,
+        height: 52,
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center'
     },
@@ -1041,175 +1287,238 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#111827',
         textAlign: 'center',
-        fontWeight: '500'
+        fontWeight: '700',
+        letterSpacing: 0.2,
     },
 
-    // Leads List
+    // Enhanced Leads List
     leadsList: {
         gap: 12
     },
     leadCard: {
         backgroundColor: '#ffffff',
-        borderRadius: 12,
-        padding: 16,
+        borderRadius: 16,
+        padding: 18,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 8,
+        elevation: 3,
+        borderWidth: 1,
+        borderColor: '#f9fafb',
     },
     leadHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
         gap: 12,
-        marginBottom: 12
+        marginBottom: 14
     },
     leadInfo: {
         flex: 1
     },
     leadName: {
-        fontSize: 14,
+        fontSize: 15,
         color: '#111827',
-        fontWeight: '600',
-        marginBottom: 4
+        fontWeight: '700',
+        marginBottom: 6,
+        letterSpacing: -0.2,
     },
     leadProperty: {
-        fontSize: 12,
+        fontSize: 13,
         color: '#6b7280',
-        marginBottom: 4
+        marginBottom: 6,
+        fontWeight: '500',
     },
     leadBudget: {
-        fontSize: 14,
+        fontSize: 15,
         color: '#2D6A4F',
-        fontWeight: '600'
+        fontWeight: '700'
     },
     statusBadge: {
         paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 12,
-        borderWidth: 1
+        paddingVertical: 6,
+        borderRadius: 14,
+        borderWidth: 1.5,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    statusDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
     },
     statusText: {
         fontSize: 12,
-        fontWeight: '500'
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     leadFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: 12,
+        paddingTop: 14,
         borderTopWidth: 1,
         borderTopColor: '#f3f4f6'
     },
     leadDate: {
         fontSize: 12,
-        color: '#9ca3af'
+        color: '#9ca3af',
+        fontWeight: '500',
     },
     leadActions: {
         flexDirection: 'row',
         gap: 8
     },
     leadActionPrimary: {
-        width: 32,
-        height: 32,
+        width: 36,
+        height: 36,
         backgroundColor: '#2D6A4F',
-        borderRadius: 8,
+        borderRadius: 10,
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
+        shadowColor: '#2D6A4F',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 3,
     },
     leadActionSecondary: {
-        width: 32,
-        height: 32,
+        width: 36,
+        height: 36,
         backgroundColor: '#f3f4f6',
-        borderRadius: 8,
+        borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center'
     },
 
-    // Listings List
+    // Enhanced Listings List
     listingsList: {
-        gap: 12
+        gap: 14
     },
     listingCard: {
         backgroundColor: '#ffffff',
-        borderRadius: 12,
-        flexDirection: 'row',
+        borderRadius: 18,
         overflow: 'hidden',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 5,
+        borderWidth: 1,
+        borderColor: '#f9fafb',
+    },
+    listingImageContainer: {
+        position: 'relative',
+        height: 140,
     },
     listingImage: {
-        width: 96,
-        height: 96
+        width: '100%',
+        height: '100%',
+    },
+    listingImageGradient: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 60,
     },
     listingContent: {
-        flex: 1,
-        padding: 12
+        padding: 16
     },
     listingHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        gap: 8,
-        marginBottom: 8
+        marginBottom: 12
     },
     listingInfo: {
         flex: 1
     },
     listingTitle: {
-        fontSize: 14,
+        fontSize: 16,
         color: '#111827',
-        fontWeight: '600',
-        marginBottom: 4
+        fontWeight: '700',
+        marginBottom: 8,
+        letterSpacing: -0.3,
     },
     listingLocation: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4
+        gap: 8
+    },
+    locationIconCircle: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: 'rgba(45, 106, 79, 0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     listingLocationText: {
-        fontSize: 12,
+        fontSize: 13,
         color: '#6b7280',
-        flex: 1
+        flex: 1,
+        fontWeight: '500',
     },
     listingStatusBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12
+        position: 'absolute',
+        top: 12,
+        left: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 14,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 4,
+        elevation: 3,
     },
     listingStatusText: {
         fontSize: 12,
-        fontWeight: '500'
+        fontWeight: '700',
+        letterSpacing: 0.3,
     },
     listingFooter: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center'
+        alignItems: 'center',
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: '#f3f4f6',
     },
     listingPrice: {
-        fontSize: 16,
+        fontSize: 18,
         color: '#2D6A4F',
-        fontWeight: 'bold'
+        fontWeight: '800',
+        letterSpacing: -0.5,
     },
     listingActions: {
         flexDirection: 'row',
-        gap: 12
+        gap: 10
+    },
+    listingActionButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 10,
+        backgroundColor: '#f9fafb',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 
-    // Insights
+    // Enhanced Insights
     insightsCard: {
         backgroundColor: '#ffffff',
-        borderRadius: 16,
-        padding: 16,
+        borderRadius: 20,
+        padding: 20,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 12,
+        elevation: 5,
+        borderWidth: 1,
+        borderColor: '#f9fafb',
     },
     insightsList: {
         gap: 12,
@@ -1219,102 +1528,120 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 12,
-        borderRadius: 12
+        padding: 16,
+        borderRadius: 16
     },
     insightLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 14,
         flex: 1
     },
     insightIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: 8,
+        width: 44,
+        height: 44,
+        borderRadius: 12,
         justifyContent: 'center',
         alignItems: 'center'
+    },
+    insightTextContainer: {
+        flex: 1,
     },
     insightTitle: {
         fontSize: 14,
         color: '#111827',
-        fontWeight: '500'
+        fontWeight: '700',
+        marginBottom: 4,
+        letterSpacing: -0.2,
     },
     insightSubtitle: {
         fontSize: 12,
-        color: '#6b7280'
-    },
-    insightAction: {
-        fontSize: 12,
-        color: '#16a34a',
-        fontWeight: '500'
+        color: '#6b7280',
+        fontWeight: '500',
     },
     conversionBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        marginTop: 4
+        gap: 10,
+        marginTop: 6
     },
     conversionBarBg: {
-        width: 80,
-        height: 6,
+        width: 100,
+        height: 8,
         backgroundColor: '#bfdbfe',
-        borderRadius: 3,
+        borderRadius: 4,
         overflow: 'hidden'
     },
     conversionBarFill: {
         height: '100%',
         backgroundColor: '#2563eb',
-        borderRadius: 3
+        borderRadius: 4
     },
     conversionPercent: {
-        fontSize: 12,
-        color: '#6b7280'
+        fontSize: 13,
+        color: '#2563eb',
+        fontWeight: '700',
     },
 
-    // FAB
+    // Enhanced FAB
     fab: {
         position: 'absolute',
-        bottom: 80,
+        bottom: 90,
         right: 24,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8
+        shadowColor: '#2D6A4F',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+        elevation: 10
     },
     fabGradient: {
-        width: 56,
-        height: 56,
-        borderRadius: 28,
+        width: 60,
+        height: 60,
+        borderRadius: 30,
         justifyContent: 'center',
         alignItems: 'center'
     },
 
-    // Bottom Nav
+    // Enhanced Bottom Nav
     bottomNav: {
         flexDirection: 'row',
         justifyContent: 'space-around',
         alignItems: 'center',
         backgroundColor: '#ffffff',
         borderTopWidth: 1,
-        borderTopColor: '#e5e7eb',
+        borderTopColor: '#f3f4f6',
         paddingVertical: 12,
-        paddingHorizontal: 24
+        paddingHorizontal: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 8,
     },
     navItem: {
         alignItems: 'center',
-        gap: 4
+        gap: 6,
+        paddingVertical: 4,
+    },
+    navIconActive: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: 'rgba(45, 106, 79, 0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     navTextActive: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#2D6A4F',
-        fontWeight: '600'
+        fontWeight: '700',
+        letterSpacing: 0.2,
     },
     navTextInactive: {
-        fontSize: 12,
+        fontSize: 11,
         color: '#9ca3af',
-        fontWeight: '500'
+        fontWeight: '600',
+        letterSpacing: 0.2,
     }
 });
 
