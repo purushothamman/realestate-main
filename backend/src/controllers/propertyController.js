@@ -411,6 +411,10 @@ exports.getAllProperties = async (req, res) => {
                 u.name as owner_name,
                 u.email as owner_email,
                 u.phone as owner_phone,
+                a.id as agent_id,
+                a.name as agent_name,
+                a.email as agent_email,
+                a.phone as agent_phone,
                 (SELECT COUNT(*) FROM favorites f WHERE f.property_id = p.id) as favorite_count,
                 (SELECT COUNT(*) FROM property_views v WHERE v.property_id = p.id) as view_count,
                 EXISTS(
@@ -419,6 +423,8 @@ exports.getAllProperties = async (req, res) => {
                 ) as is_favorited
             FROM properties p
             LEFT JOIN users u ON p.uploaded_by = u.id
+            LEFT JOIN property_requests pr ON pr.property_id = p.id AND pr.status = 'approved'
+            LEFT JOIN users a ON a.id = pr.agent_id
             WHERE p.is_active = TRUE AND p.status = 'active'
         `;
 
@@ -486,7 +492,16 @@ exports.getAllProperties = async (req, res) => {
                 name: prop.owner_name,
                 email: prop.owner_email,
                 phone: prop.owner_phone
-            }
+            },
+            agent: prop.agent_id
+                ? {
+                    id: prop.agent_id,
+                    name: prop.agent_name,
+                    email: prop.agent_email,
+                    phone: prop.agent_phone,
+                    role: 'agent',
+                  }
+                : null,
         }));
 
         res.json({

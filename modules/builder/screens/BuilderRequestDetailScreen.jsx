@@ -158,7 +158,8 @@ export default function BuilderRequestDetailScreen({ navigation, onBack, request
   const openPropertyDetail = () => {
     if (!property || !navigation || !navigation.navigate) return;
     try {
-      navigation.navigate('propertyDetail', { property });
+      // Pass agent along so PropertyDetailScreen can show "Contact Agent" correctly
+      navigation.navigate('propertyDetail', { property: { ...property, agent } });
     } catch (e) {
       console.error('Failed to navigate to property detail from builder request detail:', e);
     }

@@ -134,6 +134,44 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
   const builtYear = property.builtYear ?? property.built_year ?? 2021;
   const description = property.description || "Step into luxury with this stunning modern villa. This architectural masterpiece features an open floor plan with floor-to-ceiling windows that flood the space with natural light.";
 
+  // Agent (for "Contact Agent" card)
+  const listingAgent =
+    property.agent ||
+    route?.params?.agent ||
+    property.listingAgent ||
+    property.agentDetails ||
+    null;
+
+  const agentName = listingAgent?.name || listingAgent?.agent_name || listingAgent?.fullName || 'Agent';
+  const agentEmail = listingAgent?.email || listingAgent?.agent_email || null;
+  const agentPhone = listingAgent?.phone || listingAgent?.agent_phone || null;
+  const agentRole =
+    listingAgent?.role === 'agent'
+      ? 'Real Estate Agent'
+      : (listingAgent?.role ? String(listingAgent.role) : 'Real Estate Agent');
+
+  const agentInitials = String(agentName || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join('') || 'AG';
+
+  const handleAgentCall = () => {
+    if (!agentPhone) return Alert.alert('Agent', 'Phone number not available.');
+    Alert.alert('Call Agent', agentPhone);
+  };
+
+  const handleAgentEmail = () => {
+    if (!agentEmail) return Alert.alert('Agent', 'Email not available.');
+    Alert.alert('Email Agent', agentEmail);
+  };
+
+  const handleAgentChat = () => {
+    Alert.alert('Chat', 'Chat feature coming soon.');
+  };
+
   // Images
   const placeholderImage = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800';
   let propertyImages = [placeholderImage];
@@ -560,33 +598,28 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
                   colors={['#2D6A4F', '#1e4d38']}
                   style={styles.agentAvatar}
                 >
-                  <Text style={styles.agentInitials}>JD</Text>
+                  <Text style={styles.agentInitials}>{agentInitials}</Text>
                 </LinearGradient>
                 <View style={styles.agentInfo}>
-                  <Text style={styles.agentName}>Jessica Davis</Text>
-                  <Text style={styles.agentRole}>Senior Real Estate Agent</Text>
-                  <View style={styles.agentRating}>
-                    <Star size={16} color="#F39C12" fill="#F39C12" strokeWidth={2} />
-                    <Text style={styles.agentRatingValue}>4.9</Text>
-                    <Text style={styles.agentRatingCount}>(127 reviews)</Text>
-                  </View>
+                  <Text style={styles.agentName}>{agentName}</Text>
+                  <Text style={styles.agentRole}>{agentRole}</Text>
                 </View>
               </View>
 
               <View style={styles.contactButtons}>
-                <TouchableOpacity style={styles.contactButton} activeOpacity={0.7}>
+                <TouchableOpacity style={styles.contactButton} activeOpacity={0.7} onPress={handleAgentCall}>
                   <View style={styles.contactIconCircle}>
                     <Phone size={18} color="#2D6A4F" strokeWidth={2.5} />
                   </View>
                   <Text style={styles.contactButtonText}>Call</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.contactButton} activeOpacity={0.7}>
+                <TouchableOpacity style={styles.contactButton} activeOpacity={0.7} onPress={handleAgentEmail}>
                   <View style={styles.contactIconCircle}>
                     <Mail size={18} color="#2D6A4F" strokeWidth={2.5} />
                   </View>
                   <Text style={styles.contactButtonText}>Email</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.contactButton} activeOpacity={0.7}>
+                <TouchableOpacity style={styles.contactButton} activeOpacity={0.7} onPress={handleAgentChat}>
                   <View style={styles.contactIconCircle}>
                     <MessageCircle size={18} color="#2D6A4F" strokeWidth={2.5} />
                   </View>

@@ -833,10 +833,10 @@ module.exports.register = async (req, res) => {
 
         let userId;
 
-        // Insert into users table first
+        // Insert into users table first (include profile_image)
         const [result] = await connection.query(
-            "INSERT INTO users (name, email, phone, password, role, is_verified, created_at) VALUES (?,?,?,?,?, false, NOW())",
-            [name.trim(), email.toLowerCase().trim(), phone, hashed, role]
+            "INSERT INTO users (name, email, phone, password, role, profile_image, is_verified, created_at) VALUES (?,?,?,?,?,?, false, NOW())",
+            [name.trim(), email.toLowerCase().trim(), phone, hashed, role, profileImage?.trim() || null]
         );
         userId = result.insertId;
 
@@ -1170,9 +1170,9 @@ module.exports.getProfile = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Fetch basic user info
+        // Fetch basic user info (include profile_image)
         const [users] = await pool.query(
-            "SELECT id, name, email, phone, role, is_verified FROM users WHERE id = ?",
+            "SELECT id, name, email, phone, role, is_verified, profile_image FROM users WHERE id = ?",
             [userId]
         );
 
@@ -1202,7 +1202,7 @@ module.exports.getProfile = async (req, res) => {
             phone: user.phone,
             role: user.role,
             isVerified: user.is_verified,
-            // profileImage: user.profile_image
+            profileImage: user.profile_image || null
         };
 
         // Add builder specific fields

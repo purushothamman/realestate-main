@@ -16,7 +16,9 @@ const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
     const ext = (path.extname(file.originalname) || '').toLowerCase() || '.jpg';
-    cb(null, 'property-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext);
+    // Use 'profile-' prefix for profile images, 'property-' for property images
+    const prefix = file.fieldname === 'profileImage' ? 'profile-' : 'property-';
+    cb(null, prefix + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + ext);
   }
 });
 

@@ -40,6 +40,7 @@ exports.getDashboard = async (req, res) => {
         // Fetch all images for these properties (so details screen can show multiple images)
         const propertyIds = (properties || []).map((p) => p.id).filter(Boolean);
         const imagesByPropertyId = new Map();
+        const agentByPropertyId = new Map();
 
         if (propertyIds.length > 0) {
             const [imageRows] = await pool.query(
@@ -61,11 +62,38 @@ exports.getDashboard = async (req, res) => {
                 }
                 imagesByPropertyId.get(row.property_id).push(row);
             });
+
+            // If this property was submitted by an agent, attach agent details (approved/pending/rejected)
+            const [agentRows] = await pool.query(
+                `SELECT 
+                    pr.property_id,
+                    u.id as agent_id,
+                    u.name as agent_name,
+                    u.email as agent_email,
+                    u.phone as agent_phone,
+                    pr.status as request_status
+                 FROM property_requests pr
+                 JOIN users u ON u.id = pr.agent_id
+                 WHERE pr.property_id IN (?)`,
+                [propertyIds]
+            );
+
+            (agentRows || []).forEach((row) => {
+                agentByPropertyId.set(row.property_id, {
+                    id: row.agent_id,
+                    name: row.agent_name,
+                    email: row.agent_email,
+                    phone: row.agent_phone,
+                    role: 'agent',
+                    requestStatus: row.request_status,
+                });
+            });
         }
 
         // Format properties for frontend with proper field names
         const formattedProperties = (properties || []).map(p => {
             const imgs = imagesByPropertyId.get(p.id) || [];
+            const agent = agentByPropertyId.get(p.id) || null;
             const imageUrls = imgs
                 .map((x) => x.image_url)
                 .filter((x) => x !== null && x !== undefined && String(x).trim().length > 0)
@@ -89,6 +117,7 @@ exports.getDashboard = async (req, res) => {
             description: p.description,
             image: imageUrls[0] || null,
             images: imageUrls,
+            agent,
             // Temporary fields
             progress: 100,
             deadline: new Date(p.created_at).toLocaleDateString('en-US', {

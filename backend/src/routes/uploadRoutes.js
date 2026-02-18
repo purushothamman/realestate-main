@@ -35,5 +35,35 @@ router.post(
   }
 );
 
+// Upload profile image (no auth required for registration)
+router.post(
+  "/profile-image",
+  upload.single("profileImage"),
+  (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "No image file provided",
+        });
+      }
+
+      const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+
+      return res.json({
+        success: true,
+        url: fileUrl,
+        imageUrl: fileUrl, // Alias for compatibility
+      });
+    } catch (error) {
+      console.error("Profile image upload error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to upload image",
+      });
+    }
+  }
+);
+
 module.exports = router;
 

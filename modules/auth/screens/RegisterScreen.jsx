@@ -196,7 +196,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -215,35 +215,54 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
 
         try {
           const formDataUpload = new FormData();
-          formDataUpload.append('profileImage', {
-            uri: asset.uri,
-            type: asset.type || 'image/jpeg',
-            name: asset.fileName || 'profile.jpg',
-          });
+
+          // Handle web vs native differently (like property images)
+          if (Platform.OS === 'web') {
+            if (asset.file) {
+              // On web, expo-image-picker provides a real File
+              formDataUpload.append('profileImage', asset.file);
+            } else {
+              // Fallback: fetch blob from uri
+              const response = await fetch(asset.uri);
+              const blob = await response.blob();
+              const name = asset.fileName || `profile-${Date.now()}.jpg`;
+              formDataUpload.append('profileImage', blob, name);
+            }
+          } else {
+            // On native (iOS/Android), use uri/name/type object
+            const name = asset.fileName || `profile-${Date.now()}.jpg`;
+            const type = asset.mimeType || 'image/jpeg';
+            formDataUpload.append('profileImage', {
+              uri: asset.uri,
+              name,
+              type,
+            });
+          }
 
           const response = await fetch(`${API_BASE_URL}/upload/profile-image`, {
             method: 'POST',
             body: formDataUpload,
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
           });
 
           const data = await response.json();
 
-          if (!response.ok) {
+          if (!response.ok || !data.success) {
             throw new Error(data.message || 'Failed to upload image');
+          }
+
+          const imageUrl = data.url || data.imageUrl;
+          if (!imageUrl) {
+            throw new Error('No image URL returned from server');
           }
 
           setFormData((prev) => ({
             ...prev,
-            profileImage: data.imageUrl || data.url || asset.uri,
+            profileImage: imageUrl,
           }));
         } catch (error) {
           console.error('Image upload error:', error);
-          // Fallback: use local URI if backend fails
-          setFormData((prev) => ({ ...prev, profileImage: asset.uri }));
-          Alert.alert('Info', 'Image will be uploaded after registration');
+          Alert.alert('Upload Failed', error.message || 'Failed to upload image. Please try again.');
+          setFormData((prev) => ({ ...prev, profileImage: null }));
         } finally {
           setUploadingImage(false);
         }
@@ -366,6 +385,7 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
         phone: formData.phone.replace(/[\s\-\(\)]/g, ''),
         password: formData.password,
         role: formData.role,
+        profileImage: formData.profileImage || null, // Include profile image URL
       };
 
       // Add builder-specific fields if role is builder
