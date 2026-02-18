@@ -29,6 +29,7 @@ const PhoneIcon = () => <Text style={styles.icon}>📞</Text>;
 const VideoIcon = () => <Text style={styles.icon}>📹</Text>;
 const MoreIcon = () => <Text style={styles.icon}>⋮</Text>;
 
+
 // Message Bubble Component
 const MessageBubble = ({ message, isUser }) => {
   return (
@@ -52,8 +53,38 @@ const MessageBubble = ({ message, isUser }) => {
   );
 };
 
-export default function ChatScreen({ navigation, onBack, route, user }) {
+
+
+export default function ChatScreen({ navigation, onBack, route, user: propUser }) {
   const { chatId, inquiryId } = route.params || {};
+  const [user, setUser] = useState(propUser);
+
+  useEffect(() => {
+    if (propUser) setUser(propUser);
+  }, [propUser]);
+
+  useEffect(() => {
+    const ensureUser = async () => {
+      if (!user) {
+        try {
+          const savedUser = await AsyncStorage.getItem('user');
+          if (savedUser) {
+            const parsed = JSON.parse(savedUser);
+            setUser(parsed);
+            console.log("🟢 RESTORED USER FROM STORAGE:", parsed.id);
+          }
+        } catch (e) {
+          console.error("Failed to restore user:", e);
+        }
+      }
+    };
+    ensureUser();
+  }, [user]);
+
+  console.log("🟢 CHAT SCREEN PARAMS:", route?.params);
+  console.log("🟢 CHAT ID:", chatId);
+  console.log("🟢 CURRENT USER ID:", user?.id);
+
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [chatContext, setChatContext] = useState(null);
@@ -77,10 +108,35 @@ export default function ChatScreen({ navigation, onBack, route, user }) {
   };
   const API_BASE_URL = getApiUrl();
 
+  // useEffect(() => {
+  //   if (chatId) {
+  //     fetchMessages();
+  //     const interval = setInterval(fetchMessages, 5000); // Poll every 5s
+  //     return () => { 
+  //       clearInterval(interval); 
+  //     };
+  //   }
+  // }, [chatId]);
   useEffect(() => {
-    fetchMessages();
-    const interval = setInterval(fetchMessages, 5000); // Poll every 5s
+    if (!chatId) return;
 
+    let isMounted = true;
+
+    const loadMessages = async () => {
+      if (isMounted) await fetchMessages();
+    };
+
+    loadMessages();
+
+    const interval = setInterval(loadMessages, 5000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [chatId]);
+
+  useEffect(() => {
     // Keyboard listeners
     const keyboardWillShow = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
@@ -99,6 +155,10 @@ export default function ChatScreen({ navigation, onBack, route, user }) {
   }, [chatId]);
 
   const fetchMessages = async () => {
+    if (!chatId) {
+      console.warn("⚠️ fetchMessages called without chatId");
+      return;
+    }
     try {
       const token = await AsyncStorage.getItem('authToken');
       if (!token) return;
@@ -215,13 +275,25 @@ export default function ChatScreen({ navigation, onBack, route, user }) {
         contentContainerStyle={styles.messagesContent}
         onContentSizeChange={scrollToBottom}
       >
-        {messages.map((msg, index) => (
-          <MessageBubble
-            key={msg.id || index}
-            message={msg}
-            isUser={msg.sender_id === user?.id}
-          />
-        ))}
+        {messages.map((msg, index) => {
+          // Identify current user ID from state or prop
+          const myId = user?.id || propUser?.id;
+
+          // Identity check: ensures sent messages are on the right
+          const isUser = String(msg.sender_id) === String(myId);
+
+          if (index === 0) {
+            console.log(`🔎 Chat Identity Audit | My ID: ${myId} | First Msg Sender: ${msg.sender_id} | isUser: ${isUser}`);
+          }
+
+          return (
+            <MessageBubble
+              key={msg.id || index}
+              message={msg}
+              isUser={isUser}
+            />
+          );
+        })}
       </ScrollView>
 
       {/* Input */}

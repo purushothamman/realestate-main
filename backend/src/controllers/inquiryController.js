@@ -263,13 +263,20 @@ exports.acceptInquiry = async (req, res) => {
             [inquiryId]
         );
 
+        // Get chat_id associated with this inquiry
+        const [chat] = await pool.query(
+            'SELECT id FROM chats WHERE inquiry_id = ?',
+            [inquiryId]
+        );
+
         // Get user info to send notification
         const [user] = await pool.query('SELECT name, email FROM users WHERE id = ?', [inquiry[0].user_id]);
 
         res.json({
             success: true,
             message: 'Inquiry accepted successfully',
-            user_name: user[0]?.name
+            user_name: user[0]?.name,
+            chat_id: chat[0]?.id
         });
 
     } catch (error) {

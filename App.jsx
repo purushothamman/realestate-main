@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SplashScreen } from './modules/user/screens/SplashScreen';
 import { WelcomeScreen } from './modules/user/screens/WelcomeScreen';
 import LoginScreen from './modules/auth/screens/LoginScreen';
@@ -27,11 +28,28 @@ export default function App() {
   const [paymentData, setPaymentData] = useState(null);
   const [chatData, setChatData] = useState(null);
 
-  const [userData, setUserData] = useState({
-    name: 'Sarah',
-    email: 'sarah@example.com',
-    phone: '+1 234 567 8900',
-  });
+  // const [userData, setUserData] = useState({
+  //   name: 'Sarah',
+  //   email: 'sarah@example.com',
+  //   phone: '+1 234 567 8900',
+  // });
+
+  const [userData, setUserData] = useState(null);
+
+  // 🔹 Load User Data on mount
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const savedUser = await AsyncStorage.getItem('user');
+        if (savedUser) {
+          setUserData(JSON.parse(savedUser));
+        }
+      } catch (e) {
+        console.error('Failed to load user data:', e);
+      }
+    };
+    loadUser();
+  }, []);
 
   // 🔹 Splash Screen Timeout (fallback)
   useEffect(() => {
@@ -77,13 +95,22 @@ export default function App() {
     }
 
     // Handle Chat data
-    if (params.chatId || params.inquiryId) {
+    //   if (params.chatId || params.inquiryId) {
+    //     setChatData({
+    //       chatId: params.chatId,
+    //       inquiryId: params.inquiryId,
+    //     });
+    //   }
+    // };
+
+    if (screen === 'chat') {
       setChatData({
         chatId: params.chatId,
         inquiryId: params.inquiryId,
       });
     }
-  };
+  }
+
 
   const goBack = () => {
     setScreenStack(prev => {
@@ -98,13 +125,19 @@ export default function App() {
     });
   };
 
-  const resetApp = () => {
-    setScreenStack([]);
-    setCurrentScreen('welcome');
-    setSelectedProperty(null);
-    setReportPropertyData(null);
-    setPaymentData(null);
-    setChatData(null);
+  const resetApp = async () => {
+    try {
+      await AsyncStorage.multiRemove(['authToken', 'user', 'userRole', 'userId', 'loginMethod']);
+      setUserData(null);
+      setScreenStack([]);
+      setCurrentScreen('welcome');
+      setSelectedProperty(null);
+      setReportPropertyData(null);
+      setPaymentData(null);
+      setChatData(null);
+    } catch (e) {
+      console.error('Error during logout:', e);
+    }
   };
 
   const navigation = {
@@ -183,7 +216,7 @@ export default function App() {
         return (
           <HomeScreen
             navigation={navigation}
-            userName={userData.name}
+            userName={userData?.name}
             onProfilePress={() => navigateTo('profile')}
             onLogout={resetApp}
             onSearch={(query) => navigateTo('searchResults', { query })}
@@ -197,9 +230,9 @@ export default function App() {
         return (
           <ProfileScreen
             navigation={navigation}
-            userName={userData.name}
-            userEmail={userData.email}
-            userPhone={userData.phone}
+            userName={userData?.name}
+            userEmail={userData?.email}
+            userPhone={userData?.phone}
             onBack={goBack}
             onLogout={resetApp}
           />
