@@ -16,18 +16,62 @@ exports.getDashboard = async (req, res) => {
             [builderId]
         );
 
-        // Get all properties with full details
+        // Get all properties for this builder
         const [properties] = await pool.query(
-            `SELECT p.*, 
-            (SELECT image_url FROM property_images pi WHERE pi.property_id = p.id LIMIT 1) as image_url
-       FROM properties p
-       WHERE uploaded_by = ?
-       ORDER BY created_at DESC`,
+            `SELECT 
+                p.id,
+                p.title,
+                p.description,
+                p.price,
+                p.address,
+                p.city,
+                p.state,
+                p.area_sqft,
+                p.bedrooms,
+                p.bathrooms,
+                p.status,
+                p.created_at
+             FROM properties p
+             WHERE p.uploaded_by = ?
+             ORDER BY p.created_at DESC`,
             [builderId]
         );
 
+        // Fetch all images for these properties (so details screen can show multiple images)
+        const propertyIds = (properties || []).map((p) => p.id).filter(Boolean);
+        const imagesByPropertyId = new Map();
+
+        if (propertyIds.length > 0) {
+            const [imageRows] = await pool.query(
+                `SELECT 
+                    pi.property_id,
+                    pi.image_url,
+                    pi.is_primary,
+                    pi.sort_order,
+                    pi.id as image_id
+                 FROM property_images pi
+                 WHERE pi.property_id IN (?)
+                 ORDER BY pi.property_id ASC, pi.is_primary DESC, pi.sort_order ASC, pi.id ASC`,
+                [propertyIds]
+            );
+
+            (imageRows || []).forEach((row) => {
+                if (!imagesByPropertyId.has(row.property_id)) {
+                    imagesByPropertyId.set(row.property_id, []);
+                }
+                imagesByPropertyId.get(row.property_id).push(row);
+            });
+        }
+
         // Format properties for frontend with proper field names
-        const formattedProperties = properties.map(p => ({
+        const formattedProperties = (properties || []).map(p => {
+            const imgs = imagesByPropertyId.get(p.id) || [];
+            const imageUrls = imgs
+                .map((x) => x.image_url)
+                .filter((x) => x !== null && x !== undefined && String(x).trim().length > 0)
+                .map((x) => String(x));
+
+            return ({
             id: p.id,
             title: p.title,
             price: typeof p.price === 'number' ? p.price : parseFloat(p.price),
@@ -43,8 +87,8 @@ exports.getDashboard = async (req, res) => {
             area: p.area_sqft,
             area_sqft: p.area_sqft,
             description: p.description,
-            image: p.image_url,
-            images: p.image_url ? [p.image_url] : [],
+            image: imageUrls[0] || null,
+            images: imageUrls,
             // Temporary fields
             progress: 100,
             deadline: new Date(p.created_at).toLocaleDateString('en-US', {
@@ -54,7 +98,8 @@ exports.getDashboard = async (req, res) => {
             }),
             views: 0,
             inquiries: 0
-        }));
+        });
+        });
 
         res.json({
             success: true,
@@ -70,6 +115,43 @@ exports.getDashboard = async (req, res) => {
 
     } catch (err) {
         console.error('Builder dashboard error:', err);
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
+};
+
+// List builders (for agent to select when adding property)
+exports.getBuildersList = async (req, res) => {
+    try {
+        const [rows] = await pool.query(
+            `
+            SELECT 
+              u.id,
+              u.name,
+              u.email,
+              u.phone,
+              b.company_name
+            FROM users u
+            LEFT JOIN builders b ON b.user_id = u.id
+            WHERE u.role = 'builder' AND u.is_blocked = FALSE
+            ORDER BY COALESCE(b.company_name, u.name) ASC
+            `
+        );
+
+        const builders = (rows || []).map(r => ({
+            id: r.id,
+            name: r.name,
+            email: r.email,
+            phone: r.phone,
+            companyName: r.company_name || null,
+            displayName: r.company_name || r.name
+        }));
+
+        res.json({ success: true, builders });
+    } catch (err) {
+        console.error('Get builders list error:', err);
         res.status(500).json({
             success: false,
             message: err.message

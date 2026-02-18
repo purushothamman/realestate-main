@@ -340,7 +340,7 @@ const ProfileScreen = ({
             <View style={styles.profileImageContainer}>
               <View style={styles.profileImageWrapper}>
                 <Image
-                  source={userData.profileImage ? { uri: userData.profileImage } : { uri: 'https://via.placeholder.com/150' }}
+                  source={userData.profileImage ? { uri: userData.profileImage } : { uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' }}
                   style={styles.profileImage}
                 />
                 <View style={styles.onlineIndicator} />

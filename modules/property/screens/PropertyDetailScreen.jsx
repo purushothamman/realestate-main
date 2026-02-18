@@ -158,6 +158,15 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
     if (primary) propertyImages = [primary];
   }
 
+  // Filter out non-http/https URIs (like blob: or file:) that won't work after restart
+  propertyImages = propertyImages
+    .map(uri => (typeof uri === 'string' ? uri : String(uri)))
+    .filter(uri => uri.startsWith('http'));
+
+  if (propertyImages.length === 0) {
+    propertyImages = [placeholderImage];
+  }
+
   const handleBack = () => {
     if (navigation && navigation.goBack) {
       navigation.goBack();

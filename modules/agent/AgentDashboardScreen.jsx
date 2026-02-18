@@ -624,21 +624,26 @@ const AgentDashboard = ({ navigation, route }) => {
 
                         <View style={styles.listingsList}>
                             {activeListings.length > 0 ? (
-                                activeListings.slice(0, 5).map((listing) => {
-                                    const statusStyle = getStatusStyle(listing.status);
+                            activeListings.slice(0, 5).map((listing) => {
+                                const statusStyle = getStatusStyle(listing.status);
+                                const primaryImage =
+                                    typeof listing.primaryImage === 'string' &&
+                                    listing.primaryImage.startsWith('http')
+                                        ? listing.primaryImage
+                                        : 'https://images.unsplash.com/photo-1640109478916-f445f8f19b11?w=800';
 
-                                    return (
-                                        <TouchableOpacity
-                                            key={listing.id}
-                                            style={styles.listingCard}
-                                            onPress={() => navigation.navigate('PropertyDetailScreen', { property: listing })}
-                                            activeOpacity={0.9}
-                                        >
-                                            <View style={styles.listingImageContainer}>
-                                                <Image
-                                                    source={{ uri: listing.primaryImage || 'https://images.unsplash.com/photo-1640109478916-f445f8f19b11?w=800' }}
-                                                    style={styles.listingImage}
-                                                />
+                                return (
+                                <TouchableOpacity
+                                    key={listing.id}
+                                    style={styles.listingCard}
+                                    onPress={() => navigation.navigate('PropertyDetailScreen', { property: listing })}
+                                    activeOpacity={0.9}
+                                >
+                                    <View style={styles.listingImageContainer}>
+                                    <Image
+                                        source={{ uri: primaryImage }}
+                                        style={styles.listingImage}
+                                    />
                                                 <LinearGradient
                                                     colors={['transparent', 'rgba(0,0,0,0.3)']}
                                                     style={styles.listingImageGradient}

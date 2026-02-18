@@ -12,4 +12,12 @@ router.get(
     builder.getDashboard
 )
 
+// For agents: list available builders
+router.get(
+    "/list",
+    protect,
+    allow("agent"),
+    builder.getBuildersList
+)
+
 module.exports = router

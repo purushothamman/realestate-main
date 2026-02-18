@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const path = require("path");
 const authRoutes = require("./routes/authRoutes");
 const propertyRoutes = require("./routes/propertyRoutes")
 const bookingRoutes = require("./routes/bookingRoutes")
@@ -8,6 +9,8 @@ const chatRoutes = require("./routes/chatRoutes")
 const { protect } = require("./middlewares/authMiddleware");
 const builderRoutes = require("./routes/builderRoutes");
 const inquiryRoutes = require("./routes/inquiryRoutes");
+const propertyRequestRoutes = require("./routes/propertyRequestRoutes");
+const uploadRoutes = require("./routes/uploadRoutes");
 
 require("dotenv").config();
 
@@ -34,6 +37,16 @@ app.use(express.json());
 app.use(cors());
 app.use(helmet());
 
+// Serve uploaded files (profile images, property images, etc.)
+// Allow cross-origin so images load when app is on a different origin (e.g. localhost:8081 vs localhost:5000)
+const uploadsPath = path.join(__dirname, "..", "..", "uploads");
+console.log("✅ Serving /uploads from:", uploadsPath);
+app.use("/uploads", (req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  next();
+}, express.static(uploadsPath));
+
 // Routes
 console.log(" Registering /api/auth routes");
 app.use("/api/auth", authRoutes);
@@ -48,6 +61,12 @@ app.use("/api/builder", builderRoutes);
 
 console.log("✅ Registering /api/inquiries routes");
 app.use("/api/inquiries", inquiryRoutes);
+
+console.log("✅ Registering /api/property-requests routes");
+app.use("/api/property-requests", propertyRequestRoutes);
+
+console.log("✅ Registering /api/upload routes");
+app.use("/api/upload", uploadRoutes);
 
 // Root route
 app.get("/", (req, res) => {

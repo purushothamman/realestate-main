@@ -6,12 +6,14 @@ import {
     TextInput,
     TouchableOpacity,
     Image,
+    Modal,
     Animated,
     StyleSheet,
     Dimensions,
     StatusBar,
     Platform,
     Alert,
+    ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -65,6 +67,12 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
 
     const [uploadedImages, setUploadedImages] = useState([]);
     const [focusedInput, setFocusedInput] = useState(null);
+
+    // Builder selection (required for agent flow)
+    const [builders, setBuilders] = useState([]);
+    const [buildersLoading, setBuildersLoading] = useState(false);
+    const [builderModalVisible, setBuilderModalVisible] = useState(false);
+    const [selectedBuilder, setSelectedBuilder] = useState(null); // { id, displayName, ... }
 
     // Animation values
     const headerAnim = useRef(new Animated.Value(0)).current;
@@ -131,6 +139,37 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
         ).start();
     }, []);
 
+    useEffect(() => {
+        const fetchBuilders = async () => {
+            try {
+                setBuildersLoading(true);
+                const token = await AsyncStorage.getItem('authToken');
+                if (!token) return;
+
+                const response = await fetch(`${API_BASE_URL}/builder/list`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    setBuilders(data.builders || []);
+                } else {
+                    console.warn('Failed to fetch builders:', data?.message);
+                }
+            } catch (e) {
+                console.warn('Fetch builders error:', e?.message);
+            } finally {
+                setBuildersLoading(false);
+            }
+        };
+
+        fetchBuilders();
+    }, []);
+
     const propertyTypes = [
         { id: 'apartment', label: 'Apartment', icon: Building2 },
         { id: 'villa', label: 'Villa', icon: Home },
@@ -146,6 +185,52 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
         { id: 'security', label: '24/7 Security', icon: ShieldCheck },
         { id: 'pool', label: 'Swimming Pool', icon: Droplets },
     ];
+
+    const uploadImageToServer = async (asset, token) => {
+        try {
+            const formData = new FormData();
+
+            if (Platform.OS === 'web') {
+                if (asset.file) {
+                    // On web, expo-image-picker provides a real File; use it so the server receives binary
+                    formData.append('image', asset.file);
+                } else {
+                    // Fallback: fetch blob from uri (e.g. blob:...) and send as file
+                    const response = await fetch(asset.uri);
+                    const blob = await response.blob();
+                    const name = asset.fileName || `property-${Date.now()}.jpg`;
+                    formData.append('image', blob, name);
+                }
+            } else {
+                // On native (iOS/Android), use uri/name/type object
+                const name = asset.fileName || `property-${Date.now()}.jpg`;
+                const type = asset.mimeType || 'image/jpeg';
+                formData.append('image', {
+                    uri: asset.uri,
+                    name,
+                    type,
+                });
+            }
+
+            const response = await fetch(`${API_BASE_URL}/upload/property-image`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: formData,
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success || !data.url) {
+                throw new Error(data.message || 'Failed to upload image');
+            }
+
+            return data.url;
+        } catch (error) {
+            console.error('Upload image error:', error);
+            throw error;
+        }
+    };
 
     const handleImageUpload = async () => {
         try {
@@ -171,20 +256,17 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                 return;
             }
 
-            // Launch image picker
+            // Launch image picker (use MediaType array; MediaTypeOptions is deprecated)
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsMultipleSelection: true,
                 quality: 0.8,
                 aspect: [4, 3],
             });
 
             if (!result.canceled && result.assets) {
-                // Get the selected images
-                const newImages = result.assets.map(asset => asset.uri);
-
-                // Check total count
-                const totalImages = uploadedImages.length + newImages.length;
+                // Check total count first
+                const totalImages = uploadedImages.length + result.assets.length;
                 if (totalImages > 6) {
                     Alert.alert(
                         'Too Many Images',
@@ -194,8 +276,26 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                     return;
                 }
 
-                // Add new images to state
-                setUploadedImages(prev => [...prev, ...newImages]);
+                const token = await AsyncStorage.getItem('authToken');
+                if (!token) {
+                    Alert.alert('Error', 'You must be logged in to upload images');
+                    return;
+                }
+
+                // Upload each selected image to backend and store the returned URLs
+                const uploadedUrls = [];
+                for (const asset of result.assets) {
+                    try {
+                        const remoteUrl = await uploadImageToServer(asset, token);
+                        uploadedUrls.push(remoteUrl);
+                    } catch (e) {
+                        Alert.alert('Image Upload Failed', 'One of the images could not be uploaded.');
+                    }
+                }
+
+                if (uploadedUrls.length > 0) {
+                    setUploadedImages(prev => [...prev, ...uploadedUrls]);
+                }
             }
         } catch (error) {
             console.error('Image upload error:', error);
@@ -252,6 +352,11 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                 return;
             }
 
+            if (!selectedBuilder?.id) {
+                Alert.alert('Builder Required', 'Please select which builder you are adding this property for.');
+                return;
+            }
+
             const token = await AsyncStorage.getItem('authToken');
             if (!token) {
                 Alert.alert('Error', 'You must be logged in to add a property');
@@ -268,6 +373,7 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
             };
 
             const payload = {
+                builder_id: selectedBuilder.id,
                 title: propertyData.title,
                 description: propertyData.description || "No description provided",
                 price: parseFloat(propertyData.price.replace(/,/g, '')),
@@ -332,7 +438,7 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
             setTimeout(() => {
                 Alert.alert(
                     'Success! 🎉',
-                    'Your property has been published successfully!',
+                    'Property saved and sent to the selected builder for approval. It will be activated after the builder approves the request.',
                     [{ text: 'OK' }]
                 );
             }, 200);
@@ -396,6 +502,7 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                         uri: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600',
                     }}
                     style={styles.headerImage}
+                    resizeMode="cover"
                 />
                 <View style={styles.headerOverlay} />
 
@@ -491,6 +598,28 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                 <Building2 color="#2D6A4F" size={20} />
                             </View>
                             <Text style={styles.sectionTitle}>Basic Property Details</Text>
+                        </View>
+
+                        {/* Builder selection */}
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Select Builder *</Text>
+                            <TouchableOpacity
+                                onPress={() => setBuilderModalVisible(true)}
+                                style={[styles.inputWrapper, { justifyContent: 'space-between' }]}
+                                activeOpacity={0.8}
+                            >
+                                <Text style={{ color: selectedBuilder ? '#111827' : '#9CA3AF', fontSize: 15, fontWeight: '600' }}>
+                                    {selectedBuilder?.displayName || 'Choose a builder'}
+                                </Text>
+                                {buildersLoading ? (
+                                    <ActivityIndicator size="small" color="#2D6A4F" />
+                                ) : (
+                                    <Building2 color="#9CA3AF" size={18} />
+                                )}
+                            </TouchableOpacity>
+                            <Text style={[styles.helperText, { marginTop: 8 }]}>
+                                This property will be blocked until the builder approves.
+                            </Text>
                         </View>
 
                         <View style={styles.inputGroup}>
@@ -768,7 +897,16 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                         <View style={styles.imageGrid}>
                             {uploadedImages.map((image, index) => (
                                 <View key={index} style={styles.imageBox}>
-                                    <Image source={{ uri: image }} style={styles.uploadedImage} />
+                                    <Image
+                                        source={{
+                                            uri:
+                                                typeof image === 'string' && (image.startsWith('http://') || image.startsWith('https://'))
+                                                    ? image
+                                                    : 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+                                        }}
+                                        style={styles.uploadedImage}
+                                        resizeMode="cover"
+                                    />
                                     <TouchableOpacity
                                         onPress={() => removeImage(index)}
                                         style={styles.removeImageButton}
@@ -895,6 +1033,62 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                 <View style={{ height: 180 }} />
             </ScrollView>
 
+            {/* Builder Picker Modal */}
+            <Modal
+                transparent
+                visible={builderModalVisible}
+                animationType="fade"
+                onRequestClose={() => setBuilderModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Select Builder</Text>
+                            <TouchableOpacity onPress={() => setBuilderModalVisible(false)} style={styles.modalClose}>
+                                <X color="#6B7280" size={18} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                            {buildersLoading ? (
+                                <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                                    <ActivityIndicator size="large" color="#2D6A4F" />
+                                    <Text style={{ marginTop: 10, color: '#6B7280', fontWeight: '600' }}>Loading builders…</Text>
+                                </View>
+                            ) : builders.length === 0 ? (
+                                <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                                    <Text style={{ color: '#6B7280', fontWeight: '600' }}>No builders available.</Text>
+                                </View>
+                            ) : (
+                                builders.map((b) => {
+                                    const isSelected = selectedBuilder?.id === b.id;
+                                    return (
+                                        <TouchableOpacity
+                                            key={b.id}
+                                            onPress={() => {
+                                                setSelectedBuilder(b);
+                                                setBuilderModalVisible(false);
+                                            }}
+                                            style={[styles.builderRow, isSelected && styles.builderRowSelected]}
+                                            activeOpacity={0.85}
+                                        >
+                                            <View style={styles.builderAvatar}>
+                                                <Building2 color="#2D6A4F" size={16} />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.builderName}>{b.displayName || b.companyName || b.name}</Text>
+                                                {!!b.email && <Text style={styles.builderMeta}>{b.email}</Text>}
+                                            </View>
+                                            {isSelected && <CheckCircle2 color="#2D6A4F" size={18} fill="#2D6A4F" />}
+                                        </TouchableOpacity>
+                                    );
+                                })
+                            )}
+                        </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
             {/* Floating Action Buttons */}
             <Animated.View
                 style={[
@@ -958,7 +1152,6 @@ const styles = StyleSheet.create({
     headerImage: {
         width: '100%',
         height: '100%',
-        resizeMode: 'cover',
     },
     headerOverlay: {
         ...StyleSheet.absoluteFillObject,
@@ -1219,7 +1412,6 @@ const styles = StyleSheet.create({
     uploadedImage: {
         width: '100%',
         height: '100%',
-        resizeMode: 'cover',
     },
     removeImageButton: {
         position: 'absolute',
@@ -1271,6 +1463,75 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#6B7280',
         flex: 1,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        justifyContent: 'center',
+        paddingHorizontal: 20,
+    },
+    modalCard: {
+        backgroundColor: '#fff',
+        borderRadius: 18,
+        padding: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+        elevation: 10,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+    },
+    modalTitle: {
+        fontSize: 16,
+        fontWeight: '800',
+        color: '#111827',
+    },
+    modalClose: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        backgroundColor: '#F3F4F6',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    builderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 10,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        marginBottom: 10,
+    },
+    builderRowSelected: {
+        borderColor: '#2D6A4F',
+        backgroundColor: '#ECFDF5',
+    },
+    builderAvatar: {
+        width: 34,
+        height: 34,
+        borderRadius: 12,
+        backgroundColor: '#ECFDF5',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    builderName: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#111827',
+    },
+    builderMeta: {
+        marginTop: 2,
+        fontSize: 12,
+        color: '#6B7280',
+        fontWeight: '600',
     },
     textAreaWrapper: {
         borderWidth: 2,

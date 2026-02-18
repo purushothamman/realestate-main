@@ -12,6 +12,8 @@ import PropertyDetailScreen from './modules/property/screens/PropertyDetailScree
 import SearchResultsScreen from './modules/property/screens/SearchResultsScreen';
 import ExploreProperties from './modules/property/screens/ExploreProperties';
 import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
+import BuilderRequestListScreen from './modules/builder/screens/BuilderRequestListScreen';
+import BuilderRequestDetailScreen from './modules/builder/screens/BuilderRequestDetailScreen';
 import ReportPropertyScreen from './modules/property/screens/ReportPropertyScreen';
 import AddProperty from './modules/property/screens/AddProperties';
 import AddPropertiesAgent from './modules/property/screens/AddPropertiesAgent';
@@ -23,6 +25,7 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
   const [screenStack, setScreenStack] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(null);
+  const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [reportPropertyData, setReportPropertyData] = useState(null);
   const [paymentData, setPaymentData] = useState(null);
@@ -53,6 +56,9 @@ export default function App() {
 
     // Handle property selection
     if (params.property) setSelectedProperty(params.property);
+
+    // Handle builder request selection
+    if (params.requestId !== undefined) setSelectedRequestId(params.requestId);
 
     // Handle search query
     if (params.query !== undefined) setSearchQuery(params.query);
@@ -95,6 +101,7 @@ export default function App() {
     setScreenStack([]);
     setCurrentScreen('welcome');
     setSelectedProperty(null);
+    setSelectedRequestId(null);
     setReportPropertyData(null);
     setPaymentData(null);
   };
@@ -243,6 +250,23 @@ export default function App() {
               navigateTo('propertyDetail', { property })
             }
             onAddProperty={() => navigateTo('addProperty')}
+          />
+        );
+
+      case 'builderRequests':
+        return (
+          <BuilderRequestListScreen
+            navigation={navigation}
+            onBack={goBack}
+          />
+        );
+
+      case 'builderRequestDetail':
+        return (
+          <BuilderRequestDetailScreen
+            navigation={navigation}
+            onBack={goBack}
+            requestId={selectedRequestId}
           />
         );
 

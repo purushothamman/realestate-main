@@ -62,11 +62,13 @@ export default function BuilderDashboard({
   const [error, setError] = useState(null);
   const [inquiries, setInquiries] = useState([]);
   const [loadingInquiries, setLoadingInquiries] = useState(false);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
   // Fetch dashboard data
   useEffect(() => {
     fetchDashboardData();
     fetchInquiries();
+    fetchPendingRequestsCount();
   }, []);
 
   const fetchDashboardData = async () => {
@@ -125,6 +127,29 @@ export default function BuilderDashboard({
       console.error('Fetch inquiries error:', err);
     } finally {
       setLoadingInquiries(false);
+    }
+  };
+
+  // Fetch pending agent->builder property requests count
+  const fetchPendingRequestsCount = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/property-requests/builder?status=pending`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setPendingRequestsCount((data.requests || []).length);
+      }
+    } catch (err) {
+      console.error('Fetch property requests count error:', err);
     }
   };
 
@@ -309,11 +334,14 @@ export default function BuilderDashboard({
                 <Text style={styles.logoText}>EstateHub</Text>
               </View>
               <View style={styles.topBarRight}>
-                <TouchableOpacity style={styles.notificationButton}>
+                <TouchableOpacity
+                  style={styles.notificationButton}
+                  onPress={() => navigation.navigate('builderRequests')}
+                >
                   <Bell size={24} color="#FFFFFF" strokeWidth={2} />
                   <View style={styles.notificationBadge}>
                     <Text style={styles.notificationBadgeText}>
-                      {stats.pendingInquiries}
+                      {pendingRequestsCount}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -511,7 +539,7 @@ export default function BuilderDashboard({
               <View key={inquiry.id} style={styles.inquiryCard}>
                 <View style={styles.inquiryImageContainer}>
                   <Image
-                    source={{ uri: inquiry.property_images?.[0] || 'https://via.placeholder.com/100' }}
+                    source={{ uri: inquiry.property_images?.[0] || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' }}
                     style={styles.inquiryImage}
                     resizeMode="cover"
                   />
