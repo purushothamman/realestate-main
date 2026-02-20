@@ -145,7 +145,7 @@ export default function BuilderInquiriesScreen({ navigation, onBack }) {
                                     source={{ uri: inquiry.property_images?.[0] || 'https://via.placeholder.com/100' }}
                                     style={styles.propertyImage}
                                 />
-                                <div style={styles.cardInfo}>
+                                <View style={styles.cardInfo}>
                                     <Text style={styles.propertyTitle}>{inquiry.property_title}</Text>
                                     <View style={styles.userRow}>
                                         <User size={14} color="#6B7280" />
@@ -160,7 +160,7 @@ export default function BuilderInquiriesScreen({ navigation, onBack }) {
                                             {new Date(inquiry.created_at).toLocaleDateString()}
                                         </Text>
                                     </View>
-                                </div>
+                                </View>
                             </View>
 
                             <View style={styles.cardActions}>

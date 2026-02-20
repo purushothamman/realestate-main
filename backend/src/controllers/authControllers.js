@@ -780,30 +780,32 @@ module.exports.register = async (req, res) => {
         }
 
         // For builders, check if GST or PAN already exists
-        const [existingGst] = await connection.query(
-            "SELECT user_id FROM builders WHERE gst_no = ?",
-            [gstNo.trim()]
-        );
+        if (role === "builder") {
+            const [existingGst] = await connection.query(
+                "SELECT user_id FROM builders WHERE gst_no = ?",
+                [gstNo.trim()]
+            );
 
-        if (existingGst.length > 0) {
-            await connection.rollback();
-            connection.release();
-            return res.status(409).json({
-                message: "This GST number is already registered."
-            });
-        }
+            if (existingGst.length > 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(409).json({
+                    message: "This GST number is already registered."
+                });
+            }
 
-        const [existingPan] = await connection.query(
-            "SELECT user_id FROM builders WHERE pan_no = ?",
-            [panNo.trim()]
-        );
+            const [existingPan] = await connection.query(
+                "SELECT user_id FROM builders WHERE pan_no = ?",
+                [panNo.trim()]
+            );
 
-        if (existingPan.length > 0) {
-            await connection.rollback();
-            connection.release();
-            return res.status(409).json({
-                message: "This PAN number is already registered."
-            });
+            if (existingPan.length > 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(409).json({
+                    message: "This PAN number is already registered."
+                });
+            }
         }
 
         console.log("Register payload:", {
@@ -831,10 +833,10 @@ module.exports.register = async (req, res) => {
 
         let userId;
 
-        // Insert into users table first
+        // Insert into users table first (include profile_image)
         const [result] = await connection.query(
-            "INSERT INTO users (name, email, phone, password, role, is_verified, created_at) VALUES (?,?,?,?,?, false, NOW())",
-            [name.trim(), email.toLowerCase().trim(), phone, hashed, role]
+            "INSERT INTO users (name, email, phone, password, role, profile_image, is_verified, created_at) VALUES (?,?,?,?,?,?, false, NOW())",
+            [name.trim(), email.toLowerCase().trim(), phone, hashed, role, profileImage?.trim() || null]
         );
         userId = result.insertId;
 
@@ -1168,9 +1170,9 @@ module.exports.getProfile = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Fetch basic user info
+        // Fetch basic user info (include profile_image)
         const [users] = await pool.query(
-            "SELECT id, name, email, phone, role, is_verified FROM users WHERE id = ?",
+            "SELECT id, name, email, phone, role, is_verified, profile_image FROM users WHERE id = ?",
             [userId]
         );
 
@@ -1200,7 +1202,7 @@ module.exports.getProfile = async (req, res) => {
             phone: user.phone,
             role: user.role,
             isVerified: user.is_verified,
-            // profileImage: user.profile_image
+            profileImage: user.profile_image || null
         };
 
         // Add builder specific fields

@@ -13,27 +13,27 @@ import PropertyDetailScreen from './modules/property/screens/PropertyDetailScree
 import SearchResultsScreen from './modules/property/screens/SearchResultsScreen';
 import ExploreProperties from './modules/property/screens/ExploreProperties';
 import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
+import BuilderRequestListScreen from './modules/builder/screens/BuilderRequestListScreen';
+import BuilderRequestDetailScreen from './modules/builder/screens/BuilderRequestDetailScreen';
 import ReportPropertyScreen from './modules/property/screens/ReportPropertyScreen';
 import AddProperty from './modules/property/screens/AddProperties';
 import BuilderInquiriesScreen from './modules/builder/screens/BuilderInquiriesScreen';
 import PaymentScreen from './store/PaymentScreen';
 import ChatScreen from './modules/chat/screens/ChatScreen';
+import ChatListScreen from './modules/chat/screens/ChatListScreen';
+import AddPropertiesAgent from './modules/property/screens/AddPropertiesAgent';
+import AgentDashboard from './modules/agent/AgentDashboardScreen';
+import MyListingsScreen from './modules/property/screens/MyListingsScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
   const [screenStack, setScreenStack] = useState([]);
   const [selectedProperty, setSelectedProperty] = useState(null);
+  const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [reportPropertyData, setReportPropertyData] = useState(null);
   const [paymentData, setPaymentData] = useState(null);
   const [chatData, setChatData] = useState(null);
-
-  // const [userData, setUserData] = useState({
-  //   name: 'Sarah',
-  //   email: 'sarah@example.com',
-  //   phone: '+1 234 567 8900',
-  // });
-
   const [userData, setUserData] = useState(null);
 
   // 🔹 Load User Data on mount
@@ -57,25 +57,83 @@ export default function App() {
       const splashTimer = setTimeout(() => {
         console.log('⏱️ Splash timeout - auto-navigate to welcome');
         setCurrentScreen('welcome');
-      }, 5000); // After 5 seconds, go to welcome if not already done
+      }, 5000);
 
       return () => clearTimeout(splashTimer);
     }
   }, [currentScreen]);
 
   // 🔹 Navigation handler (Stack based)
+  // const navigateTo = (screen, params = {}) => {
+  //   setScreenStack(prev => [...prev, currentScreen]);
+  //   setCurrentScreen(screen);
+
+  //   if (params.property) setSelectedProperty(params.property);
+  //   if (params.requestId !== undefined) setSelectedRequestId(params.requestId);
+  //   if (params.query !== undefined) setSearchQuery(params.query);
+
+  //   if (params.propertyId || params.propertyName || params.propertyAddress || params.propertyPrice || params.propertyImage) {
+  //     setReportPropertyData({
+  //       propertyId: params.propertyId,
+  //       propertyName: params.propertyName,
+  //       propertyAddress: params.propertyAddress,
+  //       propertyPrice: params.propertyPrice,
+  //       propertyImage: params.propertyImage,
+  //     });
+  //   }
+
+  //   if (params.propertyPrice) {
+  //     setPaymentData({
+  //       propertyId: params.propertyId,
+  //       propertyName: params.propertyName,
+  //       propertyPrice: params.propertyPrice,
+  //     });
+  //   }
+
+  //   if (screen === 'chat') {
+  //     setChatData({
+  //       chatId: params.chatId,
+  //       inquiryId: params.inquiryId,
+  //     });
+  //   }
+  // };
+
   const navigateTo = (screen, params = {}) => {
+    const normalizedScreen =
+      screen === 'PropertyDetailScreen' ? 'propertyDetail' : screen;
+
+    // 🚫 Prevent propertyDetail without property
+    if (normalizedScreen === 'propertyDetail' && !params.property) {
+      console.warn("⚠️ Tried to open propertyDetail without property.");
+      return;
+    }
+
+    // 🧹 Clear selectedProperty when leaving propertyDetail
+    if (normalizedScreen !== 'propertyDetail') {
+      setSelectedProperty(null);
+    }
+
     setScreenStack(prev => [...prev, currentScreen]);
-    setCurrentScreen(screen);
+    setCurrentScreen(normalizedScreen);
 
-    // Handle property selection
-    if (params.property) setSelectedProperty(params.property);
+    // ✅ Only set property when navigating to propertyDetail
+    if (normalizedScreen === 'propertyDetail') {
+      setSelectedProperty(params.property);
+    }
 
-    // Handle search query
-    if (params.query !== undefined) setSearchQuery(params.query);
+    if (params.requestId !== undefined)
+      setSelectedRequestId(params.requestId);
 
-    // Handle Report Property data
-    if (params.propertyId || params.propertyName || params.propertyAddress || params.propertyPrice || params.propertyImage) {
+    if (params.query !== undefined)
+      setSearchQuery(params.query);
+
+    if (
+      params.propertyId ||
+      params.propertyName ||
+      params.propertyAddress ||
+      params.propertyPrice ||
+      params.propertyImage
+    ) {
       setReportPropertyData({
         propertyId: params.propertyId,
         propertyName: params.propertyName,
@@ -85,7 +143,6 @@ export default function App() {
       });
     }
 
-    // Handle Payment data
     if (params.propertyPrice) {
       setPaymentData({
         propertyId: params.propertyId,
@@ -94,28 +151,18 @@ export default function App() {
       });
     }
 
-    // Handle Chat data
-    //   if (params.chatId || params.inquiryId) {
-    //     setChatData({
-    //       chatId: params.chatId,
-    //       inquiryId: params.inquiryId,
-    //     });
-    //   }
-    // };
-
-    if (screen === 'chat') {
+    if (normalizedScreen === 'chat') {
       setChatData({
         chatId: params.chatId,
         inquiryId: params.inquiryId,
       });
     }
-  }
+  };
 
 
   const goBack = () => {
     setScreenStack(prev => {
       if (prev.length === 0) {
-        // Fallback to home when stack is empty
         setCurrentScreen('home');
         return prev;
       }
@@ -132,6 +179,7 @@ export default function App() {
       setScreenStack([]);
       setCurrentScreen('welcome');
       setSelectedProperty(null);
+      setSelectedRequestId(null);
       setReportPropertyData(null);
       setPaymentData(null);
       setChatData(null);
@@ -170,11 +218,7 @@ export default function App() {
             onBack={goBack}
             onNavigateToLoginSuccess={(user) => {
               if (user) setUserData(user);
-              if (user?.role === 'builder' || user?.role === 'developer') {
-                navigateTo('builderDashboard');
-              } else {
-                navigateTo('home');
-              }
+              navigateTo('home');
             }}
             onForgotPassword={() => navigateTo('forgotPassword')}
             onRegister={() => navigateTo('register')}
@@ -242,24 +286,18 @@ export default function App() {
         return (
           <PropertyDetailScreen
             navigation={navigation}
-            property={selectedProperty}
             onBack={goBack}
-            // route={{
-            //   params: {
-            //     propertyId: selectedProperty?.id || 'property-001',
-            //     propertyName: selectedProperty?.name || 'Modern Luxury Villa',
-            //     propertyAddress: selectedProperty?.address || '1245 Sunset Boulevard, Beverly Hills, CA 90210',
-            //     propertyPrice: selectedProperty?.price || '$789,000',
-            //   }
-            // }}
             route={{
               params: {
-                property: selectedProperty
+                property: selectedProperty,
               }
             }}
-
           />
         );
+
+
+
+
 
       case 'searchResults':
         return (
@@ -288,7 +326,7 @@ export default function App() {
         return (
           <BuilderDashboard
             navigation={navigation}
-            builderName={userData.name}
+            builderName={userData?.name}
             onBack={goBack}
             onPropertyClick={(property) =>
               navigateTo('propertyDetail', { property })
@@ -305,12 +343,58 @@ export default function App() {
           />
         );
 
+      case 'builderRequests':
+        return (
+          <BuilderRequestListScreen
+            navigation={navigation}
+            onBack={goBack}
+          />
+        );
+
+      case 'builderRequestDetail':
+        return (
+          <BuilderRequestDetailScreen
+            navigation={navigation}
+            onBack={goBack}
+            requestId={selectedRequestId}
+          />
+        );
+
+      case 'agentDashboard':
+        return (
+          <AgentDashboard
+            navigation={navigation}
+            agentName={userData?.name}
+            onBack={goBack}
+          />
+        );
+
       case 'addProperty':
         return (
           <AddProperty
             onBack={goBack}
             onPropertyAdded={() => {
               navigateTo('builderDashboard');
+            }}
+          />
+        );
+
+      case 'addPropertyAgent':
+        return (
+          <AddPropertiesAgent
+            onBack={goBack}
+            onPropertyAdded={() => {
+              navigateTo('agentDashboard');
+            }}
+          />
+        );
+
+      case 'myListings':
+        return (
+          <MyListingsScreen
+            navigation={{
+              navigate: navigateTo,
+              goBack: goBack
             }}
           />
         );
@@ -362,6 +446,17 @@ export default function App() {
           />
         );
 
+
+
+      case 'chatList':
+        return (
+          <ChatListScreen
+            navigation={navigation}
+            onBack={goBack}
+            user={userData}
+          />
+        );
+
       default:
         console.warn('⚠️ Unknown screen:', currentScreen);
         return (
@@ -374,12 +469,18 @@ export default function App() {
     }
   };
 
+
+
+
   return (
     <View style={styles.container}>
       {renderScreen()}
     </View>
   );
 }
+
+
+
 
 const styles = StyleSheet.create({
   container: {

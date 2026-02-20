@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import {
   House,
   ArrowLeft,
 } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width, height } = Dimensions.get('window');
 
 // ImageWithFallback Component
@@ -98,103 +99,65 @@ const ChatListItem = ({ chat, onPress }) => {
 };
 
 // Main ChatListScreen Component
-export default function ChatListScreen({ navigation, onBack }) {
+export default function ChatListScreen({ navigation, onBack, route }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [chats, setChats] = useState([]);
+  const getApiUrl = () => {
+    return Platform.OS === 'android'
+      ? 'http://10.0.2.2:5000/api'
+      : 'http://localhost:5000/api';
+  };
 
-  // Mock chat data
-  const chatData = [
-    {
-      id: '1',
-      avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150&h=150&fit=crop',
-      name: 'Sarah Johnson',
-      role: 'Agent',
-      property: 'Luxury Penthouse Downtown',
-      lastMessage: 'The viewing is scheduled for tomorrow at 3 PM. Looking forward to showing you around!',
-      timestamp: '2m ago',
-      unreadCount: 2,
-      online: true,
-    },
-    {
-      id: '2',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&h=150&fit=crop',
-      name: 'Michael Chen',
-      role: 'Buyer',
-      property: 'Inquiry about Modern Villa',
-      lastMessage: 'Thanks for the information. Can we discuss the financing options?',
-      timestamp: '1h ago',
-      unreadCount: 0,
-      online: false,
-    },
-    {
-      id: '3',
-      avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&h=150&fit=crop',
-      name: 'Emma Williams',
-      role: 'Buyer',
-      property: 'Suburban Family Home',
-      lastMessage: "I'm interested in making an offer. What's the next step?",
-      timestamp: '3h ago',
-      unreadCount: 5,
-      online: true,
-    },
-    {
-      id: '4',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop',
-      name: 'James Rodriguez',
-      role: 'Agent',
-      property: 'Waterfront Condo',
-      lastMessage: 'Just sent you the updated listing photos. Take a look!',
-      timestamp: '5h ago',
-      unreadCount: 0,
-      online: false,
-    },
-    {
-      id: '5',
-      avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop',
-      name: 'Lisa Anderson',
-      role: 'Seller',
-      property: 'Downtown Apartment',
-      lastMessage: 'The price looks good. When can we schedule a visit?',
-      timestamp: 'Yesterday',
-      unreadCount: 1,
-      online: false,
-    },
-    {
-      id: '6',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop',
-      name: 'David Park',
-      role: 'Seller',
-      property: 'Colonial Style House',
-      lastMessage: 'Thank you for handling the sale. Everything went smoothly!',
-      timestamp: 'Yesterday',
-      unreadCount: 0,
-      online: true,
-    },
-    {
-      id: '7',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&h=150&fit=crop',
-      name: 'Rachel Green',
-      role: 'Buyer',
-      property: 'Garden Apartment',
-      lastMessage: 'Could you send me the property inspection report?',
-      timestamp: '2 days ago',
-      unreadCount: 0,
-      online: false,
-    },
-    {
-      id: '8',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop',
-      name: 'Tom Wilson',
-      role: 'Agent',
-      property: 'Beachfront Property',
-      lastMessage: 'Great news! The seller accepted your offer.',
-      timestamp: '3 days ago',
-      unreadCount: 3,
-      online: false,
-    },
-  ];
+  const API_BASE_URL = getApiUrl();
+
+  const fetchChats = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+
+      const res = await fetch(`${API_BASE_URL}/chats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        console.log("Chats:", data);
+
+        // 🔥 MAP backend → UI format
+        const formatted = data.map(chat => ({
+          id: chat.chat_id,
+          name: chat.other_user_name || "User",
+          property: chat.property_title || "Property",
+          lastMessage: chat.last_message || "",
+          timestamp: chat.timestamp || "",
+          unreadCount: chat.unread || 0,
+          avatar: null,
+          online: false
+        }));
+
+        setChats(formatted);
+      }
+    } catch (err) {
+      console.error("Error fetching chats:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchChats();
+
+    if (route?.params?.chatId) {
+      const chatId = route.params.chatId;
+
+      setTimeout(() => {
+        navigation.navigate('chat', {
+          chatId: chatId
+        });
+      }, 100);
+    }
+  }, []);
 
   // Filter chats based on search query
-  const filteredChats = chatData.filter(chat =>
+  const filteredChats = chats.filter(chat =>
     chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     chat.property.toLowerCase().includes(searchQuery.toLowerCase()) ||
     chat.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
@@ -204,7 +167,7 @@ export default function ChatListScreen({ navigation, onBack }) {
     console.log('Chat pressed:', chatId);
     // Navigate to chat details screen
     // if (navigation) {
-    //   navigation.navigate('ChatDetail', { chatId });
+    navigation.navigate('chat', { chatId });
     // }
   };
 
@@ -248,7 +211,7 @@ export default function ChatListScreen({ navigation, onBack }) {
     }
   };
 
-  const totalUnread = chatData.reduce((sum, chat) => sum + chat.unreadCount, 0);
+  const totalUnread = chats.reduce((sum, chat) => sum + chat.unreadCount, 0);
 
   return (
     <SafeAreaView style={styles.container}>

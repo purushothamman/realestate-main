@@ -173,7 +173,7 @@ const NotificationsScreen = ({ onBack }) => {
   };
 
   const markAsRead = (id) => {
-    setNotifications(notifications.map(n => 
+    setNotifications(notifications.map(n =>
       n.id === id ? { ...n, isRead: true } : n
     ));
   };
@@ -195,7 +195,7 @@ const NotificationsScreen = ({ onBack }) => {
 
   const renderNotificationCard = (notification, showUnreadIndicator = true) => {
     const { Icon, color, bg } = getNotificationIcon(notification.type);
-    
+
     return (
       <TouchableOpacity
         key={notification.id}
@@ -220,7 +220,7 @@ const NotificationsScreen = ({ onBack }) => {
           {/* Content */}
           <View style={styles.textContainer}>
             <View style={styles.headerRow}>
-              <Text 
+              <Text
                 style={[
                   styles.notificationTitle,
                   !notification.isRead && styles.notificationTitleUnread
@@ -234,7 +234,7 @@ const NotificationsScreen = ({ onBack }) => {
             <Text style={styles.description} numberOfLines={2}>
               {notification.description}
             </Text>
-            
+
             {notification.isUrgent && (
               <View style={styles.urgentBadge}>
                 <AlertCircle width={12} height={12} color="#dc2626" />
@@ -274,7 +274,7 @@ const NotificationsScreen = ({ onBack }) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <Image
@@ -282,7 +282,7 @@ const NotificationsScreen = ({ onBack }) => {
           style={styles.headerImage}
         />
         <View style={styles.headerOverlay} />
-        
+
         <View style={styles.headerContent}>
           <View style={styles.topBar}>
             <View style={styles.topBarLeft}>
@@ -344,7 +344,7 @@ const NotificationsScreen = ({ onBack }) => {
         animationType="fade"
         onRequestClose={() => setShowFilterMenu(false)}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowFilterMenu(false)}
@@ -388,8 +388,8 @@ const NotificationsScreen = ({ onBack }) => {
           </View>
           <Text style={styles.emptyTitle}>No notifications yet</Text>
           <Text style={styles.emptyText}>
-            {filter !== 'all' 
-              ? 'No notifications in this category' 
+            {filter !== 'all'
+              ? 'No notifications in this category'
               : "We'll notify you when something important happens"
             }
           </Text>
@@ -403,7 +403,7 @@ const NotificationsScreen = ({ onBack }) => {
                 <Text style={styles.sectionTitle}>TODAY</Text>
               </View>
               <View style={styles.notificationsList}>
-                {groupedNotifications.today.map((notification) => 
+                {groupedNotifications.today.map((notification) =>
                   renderNotificationCard(notification, true)
                 )}
               </View>
@@ -417,7 +417,7 @@ const NotificationsScreen = ({ onBack }) => {
                 <Text style={styles.sectionTitle}>YESTERDAY</Text>
               </View>
               <View style={styles.notificationsList}>
-                {groupedNotifications.yesterday.map((notification) => 
+                {groupedNotifications.yesterday.map((notification) =>
                   renderNotificationCard(notification, true)
                 )}
               </View>
@@ -431,7 +431,7 @@ const NotificationsScreen = ({ onBack }) => {
                 <Text style={styles.sectionTitle}>EARLIER</Text>
               </View>
               <View style={styles.notificationsList}>
-                {groupedNotifications.earlier.map((notification) => 
+                {groupedNotifications.earlier.map((notification) =>
                   renderNotificationCard(notification, false)
                 )}
               </View>

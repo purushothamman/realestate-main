@@ -68,6 +68,7 @@ exports.addProperty = async (req, res) => {
             price,
             listing_type,
             property_type_id,
+            builder_id, // required when agent adds property (on behalf of builder)
             address,
             city,
             state,
@@ -112,15 +113,83 @@ exports.addProperty = async (req, res) => {
             });
         }
 
+        // Agent flow: property must be created as BLOCKED and linked to a builder
+        // We treat the selected builder as the property "owner" (uploaded_by), so the existing
+        // builder dashboards / inquiry logic that expects uploaded_by=builder continues to work.
+        let propertyOwnerId = uploaded_by;
+        let propertyOwnerRole = uploaded_by_role;
+        let propertyStatus = 'active';
+        let agentIdForRequest = null;
+        let builderIdForRequest = null;
+
+        if (uploaded_by_role === 'agent') {
+            if (!builder_id) {
+                await connection.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: 'builder_id is required when an agent adds a property'
+                });
+            }
+
+            // Validate builder exists and is a builder
+            const [builderRows] = await connection.query(
+                "SELECT id FROM users WHERE id = ? AND role = 'builder' AND is_blocked = FALSE",
+                [builder_id]
+            );
+
+            if (!builderRows || builderRows.length === 0) {
+                await connection.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: 'Selected builder not found or not eligible'
+                });
+            }
+
+            propertyOwnerId = builder_id;
+            propertyOwnerRole = 'builder';
+            propertyStatus = 'blocked';
+            agentIdForRequest = uploaded_by;
+            builderIdForRequest = builder_id;
+        }
+
         // 1. Insert into properties table
         const [propertyResult] = await connection.query(
             `INSERT INTO properties 
        (title, description, price, listing_type, property_type_id, address, city, state, pincode, latitude, longitude, area_sqft, bedrooms, bathrooms, uploaded_by, uploaded_by_role, is_verified, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, 'active')`,
-            [title, description, price, listing_type, property_type_id, address, city, state, pincode || null, latitude || null, longitude || null, area_sqft || null, bedrooms || null, bathrooms || null, uploaded_by, uploaded_by_role]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?)`,
+            [
+                title,
+                description,
+                price,
+                listing_type,
+                property_type_id,
+                address,
+                city,
+                state,
+                pincode || null,
+                latitude || null,
+                longitude || null,
+                area_sqft || null,
+                bedrooms || null,
+                bathrooms || null,
+                propertyOwnerId,
+                propertyOwnerRole,
+                propertyStatus
+            ]
         );
 
         const property_id = propertyResult.insertId;
+
+        // 1b. If agent added property, create approval request for builder
+        let request_id = null;
+        if (uploaded_by_role === 'agent') {
+            const [requestResult] = await connection.query(
+                `INSERT INTO property_requests (property_id, agent_id, builder_id, status)
+                 VALUES (?, ?, ?, 'pending')`,
+                [property_id, agentIdForRequest, builderIdForRequest]
+            );
+            request_id = requestResult.insertId;
+        }
 
         // 2. Insert property images
         if (images && images.length > 0) {
@@ -129,7 +198,7 @@ exports.addProperty = async (req, res) => {
                 await connection.query(
                     `INSERT INTO property_images (property_id, image_url, is_primary, sort_order)
            VALUES (?, ?, ?, ?)`,
-                    [property_id, image.url, i === 0, i]
+                    [property_id, image.image_url || image.url, i === 0, i]
                 );
             }
         }
@@ -166,15 +235,18 @@ exports.addProperty = async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: 'Property added successfully',
+            message: uploaded_by_role === 'agent'
+                ? 'Property saved and sent to builder for approval'
+                : 'Property added successfully',
             property_id,
+            request_id,
             data: {
                 id: property_id,
                 title,
                 price,
                 city,
                 state,
-                status: 'active',
+                status: propertyStatus,
                 is_verified: false
             }
         });
@@ -189,6 +261,142 @@ exports.addProperty = async (req, res) => {
         });
     } finally {
         connection.release();
+    }
+};
+
+// Get properties uploaded by logged-in agent/builder
+exports.getMyProperties = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const userRole = req.user?.role;
+
+        if (!userId || !userRole) {
+            return res.status(401).json({
+                success: false,
+                message: 'User authentication required'
+            });
+        }
+
+        // Fetch properties uploaded by this user with all images
+        // For agents: also include properties they submitted via property_requests that are approved (active)
+        // For builders: only properties they uploaded directly
+        let query;
+        let params;
+
+        if (userRole === 'agent') {
+            query = `SELECT 
+                p.id,
+                p.title,
+                p.description,
+                p.price,
+                p.listing_type,
+                p.address,
+                p.city,
+                p.state,
+                p.area_sqft,
+                p.bedrooms,
+                p.bathrooms,
+                p.status,
+                p.is_verified,
+                p.created_at,
+                p.updated_at,
+                pi.image_url,
+                pi.is_primary
+            FROM properties p
+            LEFT JOIN property_images pi ON p.id = pi.property_id
+            LEFT JOIN property_requests pr ON p.id = pr.property_id AND pr.agent_id = ?
+            WHERE (
+                (p.uploaded_by = ? AND p.uploaded_by_role = ?)
+                OR 
+                (pr.agent_id = ? AND pr.status = 'approved' AND p.status = 'active')
+            )
+            ORDER BY p.created_at DESC, pi.sort_order ASC`;
+            params = [userId, userId, userRole, userId];
+        } else {
+            // Builder: only properties they uploaded directly
+            query = `SELECT 
+                p.id,
+                p.title,
+                p.description,
+                p.price,
+                p.listing_type,
+                p.address,
+                p.city,
+                p.state,
+                p.area_sqft,
+                p.bedrooms,
+                p.bathrooms,
+                p.status,
+                p.is_verified,
+                p.created_at,
+                p.updated_at,
+                pi.image_url,
+                pi.is_primary
+            FROM properties p
+            LEFT JOIN property_images pi ON p.id = pi.property_id
+            WHERE p.uploaded_by = ? AND p.uploaded_by_role = ?
+            ORDER BY p.created_at DESC, pi.sort_order ASC`;
+            params = [userId, userRole];
+        }
+
+        const [rows] = await pool.query(query, params);
+
+        // Group images by property
+        const propertiesMap = new Map();
+
+        rows.forEach(row => {
+            if (!propertiesMap.has(row.id)) {
+                propertiesMap.set(row.id, {
+                    id: row.id,
+                    title: row.title,
+                    description: row.description,
+                    price: row.price,
+                    listingType: row.listing_type,
+                    address: row.address,
+                    city: row.city,
+                    state: row.state,
+                    areaSqft: row.area_sqft,
+                    bedrooms: row.bedrooms,
+                    bathrooms: row.bathrooms,
+                    status: row.status,
+                    isVerified: row.is_verified,
+                    createdAt: row.created_at,
+                    updatedAt: row.updated_at,
+                    images: []
+                });
+            }
+
+            if (row.image_url) {
+                const property = propertiesMap.get(row.id);
+                property.images.push({
+                    url: row.image_url,
+                    isPrimary: row.is_primary === 1
+                });
+            }
+        });
+
+        // Transform to array and set primary image
+        const transformedProperties = Array.from(propertiesMap.values()).map(prop => ({
+            ...prop,
+            primaryImage: prop.images.find(img => img.isPrimary)?.url || 
+                         prop.images[0]?.url || 
+                         'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
+            imageCount: prop.images.length
+        }));
+
+        res.json({
+            success: true,
+            properties: transformedProperties,
+            total: transformedProperties.length
+        });
+
+    } catch (error) {
+        console.error('Get my properties error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch properties',
+            error: error.message
+        });
     }
 };
 
@@ -208,10 +416,27 @@ exports.getAllProperties = async (req, res) => {
                 EXISTS(
                     SELECT 1 FROM favorites f2
                     WHERE f2.property_id = p.id AND f2.user_id = ?
-                ) as is_favorited
+                ) as is_favorited,
+                (
+                    SELECT JSON_ARRAYAGG(pi2.image_url)
+                    FROM property_images pi2
+                    WHERE pi2.property_id = p.id
+                    ORDER BY pi2.is_primary DESC, pi2.sort_order ASC
+                ) as images_json,
+                (
+                    SELECT pi3.image_url
+                    FROM property_images pi3
+                    WHERE pi3.property_id = p.id
+                    ORDER BY pi3.is_primary DESC, pi3.sort_order ASC
+                    LIMIT 1
+                ) as primary_image_url,
+                (
+                    SELECT JSON_ARRAYAGG(JSON_OBJECT('name', pf.feature_name, 'value', pf.feature_value))
+                    FROM property_features pf
+                    WHERE pf.property_id = p.id
+                ) as features_json
             FROM properties p
             LEFT JOIN users u ON p.uploaded_by = u.id
-            LEFT JOIN property_images pi ON p.id = pi.property_id AND pi.is_primary = TRUE
             WHERE p.status = 'active'
         `;
 
@@ -256,34 +481,68 @@ exports.getAllProperties = async (req, res) => {
 
         const [properties] = await pool.query(query, params);
         
-        const transformedProperties = properties.map(prop => ({
-            id: prop.id,
-            title: prop.title,
-            price: prop.price,
-            purpose: prop.purpose,
-            propertyType: prop.property_type,
-            address: prop.address,
-            city: prop.city,
-            state: prop.state,
-            pincode: prop.pincode,
-            bedrooms: prop.bedrooms,
-            bathrooms: prop.bathrooms,
-            area: `${prop.area_sqft} sq ft`,
-            sqft: prop.area_sqft,
-            description: prop.description,
-            status: prop.status,
-            verificationStatus: prop.verification_status,
-            isFavorited: Boolean(prop.is_favorited),
-            viewCount: prop.view_count,
-            favoriteCount: prop.favorite_count,
-            image: prop.image_url,
-            imageUrl: prop.image_url,
-            owner: {
-                name: prop.owner_name,
-                email: prop.owner_email,
-                phone: prop.owner_phone
-            }
-        }));
+        const transformedProperties = properties.map(prop => {
+            // Parse images JSON array from subquery
+            let imagesArray = [];
+            try {
+                const raw = prop.images_json;
+                if (raw) {
+                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (Array.isArray(parsed)) {
+                        imagesArray = parsed.filter(u => u !== null);
+                    }
+                }
+            } catch (e) { /* ignore parse errors */ }
+
+            // Parse features JSON array from subquery
+            let featuresArray = [];
+            try {
+                const raw = prop.features_json;
+                if (raw) {
+                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (Array.isArray(parsed)) {
+                        featuresArray = parsed.filter(f => f && f.name !== null);
+                    }
+                }
+            } catch (e) { /* ignore parse errors */ }
+
+            const primaryImage = prop.primary_image_url || imagesArray[0] || null;
+
+            return {
+                id: prop.id,
+                title: prop.title,
+                price: prop.price,
+                purpose: prop.purpose,
+                listing_type: prop.listing_type,
+                propertyType: prop.property_type,
+                address: prop.address,
+                city: prop.city,
+                state: prop.state,
+                pincode: prop.pincode,
+                bedrooms: prop.bedrooms,
+                bathrooms: prop.bathrooms,
+                area: prop.area_sqft ? `${prop.area_sqft} sq ft` : null,
+                area_sqft: prop.area_sqft,
+                description: prop.description,
+                status: prop.status,
+                verificationStatus: prop.verification_status,
+                isFavorited: Boolean(prop.is_favorited),
+                viewCount: prop.view_count,
+                favoriteCount: prop.favorite_count,
+                // Single image for list cards
+                image: primaryImage,
+                imageUrl: primaryImage,
+                // Full images array for detail screen
+                images: imagesArray,
+                // Features / amenities for detail screen
+                features: featuresArray,
+                owner: {
+                    name: prop.owner_name,
+                    email: prop.owner_email,
+                    phone: prop.owner_phone
+                },
+            };
+        });
 
         res.json({
             success: true,

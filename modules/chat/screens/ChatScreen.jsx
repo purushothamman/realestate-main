@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+
 const { width } = Dimensions.get('window');
 
 // Icon Components
@@ -148,7 +149,7 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
     );
 
     return () => {
-      clearInterval(interval);
+      // clearInterval(interval);
       keyboardWillShow.remove();
       keyboardWillHide.remove();
     };
@@ -251,7 +252,12 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
         <View style={styles.headerContent}>
           <View style={styles.topBar}>
             <View style={styles.topBarLeft}>
-              <TouchableOpacity onPress={onBack} style={styles.backButton}>
+
+              <TouchableOpacity
+                onPress={() => navigation.navigate('chatList')}
+                style={styles.backButton}>
+
+
                 <ChevronLeftIcon />
               </TouchableOpacity>
               <View>

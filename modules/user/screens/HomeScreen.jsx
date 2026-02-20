@@ -442,12 +442,12 @@ export default function HomeScreen({ navigation }) {
     if (screen === 'propertyDetail' && selectedProperty) {
       return (
         <PropertyDetailScreen
-          property={selectedProperty}
           onBack={() => {
             setScreen('home');
             setSelectedProperty(null);
           }}
           navigation={navigation}
+          route={{ params: { property: selectedProperty } }}
         />
       );
     }
