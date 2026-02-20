@@ -9,5 +9,8 @@ router.post("/:chatId", protect, chat.sendMessage)
 
 //get messages
 router.get("/:chatId", protect, chat.getMessages)
+// for chat list
+router.get("/", protect, chat.getAllChats);
+
 
 module.exports = router

@@ -83,3 +83,47 @@ exports.getMessages = async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 }
+
+exports.getAllChats = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const [chats] = await pool.query(`
+      SELECT 
+        c.id AS chat_id,
+        p.title AS property_title,
+        p.price AS property_price,
+        u.name AS other_user_name,
+        m.message AS last_message,
+        m.sent_at AS timestamp
+      FROM chats c
+
+      -- Get last message
+      LEFT JOIN messages m 
+        ON m.chat_id = c.id
+      LEFT JOIN (
+        SELECT chat_id, MAX(sent_at) AS max_time
+        FROM messages
+        GROUP BY chat_id
+      ) lm ON lm.chat_id = m.chat_id AND lm.max_time = m.sent_at
+
+      -- Property
+      LEFT JOIN properties p ON c.property_id = p.id
+
+      -- Get other user
+      LEFT JOIN users u 
+        ON (u.id = c.user1_id AND c.user2_id = ?) 
+        OR (u.id = c.user2_id AND c.user1_id = ?)
+
+      WHERE c.user1_id = ? OR c.user2_id = ?
+
+      ORDER BY m.sent_at DESC
+    `, [userId, userId, userId, userId]);
+
+        res.json(chats);
+
+    } catch (err) {
+        console.error("Get chats error:", err);
+        res.status(500).json({ error: err.message });
+    }
+};
