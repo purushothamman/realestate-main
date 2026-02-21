@@ -70,7 +70,140 @@ const USER_TYPES = [
   },
 ];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FocusableInput
+// KEY FIX: Each input manages its OWN focused state locally via React.memo +
+// useState. This means tapping a field only re-renders THAT field, not the
+// entire form. The original bug was caused by a parent-level `focusedInput`
+// state that triggered a full-form re-render on every focus/blur event, which
+// on physical devices caused the cursor to flicker and jump between fields.
+// ─────────────────────────────────────────────────────────────────────────────
+const FocusableInput = React.memo(({
+  icon: Icon,
+  error,
+  containerStyle,
+  inputStyle,
+  rightElement,
+  multiline,
+  numberOfLines,
+  ...inputProps
+}) => {
+  const [focused, setFocused] = useState(false);
+
+  if (multiline) {
+    return (
+      <>
+        <View
+          style={[
+            styles.textAreaWrapper,
+            focused && styles.inputWrapperFocused,
+            error && styles.inputWrapperError,
+            containerStyle,
+          ]}
+        >
+          {Icon && (
+            <Icon
+              color={focused ? '#2D6A4F' : '#9CA3AF'}
+              size={20}
+              strokeWidth={2}
+              style={styles.textAreaIcon}
+            />
+          )}
+          <TextInput
+            style={[styles.textArea, inputStyle]}
+            placeholderTextColor="#9CA3AF"
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            multiline
+            numberOfLines={numberOfLines || 4}
+            textAlignVertical="top"
+            {...inputProps}
+          />
+        </View>
+        {error ? (
+          <View style={styles.errorContainer}>
+            <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <View
+        style={[
+          styles.inputWrapper,
+          focused && styles.inputWrapperFocused,
+          error && styles.inputWrapperError,
+          containerStyle,
+        ]}
+      >
+        {Icon && (
+          <Icon
+            color={focused ? '#2D6A4F' : '#9CA3AF'}
+            size={20}
+            strokeWidth={2}
+            style={styles.inputIcon}
+          />
+        )}
+        <TextInput
+          style={[styles.input, inputStyle]}
+          placeholderTextColor="#9CA3AF"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          {...inputProps}
+        />
+        {rightElement}
+      </View>
+      {error ? (
+        <View style={styles.errorContainer}>
+          <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
+    </>
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PasswordInput
+// Wraps FocusableInput and manages its own show/hide toggle state locally,
+// also isolated from the parent so toggling visibility never re-renders the form.
+// ─────────────────────────────────────────────────────────────────────────────
+const PasswordInput = React.memo(({ error, ...inputProps }) => {
+  const [showPassword, setShowPassword] = useState(false);
+
+  return (
+    <FocusableInput
+      icon={Lock}
+      error={error}
+      secureTextEntry={!showPassword}
+      autoCapitalize="none"
+      autoCorrect={false}
+      autoComplete="off"
+      blurOnSubmit={false}
+      inputStyle={styles.passwordInput}
+      rightElement={
+        <TouchableOpacity
+          onPress={() => setShowPassword((v) => !v)}
+          style={styles.eyeButton}
+        >
+          {showPassword ? (
+            <EyeOff color="#9CA3AF" size={20} strokeWidth={2} />
+          ) : (
+            <Eye color="#9CA3AF" size={20} strokeWidth={2} />
+          )}
+        </TouchableOpacity>
+      }
+      {...inputProps}
+    />
+  );
+});
+
 export default function RegisterScreen({ navigation, onNavigateToLogin }) {
+  const isAndroid = Platform.OS === 'android';
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -92,10 +225,12 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
     pincode: '',
   });
 
-  const [showPassword, setShowPassword] = useState(false);
+  // REMOVED: const [showPassword, setShowPassword] = useState(false);
+  // REMOVED: const [focusedInput, setFocusedInput] = useState(null);
+  // Both are now managed locally inside FocusableInput / PasswordInput.
+
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showroleModal, setShowroleModal] = useState(false);
-  const [focusedInput, setFocusedInput] = useState(null);
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState('');
@@ -180,10 +315,15 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: '' }));
-    }
-    setApiError('');
+    // Batch state updates: only clear error if one exists, avoid double re-render
+    setErrors((prev) => {
+      if (prev[field]) {
+        return { ...prev, [field]: '' };
+      }
+      return prev;
+    });
+    // Clear API error only once
+    setApiError((prev) => (prev ? '' : prev));
   };
 
   const handleImageUpload = async () => {
@@ -530,14 +670,17 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
       {/* Main Content */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
+        enabled={Platform.OS === 'ios'}
       >
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollViewContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false}
+          windowSize={5}
         >
           {/* Logo */}
           <View style={styles.logoContainer}>
@@ -575,7 +718,10 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
           ) : null}
 
           {/* Form */}
-          <View style={styles.form}>
+          <View
+            style={styles.form}
+            importantForAutofill={isAndroid ? 'noExcludeDescendants' : 'auto'}
+          >
             {/* Profile Image Upload */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>
@@ -653,37 +799,18 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
               <Text style={styles.label}>
                 Full Name <Text style={styles.required}>*</Text>
               </Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  focusedInput === 'name' && styles.inputWrapperFocused,
-                  errors.name && styles.inputWrapperError,
-                ]}
-              >
-                <User
-                  color={focusedInput === 'name' ? '#2D6A4F' : '#9CA3AF'}
-                  size={20}
-                  strokeWidth={2}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your full name"
-                  placeholderTextColor="#9CA3AF"
-                  value={formData.name}
-                  onChangeText={(value) => handleInputChange('name', value)}
-                  onFocus={() => setFocusedInput('name')}
-                  autoCapitalize="words"
-                  autoComplete="name"
-                  textContentType="name"
-                />
-              </View>
-              {errors.name && (
-                <View style={styles.errorContainer}>
-                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                  <Text style={styles.errorText}>{errors.name}</Text>
-                </View>
-              )}
+              {/* FIX: replaced inline TextInput + parent focusedInput state with FocusableInput */}
+              <FocusableInput
+                icon={User}
+                placeholder="Enter your full name"
+                value={formData.name}
+                onChangeText={(value) => handleInputChange('name', value)}
+                error={errors.name}
+                autoCapitalize="words"
+                autoCorrect={false}
+                autoComplete="off"
+                blurOnSubmit={false}
+              />
             </View>
 
             {/* Email */}
@@ -691,38 +818,18 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
               <Text style={styles.label}>
                 Email Address <Text style={styles.required}>*</Text>
               </Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  focusedInput === 'email' && styles.inputWrapperFocused,
-                  errors.email && styles.inputWrapperError,
-                ]}
-              >
-                <Mail
-                  color={focusedInput === 'email' ? '#2D6A4F' : '#9CA3AF'}
-                  size={20}
-                  strokeWidth={2}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your email"
-                  placeholderTextColor="#9CA3AF"
-                  value={formData.email}
-                  onChangeText={(value) => handleInputChange('email', value)}
-                  onFocus={() => setFocusedInput('email')}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  textContentType="emailAddress"
-                />
-              </View>
-              {errors.email && (
-                <View style={styles.errorContainer}>
-                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                  <Text style={styles.errorText}>{errors.email}</Text>
-                </View>
-              )}
+              <FocusableInput
+                icon={Mail}
+                placeholder="Enter your email"
+                value={formData.email}
+                onChangeText={(value) => handleInputChange('email', value)}
+                error={errors.email}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="off"
+                blurOnSubmit={false}
+              />
             </View>
 
             {/* Phone */}
@@ -730,37 +837,17 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
               <Text style={styles.label}>
                 Phone Number <Text style={styles.required}>*</Text>
               </Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  focusedInput === 'phone' && styles.inputWrapperFocused,
-                  errors.phone && styles.inputWrapperError,
-                ]}
-              >
-                <Phone
-                  color={focusedInput === 'phone' ? '#2D6A4F' : '#9CA3AF'}
-                  size={20}
-                  strokeWidth={2}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter your phone number"
-                  placeholderTextColor="#9CA3AF"
-                  value={formData.phone}
-                  onChangeText={(value) => handleInputChange('phone', value)}
-                  onFocus={() => setFocusedInput('phone')}
-                  keyboardType="phone-pad"
-                  autoComplete="tel"
-                  textContentType="telephoneNumber"
-                />
-              </View>
-              {errors.phone && (
-                <View style={styles.errorContainer}>
-                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                  <Text style={styles.errorText}>{errors.phone}</Text>
-                </View>
-              )}
+              <FocusableInput
+                icon={Phone}
+                placeholder="Enter your phone number"
+                value={formData.phone}
+                onChangeText={(value) => handleInputChange('phone', value)}
+                error={errors.phone}
+                keyboardType="phone-pad"
+                autoCorrect={false}
+                autoComplete="off"
+                blurOnSubmit={false}
+              />
             </View>
 
             {/* Password */}
@@ -768,52 +855,18 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
               <Text style={styles.label}>
                 Password <Text style={styles.required}>*</Text>
               </Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  focusedInput === 'password' && styles.inputWrapperFocused,
-                  errors.password && styles.inputWrapperError,
-                ]}
-              >
-                <Lock
-                  color={focusedInput === 'password' ? '#2D6A4F' : '#9CA3AF'}
-                  size={20}
-                  strokeWidth={2}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={[styles.input, styles.passwordInput]}
-                  placeholder="Create a password"
-                  placeholderTextColor="#9CA3AF"
-                  value={formData.password}
-                  onChangeText={(value) => handleInputChange('password', value)}
-                  onFocus={() => setFocusedInput('password')}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoComplete="password-new"
-                  textContentType="newPassword"
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeButton}
-                >
-                  {showPassword ? (
-                    <EyeOff color="#9CA3AF" size={20} strokeWidth={2} />
-                  ) : (
-                    <Eye color="#9CA3AF" size={20} strokeWidth={2} />
-                  )}
-                </TouchableOpacity>
-              </View>
-              {errors.password ? (
-                <View style={styles.errorContainer}>
-                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                  <Text style={styles.errorText}>{errors.password}</Text>
-                </View>
-              ) : (
+              {/* FIX: PasswordInput manages show/hide and focus state internally */}
+              <PasswordInput
+                placeholder="Create a password"
+                value={formData.password}
+                onChangeText={(value) => handleInputChange('password', value)}
+                error={errors.password}
+              />
+              {!errors.password ? (
                 <Text style={styles.passwordHint}>
                   Must be at least 8 characters with letters and numbers
                 </Text>
-              )}
+              ) : null}
             </View>
 
             {/* User Type */}
@@ -866,8 +919,6 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
               )}
             </View>
 
-
-
             {/* Builder Specific Fields */}
             {formData.role === 'builder' && (
               <View style={styles.builderFieldsContainer}>
@@ -878,29 +929,14 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                   <Text style={styles.label}>
                     Company Name <Text style={styles.required}>*</Text>
                   </Text>
-                  <View style={[styles.inputWrapper, focusedInput === 'companyName' && styles.inputWrapperFocused, errors.companyName && styles.inputWrapperError]}>
-                    <Building2
-                      color={focusedInput === 'companyName' ? '#2D6A4F' : '#9CA3AF'}
-                      size={20}
-                      strokeWidth={2}
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter company name"
-                      placeholderTextColor="#9CA3AF"
-                      value={formData.companyName}
-                      onChangeText={(value) => handleInputChange('companyName', value)}
-                      onFocus={() => setFocusedInput('companyName')}
-                      onBlur={() => setFocusedInput(null)}
-                    />
-                  </View>
-                  {errors.companyName && (
-                    <View style={styles.errorContainer}>
-                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                      <Text style={styles.errorText}>{errors.companyName}</Text>
-                    </View>
-                  )}
+                  <FocusableInput
+                    icon={Building2}
+                    placeholder="Enter company name"
+                    value={formData.companyName}
+                    onChangeText={(value) => handleInputChange('companyName', value)}
+                    error={errors.companyName}
+                    blurOnSubmit={false}
+                  />
                 </View>
 
                 {/* Description */}
@@ -908,26 +944,15 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                   <Text style={styles.label}>
                     Company Description <Text style={styles.labelOptional}>(Optional)</Text>
                   </Text>
-                  <View style={[styles.textAreaWrapper, focusedInput === 'description' && styles.inputWrapperFocused]}>
-                    <MessageSquare
-                      color={focusedInput === 'description' ? '#2D6A4F' : '#9CA3AF'}
-                      size={20}
-                      strokeWidth={2}
-                      style={styles.textAreaIcon}
-                    />
-                    <TextInput
-                      style={styles.textArea}
-                      placeholder="Brief description about your company and projects..."
-                      placeholderTextColor="#9CA3AF"
-                      value={formData.description}
-                      onChangeText={(value) => handleInputChange('description', value)}
-                      onFocus={() => setFocusedInput('description')}
-                      onBlur={() => setFocusedInput(null)}
-                      multiline
-                      numberOfLines={4}
-                      textAlignVertical="top"
-                    />
-                  </View>
+                  <FocusableInput
+                    icon={MessageSquare}
+                    placeholder="Brief description about your company and projects..."
+                    value={formData.description}
+                    onChangeText={(value) => handleInputChange('description', value)}
+                    multiline
+                    numberOfLines={4}
+                    blurOnSubmit={false}
+                  />
                 </View>
 
                 {/* GST Number (Optional) */}
@@ -935,30 +960,15 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                   <Text style={styles.label}>
                     GST Number <Text style={styles.labelOptional}>(Optional)</Text>
                   </Text>
-                  <View style={[styles.inputWrapper, focusedInput === 'gstNo' && styles.inputWrapperFocused, errors.gstNo && styles.inputWrapperError]}>
-                    <Shield
-                      color={focusedInput === 'gstNo' ? '#2D6A4F' : '#9CA3AF'}
-                      size={20}
-                      strokeWidth={2}
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter GST number"
-                      placeholderTextColor="#9CA3AF"
-                      value={formData.gstNo}
-                      onChangeText={(value) => handleInputChange('gstNo', value)}
-                      onFocus={() => setFocusedInput('gstNo')}
-                      onBlur={() => setFocusedInput(null)}
-                      autoCapitalize="characters"
-                    />
-                  </View>
-                  {errors.gstNo && (
-                    <View style={styles.errorContainer}>
-                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                      <Text style={styles.errorText}>{errors.gstNo}</Text>
-                    </View>
-                  )}
+                  <FocusableInput
+                    icon={Shield}
+                    placeholder="Enter GST number"
+                    value={formData.gstNo}
+                    onChangeText={(value) => handleInputChange('gstNo', value)}
+                    error={errors.gstNo}
+                    autoCapitalize="characters"
+                    blurOnSubmit={false}
+                  />
                 </View>
 
                 {/* PAN Number (Required for builders) */}
@@ -966,30 +976,15 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                   <Text style={styles.label}>
                     PAN Number <Text style={styles.required}>*</Text>
                   </Text>
-                  <View style={[styles.inputWrapper, focusedInput === 'panNo' && styles.inputWrapperFocused, errors.panNo && styles.inputWrapperError]}>
-                    <Shield
-                      color={focusedInput === 'panNo' ? '#2D6A4F' : '#9CA3AF'}
-                      size={20}
-                      strokeWidth={2}
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter PAN number (e.g. AAAAA1111A)"
-                      placeholderTextColor="#9CA3AF"
-                      value={formData.panNo}
-                      onChangeText={(value) => handleInputChange('panNo', value)}
-                      onFocus={() => setFocusedInput('panNo')}
-                      onBlur={() => setFocusedInput(null)}
-                      autoCapitalize="characters"
-                    />
-                  </View>
-                  {errors.panNo && (
-                    <View style={styles.errorContainer}>
-                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                      <Text style={styles.errorText}>{errors.panNo}</Text>
-                    </View>
-                  )}
+                  <FocusableInput
+                    icon={Shield}
+                    placeholder="Enter PAN number (e.g. AAAAA1111A)"
+                    value={formData.panNo}
+                    onChangeText={(value) => handleInputChange('panNo', value)}
+                    error={errors.panNo}
+                    autoCapitalize="characters"
+                    blurOnSubmit={false}
+                  />
                 </View>
 
                 {/* Registration Certificate Upload */}
@@ -1055,152 +1050,104 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
                   <Text style={styles.label}>
                     Website <Text style={styles.labelOptional}>(Optional)</Text>
                   </Text>
-                  <View style={[styles.inputWrapper, focusedInput === 'website' && styles.inputWrapperFocused]}>
-                    <TrendingUp
-                      color={focusedInput === 'website' ? '#2D6A4F' : '#9CA3AF'}
-                      size={20}
-                      strokeWidth={2}
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="https://example.com"
-                      placeholderTextColor="#9CA3AF"
-                      value={formData.website}
-                      onChangeText={(value) => handleInputChange('website', value)}
-                      onFocus={() => setFocusedInput('website')}
-                      onBlur={() => setFocusedInput(null)}
-                      keyboardType="url"
-                      autoCapitalize="none"
-                    />
-                  </View>
+                  <FocusableInput
+                    icon={TrendingUp}
+                    placeholder="https://example.com"
+                    value={formData.website}
+                    onChangeText={(value) => handleInputChange('website', value)}
+                    keyboardType="url"
+                    autoCapitalize="none"
+                    blurOnSubmit={false}
+                  />
                 </View>
 
                 {/* Experience Years and Total Projects in a row */}
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>Experience (Years) <Text style={styles.labelOptional}>(Optional)</Text></Text>
-                    <View style={[styles.inputWrapper, focusedInput === 'experienceYears' && styles.inputWrapperFocused]}>
-                      <Briefcase
-                        color={focusedInput === 'experienceYears' ? '#2D6A4F' : '#9CA3AF'}
-                        size={20}
-                        strokeWidth={2}
-                        style={styles.inputIcon}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g. 5"
-                        placeholderTextColor="#9CA3AF"
-                        value={formData.experienceYears}
-                        onChangeText={(value) => handleInputChange('experienceYears', value)}
-                        onFocus={() => setFocusedInput('experienceYears')}
-                        onBlur={() => setFocusedInput(null)}
-                        keyboardType="numeric"
-                      />
-                    </View>
+                    <Text style={styles.label}>
+                      Experience (Years) <Text style={styles.labelOptional}>(Optional)</Text>
+                    </Text>
+                    <FocusableInput
+                      icon={Briefcase}
+                      placeholder="e.g. 5"
+                      value={formData.experienceYears}
+                      onChangeText={(value) => handleInputChange('experienceYears', value)}
+                      keyboardType="numeric"
+                      blurOnSubmit={false}
+                    />
                   </View>
 
                   <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>Total Projects <Text style={styles.labelOptional}>(Optional)</Text></Text>
-                    <View style={[styles.inputWrapper, focusedInput === 'totalProjects' && styles.inputWrapperFocused]}>
-                      <Building2
-                        color={focusedInput === 'totalProjects' ? '#2D6A4F' : '#9CA3AF'}
-                        size={20}
-                        strokeWidth={2}
-                        style={styles.inputIcon}
-                      />
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g. 10"
-                        placeholderTextColor="#9CA3AF"
-                        value={formData.totalProjects}
-                        onChangeText={(value) => handleInputChange('totalProjects', value)}
-                        onFocus={() => setFocusedInput('totalProjects')}
-                        onBlur={() => setFocusedInput(null)}
-                        keyboardType="numeric"
-                      />
-                    </View>
+                    <Text style={styles.label}>
+                      Total Projects <Text style={styles.labelOptional}>(Optional)</Text>
+                    </Text>
+                    <FocusableInput
+                      icon={Building2}
+                      placeholder="e.g. 10"
+                      value={formData.totalProjects}
+                      onChangeText={(value) => handleInputChange('totalProjects', value)}
+                      keyboardType="numeric"
+                      blurOnSubmit={false}
+                    />
                   </View>
                 </View>
 
                 {/* Address Section */}
-                <Text style={[styles.label, { marginTop: 8 }]}>Street Address / Building <Text style={styles.labelOptional}>(Optional)</Text></Text>
+                <Text style={[styles.label, { marginTop: 8 }]}>
+                  Street Address / Building <Text style={styles.labelOptional}>(Optional)</Text>
+                </Text>
 
                 <View style={styles.inputGroup}>
-                  <View style={[styles.inputWrapper, focusedInput === 'address' && styles.inputWrapperFocused]}>
-                    <MapPin
-                      color={focusedInput === 'address' ? '#2D6A4F' : '#9CA3AF'}
-                      size={20}
-                      strokeWidth={2}
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Floor, Building Name, Street"
-                      placeholderTextColor="#9CA3AF"
-                      value={formData.address}
-                      onChangeText={(value) => handleInputChange('address', value)}
-                      onFocus={() => setFocusedInput('address')}
-                      onBlur={() => setFocusedInput(null)}
-                    />
-                  </View>
+                  <FocusableInput
+                    icon={MapPin}
+                    placeholder="Floor, Building Name, Street"
+                    value={formData.address}
+                    onChangeText={(value) => handleInputChange('address', value)}
+                    blurOnSubmit={false}
+                  />
                 </View>
 
                 {/* City and State in a row */}
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>City <Text style={styles.labelOptional}>(Optional)</Text></Text>
-                    <View style={[styles.inputWrapper, focusedInput === 'city' && styles.inputWrapperFocused]}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="City"
-                        placeholderTextColor="#9CA3AF"
-                        value={formData.city}
-                        onChangeText={(value) => handleInputChange('city', value)}
-                        onFocus={() => setFocusedInput('city')}
-                        onBlur={() => setFocusedInput(null)}
-                      />
-                    </View>
+                    <Text style={styles.label}>
+                      City <Text style={styles.labelOptional}>(Optional)</Text>
+                    </Text>
+                    <FocusableInput
+                      placeholder="City"
+                      value={formData.city}
+                      onChangeText={(value) => handleInputChange('city', value)}
+                      blurOnSubmit={false}
+                    />
                   </View>
 
                   <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>State <Text style={styles.labelOptional}>(Optional)</Text></Text>
-                    <View style={[styles.inputWrapper, focusedInput === 'state' && styles.inputWrapperFocused]}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="State"
-                        placeholderTextColor="#9CA3AF"
-                        value={formData.state}
-                        onChangeText={(value) => handleInputChange('state', value)}
-                        onFocus={() => setFocusedInput('state')}
-                        onBlur={() => setFocusedInput(null)}
-                      />
-                    </View>
+                    <Text style={styles.label}>
+                      State <Text style={styles.labelOptional}>(Optional)</Text>
+                    </Text>
+                    <FocusableInput
+                      placeholder="State"
+                      value={formData.state}
+                      onChangeText={(value) => handleInputChange('state', value)}
+                      blurOnSubmit={false}
+                    />
                   </View>
                 </View>
 
                 {/* Pincode */}
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Pincode <Text style={styles.labelOptional}>(Optional)</Text></Text>
-                  <View style={[styles.inputWrapper, focusedInput === 'pincode' && styles.inputWrapperFocused]}>
-                    <MapPin
-                      color={focusedInput === 'pincode' ? '#2D6A4F' : '#9CA3AF'}
-                      size={20}
-                      strokeWidth={2}
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Pincode"
-                      placeholderTextColor="#9CA3AF"
-                      value={formData.pincode}
-                      onChangeText={(value) => handleInputChange('pincode', value)}
-                      onFocus={() => setFocusedInput('pincode')}
-                      onBlur={() => setFocusedInput(null)}
-                      keyboardType="numeric"
-                      maxLength={6}
-                    />
-                  </View>
+                  <Text style={styles.label}>
+                    Pincode <Text style={styles.labelOptional}>(Optional)</Text>
+                  </Text>
+                  <FocusableInput
+                    icon={MapPin}
+                    placeholder="Pincode"
+                    value={formData.pincode}
+                    onChangeText={(value) => handleInputChange('pincode', value)}
+                    keyboardType="numeric"
+                    maxLength={6}
+                    blurOnSubmit={false}
+                  />
                 </View>
               </View>
             )}

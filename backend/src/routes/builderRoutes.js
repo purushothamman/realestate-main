@@ -20,4 +20,13 @@ router.get(
     builder.getBuildersList
 )
 
+// Assign Agent / Hire Agent
+router.get("/assign-agent/properties", protect, allow("builder"), builder.getPropertiesForAssign)
+router.get("/assign-agent/agents", protect, allow("builder"), builder.getHiredAgents)
+router.get("/assign-agent/agents/available", protect, allow("builder"), builder.getAvailableAgents)
+router.post("/assign-agent/agents/:agentId/hire", protect, allow("builder"), builder.hireAgent)
+router.get("/assign-agent/assignments", protect, allow("builder"), builder.getAssignments)
+router.post("/assign-agent/properties/:propertyId/assign", protect, allow("builder"), builder.assignAgentToProperty)
+router.delete("/assign-agent/properties/:propertyId/assign", protect, allow("builder"), builder.unassignAgentFromProperty)
+
 module.exports = router

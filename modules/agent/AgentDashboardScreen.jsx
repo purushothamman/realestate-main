@@ -42,7 +42,8 @@ import {
     Sparkles,
     Award,
     ChevronRight,
-    Activity
+    Activity,
+    X
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
@@ -95,6 +96,7 @@ const AgentDashboard = ({ navigation, route }) => {
     const [recentLeads, setRecentLeads] = useState([]);
     const [activeListings, setActiveListings] = useState([]);
     const [agentData, setAgentData] = useState(null);
+    const [notifications, setNotifications] = useState([]);
 
     // Get auth token from AsyncStorage
     const getAuthToken = async () => {
@@ -135,12 +137,13 @@ const AgentDashboard = ({ navigation, route }) => {
         }
     };
 
-    // Fetch Dashboard Data
+    // Fetch Dashboard Data + notifications
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
 
             const propertiesResponse = await apiRequest('/properties/my-properties');
+            const notificationsResponse = await apiRequest('/notifications');
 
             if (propertiesResponse.success) {
                 setActiveListings(propertiesResponse.properties || []);
@@ -155,6 +158,10 @@ const AgentDashboard = ({ navigation, route }) => {
                     conversionRate: 15,
                     monthlyRevenue: properties.reduce((sum, p) => sum + (p.price * 0.03), 0)
                 });
+            }
+
+            if (notificationsResponse?.success) {
+                setNotifications(notificationsResponse.notifications || []);
             }
 
         } catch (error) {
@@ -199,6 +206,11 @@ const AgentDashboard = ({ navigation, route }) => {
         if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
         return then.toLocaleDateString();
     };
+
+    // Derived: pending hire requests from notifications
+    const pendingHireRequests = notifications.filter(
+        (n) => n.type === 'hire_request' && !n.isRead
+    );
 
     // Handle lead contact
     const handleContactLead = async (lead) => {
@@ -309,10 +321,10 @@ const AgentDashboard = ({ navigation, route }) => {
                             <View style={styles.notificationIconBg}>
                                 <Bell width={20} height={20} color="#6b7280" strokeWidth={2.5} />
                             </View>
-                            {(stats?.newLeads || 0) > 0 && (
+                            {pendingHireRequests.length > 0 && (
                                 <View style={styles.notificationBadge}>
                                     <Text style={styles.notificationBadgeText}>
-                                        {stats?.newLeads || 0}
+                                        {pendingHireRequests.length}
                                     </Text>
                                 </View>
                             )}
@@ -526,6 +538,78 @@ const AgentDashboard = ({ navigation, route }) => {
                             </TouchableOpacity>
                         </View>
                     </View>
+
+                    {/* Hire Requests from Builders */}
+                    {pendingHireRequests.length > 0 && (
+                        <View style={styles.section}>
+                            <View style={styles.sectionHeader}>
+                                <View style={styles.sectionTitleContainer}>
+                                    <Users width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
+                                    <Text style={styles.sectionTitle}>Hire Requests</Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.leadsList}>
+                                {pendingHireRequests.map((n) => (
+                                    <View key={n.id} style={styles.leadCard}>
+                                        <View style={styles.leadHeader}>
+                                            <View style={styles.leadInfo}>
+                                                <Text style={styles.leadName}>
+                                                    {n.title || 'New hire request'}
+                                                </Text>
+                                                <Text style={styles.leadProperty} numberOfLines={2}>
+                                                    {n.body || 'A builder wants to add you as their agent.'}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.statusBadge}>
+                                                <View style={[styles.statusDot, { backgroundColor: '#10b981' }]} />
+                                                <Text style={[styles.statusText, { color: '#047857' }]}>
+                                                    Pending
+                                                </Text>
+                                            </View>
+                                        </View>
+
+                                        <View style={styles.leadFooter}>
+                                            <Text style={styles.leadDate}>
+                                                {formatTimeAgo(n.createdAt)}
+                                            </Text>
+                                            <View style={styles.leadActions}>
+                                                <TouchableOpacity
+                                                    style={styles.leadActionPrimary}
+                                                    onPress={async () => {
+                                                        try {
+                                                            await apiRequest(`/agent/hire-requests/${n.relatedEntityId}/accept`, { method: 'POST' });
+                                                            await apiRequest(`/notifications/${n.id}/read`, { method: 'PATCH' });
+                                                            // Refresh notifications and listings (agent is now linked to builder properties)
+                                                            await fetchDashboardData();
+                                                        } catch (e) {
+                                                            Alert.alert('Error', e.message || 'Failed to accept request');
+                                                        }
+                                                    }}
+                                                >
+                                                    <CheckCircle width={16} height={16} color="#ffffff" strokeWidth={2.5} />
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    style={styles.leadActionSecondary}
+                                                    onPress={async () => {
+                                                        try {
+                                                            await apiRequest(`/agent/hire-requests/${n.relatedEntityId}/reject`, { method: 'POST' });
+                                                            await apiRequest(`/notifications/${n.id}/read`, { method: 'PATCH' });
+                                                            await fetchDashboardData();
+                                                        } catch (e) {
+                                                            Alert.alert('Error', e.message || 'Failed to reject request');
+                                                        }
+                                                    }}
+                                                >
+                                                    <X width={16} height={16} color="#374151" strokeWidth={2.5} />
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
 
                     {/* Enhanced Recent Leads Section */}
                     <View style={styles.section}>

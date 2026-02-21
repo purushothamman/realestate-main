@@ -185,3 +185,251 @@ exports.getBuildersList = async (req, res) => {
     }
 };
 
+// ─── Assign Agent / Hire Agent APIs ─────────────────────────────────────────
+
+// GET /api/builder/assign-agent/properties — list builder's properties for assign screen
+exports.getPropertiesForAssign = async (req, res) => {
+    try {
+        const builderId = req.user.id;
+        const [rows] = await pool.query(
+            `SELECT p.id, p.title, p.address, p.city, p.state, p.status, p.created_at,
+                    (SELECT image_url FROM property_images pi WHERE pi.property_id = p.id ORDER BY pi.is_primary DESC, pi.sort_order ASC LIMIT 1) AS image_url
+             FROM properties p
+             WHERE p.uploaded_by = ?
+             ORDER BY p.created_at DESC`,
+            [builderId]
+        );
+        const list = (rows || []).map((r) => ({
+            id: r.id,
+            name: r.title,
+            location: [r.address, r.city, r.state].filter(Boolean).join(', '),
+            type: 'Residential',
+            units: '-',
+            status: (r.status || 'active') === 'active' ? 'Active' : (r.status || 'Active'),
+            image: r.image_url && r.image_url.startsWith('http') ? r.image_url : (r.image_url ? `${req.protocol}://${req.get('host')}${r.image_url.startsWith('/') ? '' : '/'}${r.image_url}` : null),
+        }));
+        res.json({ success: true, properties: list });
+    } catch (err) {
+        console.error('getPropertiesForAssign error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// GET /api/builder/assign-agent/agents — list agents hired by this builder (from builder_agents + users)
+exports.getHiredAgents = async (req, res) => {
+    try {
+        const builderId = req.user.id;
+        const [rows] = await pool.query(
+            `SELECT u.id, u.name, u.email, u.phone, u.profile_image,
+                    ba.hired_at
+             FROM builder_agents ba
+             JOIN users u ON u.id = ba.agent_id
+             WHERE ba.builder_id = ? AND u.role = 'agent' AND (u.is_blocked = FALSE OR u.is_blocked IS NULL)
+             ORDER BY ba.hired_at DESC`,
+            [builderId]
+        );
+        const list = (rows || []).map((r) => ({
+            id: String(r.id),
+            name: r.name,
+            email: r.email || '',
+            phone: r.phone || '',
+            exp: 0,
+            rating: 0,
+            deals: 0,
+            city: '—',
+            spec: 'Agent',
+            avatar: r.profile_image && r.profile_image.startsWith('http') ? r.profile_image : (r.profile_image ? `${req.protocol}://${req.get('host')}${r.profile_image.startsWith('/') ? '' : '/'}${r.profile_image}` : `https://i.pravatar.cc/150?u=${r.id}`),
+        }));
+        res.json({ success: true, agents: list });
+    } catch (err) {
+        console.error('getHiredAgents error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// GET /api/builder/assign-agent/agents/available — registered agents not yet hired by this builder
+exports.getAvailableAgents = async (req, res) => {
+    try {
+        const builderId = req.user.id;
+        const [rows] = await pool.query(
+            `SELECT u.id, u.name, u.email, u.phone, u.profile_image
+             FROM users u
+             LEFT JOIN builder_agents ba 
+               ON ba.agent_id = u.id AND ba.builder_id = ?
+             LEFT JOIN builder_agent_requests bar
+               ON bar.agent_id = u.id AND bar.builder_id = ? AND bar.status = 'pending'
+             WHERE u.role = 'agent' 
+               AND (u.is_blocked = FALSE OR u.is_blocked IS NULL) 
+               AND ba.id IS NULL
+               AND bar.id IS NULL
+             ORDER BY u.name ASC`,
+            [builderId, builderId]
+        );
+        const list = (rows || []).map((r) => ({
+            id: String(r.id),
+            name: r.name,
+            email: r.email || '',
+            phone: r.phone || '',
+            exp: 0,
+            rating: 0,
+            deals: 0,
+            city: '—',
+            spec: 'Agent',
+            avatar: r.profile_image && r.profile_image.startsWith('http') ? r.profile_image : (r.profile_image ? `${req.protocol}://${req.get('host')}${r.profile_image.startsWith('/') ? '' : '/'}${r.profile_image}` : `https://i.pravatar.cc/150?u=${r.id}`),
+        }));
+        res.json({ success: true, agents: list });
+    } catch (err) {
+        console.error('getAvailableAgents error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// POST /api/builder/assign-agent/agents/:agentId/hire — create hire request + notify agent
+exports.hireAgent = async (req, res) => {
+    try {
+        const builderId = req.user.id;
+        const agentId = parseInt(req.params.agentId, 10);
+        if (!agentId) {
+            return res.status(400).json({ success: false, message: 'Invalid agent ID' });
+        }
+        const [userRows] = await pool.query(
+            'SELECT id, role, name FROM users WHERE id = ? AND role = ?',
+            [agentId, 'agent']
+        );
+        if (!userRows || userRows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Agent not found' });
+        }
+        // If already hired, no need to create a new request
+        const [existingHire] = await pool.query(
+            'SELECT id FROM builder_agents WHERE builder_id = ? AND agent_id = ?',
+            [builderId, agentId]
+        );
+        if (existingHire && existingHire.length > 0) {
+            return res.json({ success: true, alreadyHired: true, message: 'Agent is already on your team' });
+        }
+
+        // Check if there is an active pending request
+        const [existingReq] = await pool.query(
+            'SELECT id, status FROM builder_agent_requests WHERE builder_id = ? AND agent_id = ? ORDER BY created_at DESC LIMIT 1',
+            [builderId, agentId]
+        );
+        if (existingReq && existingReq.length > 0 && existingReq[0].status === 'pending') {
+            return res.json({ success: true, pending: true, message: 'Hire request is already pending with this agent' });
+        }
+
+        const [reqResult] = await pool.query(
+            'INSERT INTO builder_agent_requests (builder_id, agent_id) VALUES (?, ?)',
+            [builderId, agentId]
+        );
+
+        const requestId = reqResult.insertId;
+
+        // Fetch builder name for a friendly message
+        const [builderRows] = await pool.query(
+            'SELECT name FROM users WHERE id = ?',
+            [builderId]
+        );
+        const builderName = builderRows && builderRows[0] && builderRows[0].name ? builderRows[0].name : 'A builder';
+
+        await pool.query(
+            'INSERT INTO notifications (user_id, type, title, body, related_entity_type, related_entity_id) VALUES (?, ?, ?, ?, ?, ?)',
+            [
+                agentId,
+                'hire_request',
+                'New hire request',
+                `${builderName} wants to add you as their agent.`,
+                'builder_agent_request',
+                requestId,
+            ]
+        );
+
+        res.json({
+            success: true,
+            message: 'Hire request sent to agent for approval',
+            requestId,
+        });
+    } catch (err) {
+        console.error('hireAgent error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// GET /api/builder/assign-agent/assignments — property_id -> agent_id map for this builder
+exports.getAssignments = async (req, res) => {
+    try {
+        const builderId = req.user.id;
+        const [rows] = await pool.query(
+            'SELECT property_id, agent_id FROM property_agent_assignments WHERE builder_id = ?',
+            [builderId]
+        );
+        const assignments = {};
+        (rows || []).forEach((r) => {
+            assignments[String(r.property_id)] = String(r.agent_id);
+        });
+        res.json({ success: true, assignments });
+    } catch (err) {
+        console.error('getAssignments error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// POST /api/builder/assign-agent/properties/:propertyId/assign — assign agent to property
+exports.assignAgentToProperty = async (req, res) => {
+    try {
+        const builderId = req.user.id;
+        const propertyId = parseInt(req.params.propertyId, 10);
+        const { agentId } = req.body;
+        const agentIdNum = parseInt(agentId, 10);
+        if (!propertyId || !agentIdNum) {
+            return res.status(400).json({ success: false, message: 'propertyId and agentId required' });
+        }
+        const [propRows] = await pool.query(
+            'SELECT id FROM properties WHERE id = ? AND uploaded_by = ?',
+            [propertyId, builderId]
+        );
+        if (!propRows || propRows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Property not found' });
+        }
+        const [agentInTeam] = await pool.query(
+            'SELECT id FROM builder_agents WHERE builder_id = ? AND agent_id = ?',
+            [builderId, agentIdNum]
+        );
+        if (!agentInTeam || agentInTeam.length === 0) {
+            return res.status(400).json({ success: false, message: 'Agent must be hired first' });
+        }
+        await pool.query(
+            'INSERT INTO property_agent_assignments (property_id, agent_id, builder_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE agent_id = VALUES(agent_id), builder_id = VALUES(builder_id)',
+            [propertyId, agentIdNum, builderId]
+        );
+        const [propTitle] = await pool.query('SELECT title FROM properties WHERE id = ?', [propertyId]);
+        const title = (propTitle && propTitle[0] && propTitle[0].title) ? propTitle[0].title : 'Property';
+        await pool.query(
+            'INSERT INTO notifications (user_id, type, title, body, related_entity_type, related_entity_id) VALUES (?, ?, ?, ?, ?, ?)',
+            [agentIdNum, 'assignment', 'Assigned to property', `You have been assigned to "${title}".`, 'property', propertyId]
+        );
+        res.json({ success: true, message: 'Agent assigned' });
+    } catch (err) {
+        console.error('assignAgentToProperty error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// DELETE /api/builder/assign-agent/properties/:propertyId/assign — remove assignment
+exports.unassignAgentFromProperty = async (req, res) => {
+    try {
+        const builderId = req.user.id;
+        const propertyId = parseInt(req.params.propertyId, 10);
+        if (!propertyId) {
+            return res.status(400).json({ success: false, message: 'propertyId required' });
+        }
+        const [result] = await pool.query(
+            'DELETE FROM property_agent_assignments WHERE property_id = ? AND builder_id = ?',
+            [propertyId, builderId]
+        );
+        res.json({ success: true, message: 'Assignment removed', removed: result.affectedRows > 0 });
+    } catch (err) {
+        console.error('unassignAgentFromProperty error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+

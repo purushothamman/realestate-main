@@ -8,9 +8,11 @@ const bookingRoutes = require("./routes/bookingRoutes")
 const chatRoutes = require("./routes/chatRoutes")
 const { protect } = require("./middlewares/authMiddleware");
 const builderRoutes = require("./routes/builderRoutes");
+const agentRoutes = require("./routes/agentRoutes");
 const inquiryRoutes = require("./routes/inquiryRoutes");
 const propertyRequestRoutes = require("./routes/propertyRequestRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 require("dotenv").config();
 
@@ -59,6 +61,9 @@ app.use("/api/chats", chatRoutes);
 console.log("✅ Registering /api/builder routes");
 app.use("/api/builder", builderRoutes);
 
+console.log("✅ Registering /api/agent routes");
+app.use("/api/agent", agentRoutes);
+
 console.log("✅ Registering /api/inquiries routes");
 app.use("/api/inquiries", inquiryRoutes);
 
@@ -67,6 +72,9 @@ app.use("/api/property-requests", propertyRequestRoutes);
 
 console.log("✅ Registering /api/upload routes");
 app.use("/api/upload", uploadRoutes);
+
+console.log("✅ Registering /api/notifications routes");
+app.use("/api/notifications", notificationRoutes);
 
 // Root route
 app.get("/", (req, res) => {

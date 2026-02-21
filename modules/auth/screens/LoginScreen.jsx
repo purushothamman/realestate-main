@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Home, Mail, Lock, Eye, EyeOff, AlertCircle, X, ArrowLeft } from 'lucide-react-native';
@@ -20,7 +21,7 @@ import {
   validateGoogleConfig,
   logGoogleConfig,
   getDebugInfo,
-  printSetupInstructions
+  printSetupInstructions,
 } from '../context/GoogleLoginConfig';
 
 // ==================== API CONFIGURATION ====================
@@ -40,20 +41,106 @@ const getApiUrl = () => {
 
 const API_BASE_URL = getApiUrl();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FocusableInput
+// KEY FIX: Each input manages its OWN focused state locally via React.memo +
+// useState. This means tapping a field only re-renders THAT field, not the
+// entire screen. The original bug was caused by a parent-level `focusedInput`
+// state that triggered a full re-render on every focus/blur event, which on
+// physical devices caused the cursor to flicker and jump between fields.
+// ─────────────────────────────────────────────────────────────────────────────
+const FocusableInput = React.memo(({
+  icon: Icon,
+  rightElement,
+  inputStyle,
+  containerStyle,
+  editable = true,
+  ...inputProps
+}) => {
+  const [focused, setFocused] = useState(false);
+
+  return (
+    <View
+      style={[
+        styles.inputWrapper,
+        focused && styles.inputWrapperFocused,
+        containerStyle,
+      ]}
+    >
+      {Icon && (
+        <Icon
+          color={focused ? '#2D6A4F' : '#9CA3AF'}
+          size={20}
+          strokeWidth={2}
+          style={styles.inputIcon}
+        />
+      )}
+      <TextInput
+        style={[styles.input, inputStyle]}
+        placeholderTextColor="#9CA3AF"
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        editable={editable}
+        {...inputProps}
+      />
+      {rightElement}
+    </View>
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PasswordInput
+// Wraps FocusableInput and manages its own show/hide toggle state locally,
+// also isolated from the parent so toggling visibility never re-renders the form.
+// ─────────────────────────────────────────────────────────────────────────────
+const PasswordInput = React.memo(({ editable = true, ...inputProps }) => {
+  const [showPassword, setShowPassword] = useState(false);
+
+  return (
+    <FocusableInput
+      icon={Lock}
+      secureTextEntry={!showPassword}
+      autoCapitalize="none"
+      autoCorrect={false}
+      autoComplete="off"
+      editable={editable}
+      inputStyle={styles.passwordInput}
+      rightElement={
+        <TouchableOpacity
+          onPress={() => setShowPassword((v) => !v)}
+          style={styles.eyeIcon}
+          activeOpacity={0.7}
+          disabled={!editable}
+        >
+          {showPassword ? (
+            <EyeOff color="#9CA3AF" size={20} strokeWidth={2} />
+          ) : (
+            <Eye color="#9CA3AF" size={20} strokeWidth={2} />
+          )}
+        </TouchableOpacity>
+      }
+      {...inputProps}
+    />
+  );
+});
+
 export default function LoginScreen({
   navigation,
   onNavigateToLoginSuccess,
   onRegister,
   onForgotPassword,
-  onBack
+  onBack,
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+
+  // REMOVED: const [showPassword, setShowPassword] = useState(false);
+  // REMOVED: const [focusedInput, setFocusedInput] = useState(null);
+  // Both are now managed locally inside FocusableInput / PasswordInput.
+
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [apiError, setApiError] = useState('');
-  const [focusedInput, setFocusedInput] = useState(null);
   const [isConfigured, setIsConfigured] = useState(false);
 
   // ==================== INITIALIZE GOOGLE SIGNIN ====================
@@ -86,7 +173,7 @@ export default function LoginScreen({
           'Google Sign-In is not properly configured.\n\nCheck the console logs for setup instructions.',
           [
             { text: 'Show Debug Info', onPress: showDebugInfo },
-            { text: 'OK' }
+            { text: 'OK' },
           ]
         );
         return;
@@ -147,7 +234,7 @@ export default function LoginScreen({
         `Failed to initialize Google Sign-In.\n\nError: ${error.message}\n\nPlease check the console for details.`,
         [
           { text: 'Show Debug Info', onPress: showDebugInfo },
-          { text: 'OK' }
+          { text: 'OK' },
         ]
       );
     }
@@ -159,10 +246,10 @@ export default function LoginScreen({
     Alert.alert(
       'Debug Information',
       `Platform: ${debugInfo.platform}\n` +
-      `Web Client ID: ${debugInfo.webClientId.substring(0, 30)}...\n` +
-      `iOS Client ID: ${debugInfo.iosClientId}\n` +
-      `API URL: ${API_BASE_URL}\n` +
-      `Config Valid: ${debugInfo.configValid ? 'Yes' : 'No'}`,
+        `Web Client ID: ${debugInfo.webClientId.substring(0, 30)}...\n` +
+        `iOS Client ID: ${debugInfo.iosClientId}\n` +
+        `API URL: ${API_BASE_URL}\n` +
+        `Config Valid: ${debugInfo.configValid ? 'Yes' : 'No'}`,
       [
         { text: 'OK' },
         {
@@ -170,8 +257,8 @@ export default function LoginScreen({
           onPress: () => {
             printSetupInstructions();
             Alert.alert('Instructions', 'Check console for detailed setup instructions');
-          }
-        }
+          },
+        },
       ]
     );
   };
@@ -196,7 +283,7 @@ export default function LoginScreen({
         console.log('STEP 1: Checking Google Play Services...');
         try {
           await GoogleSignin.hasPlayServices({
-            showPlayServicesUpdateDialog: true
+            showPlayServicesUpdateDialog: true,
           });
           console.log('✅ Play Services available\n');
         } catch (playError) {
@@ -277,7 +364,7 @@ export default function LoginScreen({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          Accept: 'application/json',
         },
         body: JSON.stringify({
           token: tokens.idToken,
@@ -368,8 +455,8 @@ export default function LoginScreen({
         [
           {
             text: 'Continue',
-            onPress: () => navigateByRole(data.user.role, data.user)
-          }
+            onPress: () => navigateByRole(data.user.role, data.user),
+          },
         ]
       );
 
@@ -423,8 +510,8 @@ export default function LoginScreen({
             { text: 'OK' },
             {
               text: 'Debug Info',
-              onPress: showDebugInfo
-            }
+              onPress: showDebugInfo,
+            },
           ]
         );
       }
@@ -479,7 +566,7 @@ export default function LoginScreen({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json',
+          Accept: 'application/json',
         },
         body: JSON.stringify(loginData),
         signal: controller.signal,
@@ -632,7 +719,6 @@ export default function LoginScreen({
     }
   };
 
-
   // ==================== NAVIGATE TO REGISTER ====================
   const handleNavigateToRegister = () => {
     console.log('📝 Navigating to Register screen');
@@ -651,229 +737,200 @@ export default function LoginScreen({
     }
   };
 
+  const busy = isLoading || isGoogleLoading;
+
   return (
     <View style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollViewContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        {/* Header Image Section */}
-        <View style={styles.headerImageContainer}>
-          <ImageBackground
-            source={{
-              uri: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80',
-            }}
-            style={styles.headerImage}
-            resizeMode="cover"
-          >
-            <View style={styles.headerOverlay} />
-            {/* Back Button */}
-            <TouchableOpacity
-              style={styles.backButtonContainer}
-              onPress={() => onBack && onBack()}
-              activeOpacity={0.8}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false}
+          windowSize={5}
+        >
+          {/* Header Image Section */}
+          <View style={styles.headerImageContainer}>
+            <ImageBackground
+              source={{
+                uri: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80',
+              }}
+              style={styles.headerImage}
+              resizeMode="cover"
             >
-              <ArrowLeft color="#FFFFFF" size={24} strokeWidth={2} />
-            </TouchableOpacity>
-            <View style={styles.headerLogoContainer}>
-              <View style={styles.headerLogo}>
-                <Home color="#FFFFFF" size={24} strokeWidth={2} />
-              </View>
-            </View>
-          </ImageBackground>
-        </View>
-
-        {/* Main Content Card */}
-        <View style={styles.contentCard}>
-          {/* App Name */}
-          <View style={styles.appNameContainer}>
-            <Text style={styles.appName}>EstateHub</Text>
-          </View>
-
-          {/* Welcome Text */}
-          <View style={styles.welcomeContainer}>
-            <Text style={styles.welcomeTitle}>Welcome Back</Text>
-            <Text style={styles.welcomeSubtitle}>
-              Sign in to continue exploring and managing your properties
-            </Text>
-          </View>
-
-          {/* API Error Message */}
-          {apiError ? (
-            <View style={styles.errorMessage}>
-              <AlertCircle color="#DC2626" size={20} strokeWidth={2} />
-              <Text style={styles.errorMessageText}>{apiError}</Text>
-              <TouchableOpacity onPress={() => setApiError('')}>
-                <X color="#EF4444" size={16} strokeWidth={2} />
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          {/* Login Form */}
-          <View style={styles.form}>
-            {/* Email Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email or Phone</Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  focusedInput === 'email' && styles.inputWrapperFocused,
-                ]}
+              <View style={styles.headerOverlay} />
+              {/* Back Button */}
+              <TouchableOpacity
+                style={styles.backButtonContainer}
+                onPress={() => onBack && onBack()}
+                activeOpacity={0.8}
               >
-                <Mail
-                  color={focusedInput === 'email' ? '#2D6A4F' : '#9CA3AF'}
-                  size={20}
-                  strokeWidth={2}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
+                <ArrowLeft color="#FFFFFF" size={24} strokeWidth={2} />
+              </TouchableOpacity>
+              <View style={styles.headerLogoContainer}>
+                <View style={styles.headerLogo}>
+                  <Home color="#FFFFFF" size={24} strokeWidth={2} />
+                </View>
+              </View>
+            </ImageBackground>
+          </View>
+
+          {/* ── Main Content Card ──
+              FIX: In the original, the closing </View> for contentCard was
+              placed immediately after the opening tag comment, which caused
+              ALL content (app name, form, social buttons) to render OUTSIDE
+              the card. It is now correctly placed after all card children. */}
+          <View style={styles.contentCard}>
+            {/* App Name */}
+            <View style={styles.appNameContainer}>
+              <Text style={styles.appName}>EstateHub</Text>
+            </View>
+
+            {/* Welcome Text */}
+            <View style={styles.welcomeContainer}>
+              <Text style={styles.welcomeTitle}>Welcome Back</Text>
+              <Text style={styles.welcomeSubtitle}>
+                Sign in to continue exploring and managing your properties
+              </Text>
+            </View>
+
+            {/* API Error Message */}
+            {apiError ? (
+              <View style={styles.errorMessage}>
+                <AlertCircle color="#DC2626" size={20} strokeWidth={2} />
+                <Text style={styles.errorMessageText}>{apiError}</Text>
+                <TouchableOpacity onPress={() => setApiError('')}>
+                  <X color="#EF4444" size={16} strokeWidth={2} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {/* Login Form */}
+            <View style={styles.form}>
+              {/* Email Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Email or Phone</Text>
+                {/* FIX: replaced inline TextInput + parent focusedInput state with FocusableInput */}
+                <FocusableInput
+                  icon={Mail}
                   placeholder="Enter your email"
-                  placeholderTextColor="#9CA3AF"
                   value={email}
                   onChangeText={(text) => {
                     setEmail(text);
                     setApiError('');
                   }}
-                  onFocus={() => setFocusedInput('email')}
-                  onBlur={() => setFocusedInput(null)}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
-                  editable={!isLoading && !isGoogleLoading}
+                  autoComplete="off"
+                  editable={!busy}
                 />
               </View>
-            </View>
 
-            {/* Password Input */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Password</Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  focusedInput === 'password' && styles.inputWrapperFocused,
-                ]}
-              >
-                <Lock
-                  color={focusedInput === 'password' ? '#2D6A4F' : '#9CA3AF'}
-                  size={20}
-                  strokeWidth={2}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={[styles.input, styles.passwordInput]}
+              {/* Password Input */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Password</Text>
+                {/* FIX: PasswordInput manages show/hide and focus state internally */}
+                <PasswordInput
                   placeholder="Enter your password"
-                  placeholderTextColor="#9CA3AF"
                   value={password}
                   onChangeText={(text) => {
                     setPassword(text);
                     setApiError('');
                   }}
-                  onFocus={() => setFocusedInput('password')}
-                  onBlur={() => setFocusedInput(null)}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!isLoading && !isGoogleLoading}
+                  editable={!busy}
                 />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeIcon}
-                  activeOpacity={0.7}
-                  disabled={isLoading || isGoogleLoading}
-                >
-                  {showPassword ? (
-                    <EyeOff color="#9CA3AF" size={20} strokeWidth={2} />
-                  ) : (
-                    <Eye color="#9CA3AF" size={20} strokeWidth={2} />
-                  )}
-                </TouchableOpacity>
               </View>
+
+              {/* Login Button */}
+              <TouchableOpacity
+                onPress={handleLogin}
+                disabled={busy}
+                style={[
+                  styles.loginButton,
+                  busy && styles.loginButtonDisabled,
+                ]}
+                activeOpacity={0.8}
+              >
+                {isLoading ? (
+                  <View style={styles.loginButtonContent}>
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                    <Text style={styles.loginButtonText}>Logging in...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.loginButtonText}>Login</Text>
+                )}
+              </TouchableOpacity>
             </View>
 
-            {/* Login Button */}
-            <TouchableOpacity
-              onPress={handleLogin}
-              disabled={isLoading || isGoogleLoading}
-              style={[
-                styles.loginButton,
-                (isLoading || isGoogleLoading) && styles.loginButtonDisabled,
-              ]}
-              activeOpacity={0.8}
-            >
-              {isLoading ? (
-                <View style={styles.loginButtonContent}>
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                  <Text style={styles.loginButtonText}>Logging in...</Text>
-                </View>
-              ) : (
-                <Text style={styles.loginButtonText}>Login</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+            {/* Divider */}
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or continue with</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or continue with</Text>
-            <View style={styles.dividerLine} />
-          </View>
+            {/* Social Login Buttons */}
+            <View style={styles.socialButtonsContainer}>
+              {/* Google Login Button */}
+              <TouchableOpacity
+                onPress={handleGoogleLogin}
+                style={[
+                  styles.socialButton,
+                  styles.googleButton,
+                  busy && styles.socialButtonDisabled,
+                ]}
+                activeOpacity={0.7}
+                disabled={busy}
+              >
+                {isGoogleLoading ? (
+                  <ActivityIndicator color="#4285F4" size="small" />
+                ) : (
+                  <>
+                    <View style={styles.googleIcon}>
+                      <Text style={styles.googleIconText}>G</Text>
+                    </View>
+                    <Text style={styles.socialButtonText}>Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
-          {/* Social Login Buttons */}
-          <View style={styles.socialButtonsContainer}>
-            {/* Google Login Button */}
-            <TouchableOpacity
-              onPress={handleGoogleLogin}
-              style={[
-                styles.socialButton,
-                styles.googleButton,
-                (isLoading || isGoogleLoading) && styles.socialButtonDisabled
-              ]}
-              activeOpacity={0.7}
-              disabled={isLoading || isGoogleLoading}
-            >
-              {isGoogleLoading ? (
-                <ActivityIndicator color="#4285F4" size="small" />
-              ) : (
-                <>
-                  <View style={styles.googleIcon}>
-                    <Text style={styles.googleIconText}>G</Text>
-                  </View>
-                  <Text style={styles.socialButtonText}>Google</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              {/* Apple Login Button */}
+              <TouchableOpacity
+                onPress={handleAppleLogin}
+                style={[
+                  styles.socialButton,
+                  busy && styles.socialButtonDisabled,
+                ]}
+                activeOpacity={0.7}
+                disabled={busy}
+              >
+                <Text style={styles.appleIcon}>🍎</Text>
+                <Text style={styles.socialButtonText}>Apple</Text>
+              </TouchableOpacity>
+            </View>
 
-            {/* Apple Login Button */}
-            <TouchableOpacity
-              onPress={handleAppleLogin}
-              style={[
-                styles.socialButton,
-                (isLoading || isGoogleLoading) && styles.socialButtonDisabled
-              ]}
-              activeOpacity={0.7}
-              disabled={isLoading || isGoogleLoading}
-            >
-              <Text style={styles.appleIcon}>🍎</Text>
-              <Text style={styles.socialButtonText}>Apple</Text>
-            </TouchableOpacity>
+            {/* Sign Up Link */}
+            <View style={styles.signUpContainer}>
+              <Text style={styles.signUpText}>Don't have an account? </Text>
+              <TouchableOpacity
+                onPress={handleNavigateToRegister}
+                activeOpacity={0.7}
+                disabled={busy}
+              >
+                <Text style={styles.signUpLink}>Create Account</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+          {/* ── End Content Card ── */}
 
-          {/* Sign Up Link */}
-          <View style={styles.signUpContainer}>
-            <Text style={styles.signUpText}>Don't have an account? </Text>
-            <TouchableOpacity
-              onPress={handleNavigateToRegister}
-              activeOpacity={0.7}
-              disabled={isLoading || isGoogleLoading}
-            >
-              <Text style={styles.signUpLink}>Create Account</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }

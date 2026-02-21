@@ -74,6 +74,16 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
     const [builderModalVisible, setBuilderModalVisible] = useState(false);
     const [selectedBuilder, setSelectedBuilder] = useState(null); // { id, displayName, ... }
 
+    // Hired builders (for Direct for my Builder mode)
+    const [hiredBuilders, setHiredBuilders] = useState([]);
+    const [hiredBuildersLoading, setHiredBuildersLoading] = useState(false);
+    const [selectedHiredBuilder, setSelectedHiredBuilder] = useState(null);
+
+    // Upload mode:
+    // - 'approval': current flow (blocked until builder approves)
+    // - 'hiringBuilder': auto-approve if this builder has formally hired the agent
+    const [uploadMode, setUploadMode] = useState('approval');
+
     // Animation values
     const headerAnim = useRef(new Animated.Value(0)).current;
     const contentAnim = useRef(new Animated.Value(50)).current;
@@ -169,6 +179,38 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
 
         fetchBuilders();
     }, []);
+
+    // Fetch hired builders when 'Direct for my Builder' mode is active
+    useEffect(() => {
+        if (uploadMode !== 'hiringBuilder') return;
+        const fetchHiredBuilders = async () => {
+            try {
+                setHiredBuildersLoading(true);
+                const token = await AsyncStorage.getItem('authToken');
+                if (!token) return;
+                const response = await fetch(`${API_BASE_URL}/agent/my-builders`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                });
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    setHiredBuilders(data.builders || []);
+                    // Reset hired builder selection if switching modes
+                    setSelectedHiredBuilder(null);
+                } else {
+                    console.warn('Failed to fetch hired builders:', data?.message);
+                }
+            } catch (e) {
+                console.warn('Fetch hired builders error:', e?.message);
+            } finally {
+                setHiredBuildersLoading(false);
+            }
+        };
+        fetchHiredBuilders();
+    }, [uploadMode]);
 
     const propertyTypes = [
         { id: 'apartment', label: 'Apartment', icon: Building2 },
@@ -352,8 +394,15 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                 return;
             }
 
-            if (!selectedBuilder?.id) {
-                Alert.alert('Builder Required', 'Please select which builder you are adding this property for.');
+            // Determine builder to use
+            const activeBuilder = uploadMode === 'hiringBuilder' ? selectedHiredBuilder : selectedBuilder;
+
+            if (!activeBuilder?.id) {
+                if (uploadMode === 'hiringBuilder') {
+                    Alert.alert('Builder Required', 'Please select one of your hired builders from the list.');
+                } else {
+                    Alert.alert('Builder Required', 'Please select which builder you are adding this property for.');
+                }
                 return;
             }
 
@@ -373,7 +422,10 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
             };
 
             const payload = {
-                builder_id: selectedBuilder.id,
+                builder_id: activeBuilder.id,
+                // When uploadMode is 'hiringBuilder', backend will auto-approve
+                // the property if this builder has actually hired the agent.
+                auto_for_hiring_builder: uploadMode === 'hiringBuilder',
                 title: propertyData.title,
                 description: propertyData.description || "No description provided",
                 price: parseFloat(propertyData.price.replace(/,/g, '')),
@@ -436,9 +488,12 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
             }
 
             setTimeout(() => {
+                const isDirectMode = uploadMode === 'hiringBuilder';
                 Alert.alert(
-                    'Success! 🎉',
-                    'Property saved and sent to the selected builder for approval. It will be activated after the builder approves the request.',
+                    isDirectMode ? 'Property Live! 🚀' : 'Sent for Approval! 📋',
+                    isDirectMode
+                        ? 'Your property is now live and visible in your builder\'s listings.'
+                        : 'Property sent to the selected builder for approval. It will go live once the builder approves it.',
                     [{ text: 'OK' }]
                 );
             }, 200);
@@ -600,26 +655,151 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                             <Text style={styles.sectionTitle}>Basic Property Details</Text>
                         </View>
 
-                        {/* Builder selection */}
+                        {/* Builder selection + upload mode */}
                         <View style={styles.inputGroup}>
-                            <Text style={styles.label}>Select Builder *</Text>
-                            <TouchableOpacity
-                                onPress={() => setBuilderModalVisible(true)}
-                                style={[styles.inputWrapper, { justifyContent: 'space-between' }]}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={{ color: selectedBuilder ? '#111827' : '#9CA3AF', fontSize: 15, fontWeight: '600' }}>
-                                    {selectedBuilder?.displayName || 'Choose a builder'}
-                                </Text>
-                                {buildersLoading ? (
-                                    <ActivityIndicator size="small" color="#2D6A4F" />
-                                ) : (
-                                    <Building2 color="#9CA3AF" size={18} />
-                                )}
-                            </TouchableOpacity>
-                            <Text style={[styles.helperText, { marginTop: 8 }]}>
-                                This property will be blocked until the builder approves.
+                            {/* Upload mode selector always shown first */}
+                            <Text style={styles.label}>Upload Mode *</Text>
+                            <Text style={[styles.helperText, { marginBottom: 8 }]}>
+                                Choose how this property should be created for the builder:
                             </Text>
+                            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.modePill,
+                                        uploadMode === 'approval' && styles.modePillActive,
+                                    ]}
+                                    onPress={() => {
+                                        setUploadMode('approval');
+                                        setSelectedHiredBuilder(null);
+                                    }}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={styles.modePillDotOuter}>
+                                        {uploadMode === 'approval' && <View style={styles.modePillDotInner} />}
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[
+                                            styles.modePillTitle,
+                                            uploadMode === 'approval' && styles.modePillTitleActive
+                                        ]}>
+                                            Send for approval
+                                        </Text>
+                                        <Text style={styles.modePillSubtitle}>
+                                            Builder must review before going live.
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.modePill,
+                                        uploadMode === 'hiringBuilder' && styles.modePillActive,
+                                    ]}
+                                    onPress={() => setUploadMode('hiringBuilder')}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={styles.modePillDotOuter}>
+                                        {uploadMode === 'hiringBuilder' && <View style={styles.modePillDotInner} />}
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={[
+                                            styles.modePillTitle,
+                                            uploadMode === 'hiringBuilder' && styles.modePillTitleActive
+                                        ]}>
+                                            Direct for my Builder
+                                        </Text>
+                                        <Text style={styles.modePillSubtitle}>
+                                            Goes live instantly via your hired builder.
+                                        </Text>
+                                    </View>
+                                </TouchableOpacity>
+                            </View>
+
+                            {/* 'Send for approval' mode: generic builder selector */}
+                            {uploadMode === 'approval' && (
+                                <>
+                                    <Text style={styles.label}>Select Builder *</Text>
+                                    <TouchableOpacity
+                                        onPress={() => setBuilderModalVisible(true)}
+                                        style={[styles.inputWrapper, { justifyContent: 'space-between' }]}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text style={{ color: selectedBuilder ? '#111827' : '#9CA3AF', fontSize: 15, fontWeight: '600' }}>
+                                            {selectedBuilder?.displayName || 'Choose a builder'}
+                                        </Text>
+                                        {buildersLoading ? (
+                                            <ActivityIndicator size="small" color="#2D6A4F" />
+                                        ) : (
+                                            <Building2 color="#9CA3AF" size={18} />
+                                        )}
+                                    </TouchableOpacity>
+                                </>
+                            )}
+
+                            {/* 'Direct for my Builder' mode: hired builders list */}
+                            {uploadMode === 'hiringBuilder' && (
+                                <View style={{ marginTop: 4 }}>
+                                    <Text style={styles.label}>Your Hired Builders *</Text>
+                                    {hiredBuildersLoading ? (
+                                        <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                                            <ActivityIndicator size="small" color="#2D6A4F" />
+                                            <Text style={[styles.helperText, { marginTop: 8 }]}>Loading your builders...</Text>
+                                        </View>
+                                    ) : hiredBuilders.length === 0 ? (
+                                        <View style={styles.emptyHiredBuilders}>
+                                            <Building2 color="#9CA3AF" size={32} />
+                                            <Text style={styles.emptyHiredBuildersTitle}>No builders found</Text>
+                                            <Text style={styles.emptyHiredBuildersText}>
+                                                You haven't been hired by any builder yet. Ask a builder to send you a hire invitation.
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        hiredBuilders.map((builder) => {
+                                            const isSelected = selectedHiredBuilder?.id === builder.id;
+                                            const displayName = builder.company_name || builder.name;
+                                            const initials = (displayName || 'B').split(' ').slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
+                                            return (
+                                                <TouchableOpacity
+                                                    key={builder.id}
+                                                    onPress={() => setSelectedHiredBuilder({ id: builder.id, displayName })}
+                                                    activeOpacity={0.8}
+                                                    style={[
+                                                        styles.hiredBuilderCard,
+                                                        isSelected && styles.hiredBuilderCardSelected,
+                                                    ]}
+                                                >
+                                                    <View style={[
+                                                        styles.hiredBuilderAvatar,
+                                                        isSelected && { backgroundColor: '#2D6A4F' }
+                                                    ]}>
+                                                        <Text style={[
+                                                            styles.hiredBuilderAvatarText,
+                                                            isSelected && { color: '#fff' }
+                                                        ]}>{initials}</Text>
+                                                    </View>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={[
+                                                            styles.hiredBuilderName,
+                                                            isSelected && { color: '#2D6A4F' }
+                                                        ]}>{displayName}</Text>
+                                                        {builder.name && builder.company_name && (
+                                                            <Text style={styles.hiredBuilderSub}>{builder.name}</Text>
+                                                        )}
+                                                        {builder.email ? (
+                                                            <Text style={styles.hiredBuilderSub}>{builder.email}</Text>
+                                                        ) : null}
+                                                    </View>
+                                                    <View style={[
+                                                        styles.hiredBuilderRadio,
+                                                        isSelected && styles.hiredBuilderRadioSelected,
+                                                    ]}>
+                                                        {isSelected && <View style={styles.hiredBuilderRadioDot} />}
+                                                    </View>
+                                                </TouchableOpacity>
+                                            );
+                                        })
+                                    )}
+                                </View>
+                            )}
                         </View>
 
                         <View style={styles.inputGroup}>
@@ -1464,6 +1644,51 @@ const styles = StyleSheet.create({
         color: '#6B7280',
         flex: 1,
     },
+    modePill: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        backgroundColor: '#F9FAFB',
+    },
+    modePillActive: {
+        borderColor: '#2D6A4F',
+        backgroundColor: '#ECFDF5',
+    },
+    modePillDotOuter: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        borderWidth: 1.5,
+        borderColor: '#6B7280',
+        marginTop: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    modePillDotInner: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#16A34A',
+    },
+    modePillTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#111827',
+    },
+    modePillTitleActive: {
+        color: '#166534',
+    },
+    modePillSubtitle: {
+        fontSize: 11,
+        color: '#6B7280',
+        marginTop: 1,
+    },
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.45)',
@@ -1650,6 +1875,144 @@ const styles = StyleSheet.create({
         color: '#6B7280',
         fontSize: 15,
         fontWeight: '600',
+    },
+
+    // ── Upload mode toggle pills ──────────────────────────────────────────────
+    modePill: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 8,
+        borderWidth: 2,
+        borderColor: '#E5E7EB',
+        borderRadius: 14,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        backgroundColor: '#FAFAFA',
+    },
+    modePillActive: {
+        borderColor: '#2D6A4F',
+        backgroundColor: '#ECFDF5',
+    },
+    modePillDotOuter: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        borderWidth: 2,
+        borderColor: '#9CA3AF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 2,
+    },
+    modePillDotInner: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: '#2D6A4F',
+    },
+    modePillTitle: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#374151',
+        lineHeight: 18,
+    },
+    modePillTitleActive: {
+        color: '#2D6A4F',
+    },
+    modePillSubtitle: {
+        fontSize: 11,
+        color: '#9CA3AF',
+        marginTop: 2,
+        fontWeight: '500',
+        lineHeight: 14,
+    },
+    helperText: {
+        fontSize: 12,
+        color: '#6B7280',
+        fontWeight: '500',
+    },
+
+    // ── Hired builders list (Direct for my Builder mode) ─────────────────────
+    hiredBuilderCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        borderWidth: 2,
+        borderColor: '#E5E7EB',
+        borderRadius: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        marginBottom: 10,
+        backgroundColor: '#FAFAFA',
+    },
+    hiredBuilderCardSelected: {
+        borderColor: '#2D6A4F',
+        backgroundColor: '#ECFDF5',
+    },
+    hiredBuilderAvatar: {
+        width: 42,
+        height: 42,
+        borderRadius: 13,
+        backgroundColor: '#E5E7EB',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    hiredBuilderAvatarText: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: '#374151',
+    },
+    hiredBuilderName: {
+        fontSize: 14,
+        fontWeight: '800',
+        color: '#111827',
+    },
+    hiredBuilderSub: {
+        fontSize: 12,
+        color: '#6B7280',
+        fontWeight: '500',
+        marginTop: 1,
+    },
+    hiredBuilderRadio: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#9CA3AF',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    hiredBuilderRadioSelected: {
+        borderColor: '#2D6A4F',
+    },
+    hiredBuilderRadioDot: {
+        width: 9,
+        height: 9,
+        borderRadius: 5,
+        backgroundColor: '#2D6A4F',
+    },
+    emptyHiredBuilders: {
+        alignItems: 'center',
+        paddingVertical: 28,
+        paddingHorizontal: 16,
+        borderWidth: 2,
+        borderColor: '#E5E7EB',
+        borderRadius: 14,
+        borderStyle: 'dashed',
+        backgroundColor: '#FAFAFA',
+    },
+    emptyHiredBuildersTitle: {
+        fontSize: 15,
+        fontWeight: '700',
+        color: '#374151',
+        marginTop: 10,
+    },
+    emptyHiredBuildersText: {
+        fontSize: 13,
+        color: '#9CA3AF',
+        textAlign: 'center',
+        marginTop: 4,
+        lineHeight: 18,
     },
 });
 

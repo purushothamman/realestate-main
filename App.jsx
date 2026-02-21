@@ -15,6 +15,7 @@ import ExploreProperties from './modules/property/screens/ExploreProperties';
 import BuilderDashboard from './modules/builder/screens/BuilderDashboard';
 import BuilderRequestListScreen from './modules/builder/screens/BuilderRequestListScreen';
 import BuilderRequestDetailScreen from './modules/builder/screens/BuilderRequestDetailScreen';
+import AssignAgentScreen from './modules/builder/screens/AssignAgentScreen';
 import ReportPropertyScreen from './modules/property/screens/ReportPropertyScreen';
 import AddProperty from './modules/property/screens/AddProperties';
 import BuilderInquiriesScreen from './modules/builder/screens/BuilderInquiriesScreen';
@@ -332,6 +333,15 @@ export default function App() {
               navigateTo('propertyDetail', { property })
             }
             onAddProperty={() => navigateTo('addProperty')}
+            onAssignAgent={() => navigateTo('assignAgent')}
+          />
+        );
+
+      case 'assignAgent':
+        return (
+          <AssignAgentScreen
+            navigation={navigation}
+            onBack={goBack}
           />
         );
 

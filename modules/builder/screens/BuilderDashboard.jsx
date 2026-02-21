@@ -54,6 +54,7 @@ export default function BuilderDashboard({
   onBack,
   onPropertyClick,
   onAddProperty,
+  onAssignAgent,
   onMyProperties,
 }) {
   // State management
@@ -431,7 +432,7 @@ export default function BuilderDashboard({
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.secondaryButton}
-            onPress={onMyProperties}
+            onPress={onAssignAgent}
             activeOpacity={0.8}
           >
             <Building2 size={20} color="#FFFFFF" strokeWidth={2} />
