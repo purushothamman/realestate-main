@@ -25,6 +25,7 @@ import ChatListScreen from './modules/chat/screens/ChatListScreen';
 import AddPropertiesAgent from './modules/property/screens/AddPropertiesAgent';
 import AgentDashboard from './modules/agent/AgentDashboardScreen';
 import MyListingsScreen from './modules/property/screens/MyListingsScreen';
+import AgentNotificationsScreen from './modules/agent/AgentNotificationsScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
@@ -375,6 +376,14 @@ export default function App() {
           <AgentDashboard
             navigation={navigation}
             agentName={userData?.name}
+            onBack={goBack}
+          />
+        );
+
+      case 'agentNotifications':
+        return (
+          <AgentNotificationsScreen
+            navigation={navigation}
             onBack={goBack}
           />
         );
