@@ -21,9 +21,16 @@ import BuilderInquiriesScreen from './modules/builder/screens/BuilderInquiriesSc
 import PaymentScreen from './store/PaymentScreen';
 import ChatScreen from './modules/chat/screens/ChatScreen';
 import ChatListScreen from './modules/chat/screens/ChatListScreen';
+import { API_BASE_URL } from './utils/api';
+
 import AddPropertiesAgent from './modules/property/screens/AddPropertiesAgent';
 import AgentDashboard from './modules/agent/AgentDashboardScreen';
 import MyListingsScreen from './modules/property/screens/MyListingsScreen';
+import UserNavigator from './navigation/UserNavigator';
+import FavoritesScreen from './modules/user/screens/FavoritesScreen';
+
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
@@ -31,25 +38,61 @@ export default function App() {
   const [selectedProperty, setSelectedProperty] = useState(null);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [messageCount, setMessageCount] = useState(0);
+
   const [reportPropertyData, setReportPropertyData] = useState(null);
   const [paymentData, setPaymentData] = useState(null);
   const [chatData, setChatData] = useState(null);
   const [userData, setUserData] = useState(null);
+
+  // 🔹 Fetch Unread Messages Count
+  const fetchUnreadCount = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/chats`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const totalUnread = data.reduce((sum, chat) => sum + (chat.unread || 0), 0);
+        setMessageCount(totalUnread);
+      }
+    } catch (err) {
+      console.error('Error fetching unread count:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (userData) {
+      fetchUnreadCount();
+      const interval = setInterval(fetchUnreadCount, 30000); // Check every 30s
+      return () => clearInterval(interval);
+    }
+  }, [userData]);
 
   // 🔹 Load User Data on mount
   useEffect(() => {
     const loadUser = async () => {
       try {
         const savedUser = await AsyncStorage.getItem('user');
+        const token = await AsyncStorage.getItem('authToken'); // Retrieve authToken
         if (savedUser) {
           setUserData(JSON.parse(savedUser));
+          if (token) {
+            setAuthToken(token);
+          }
         }
       } catch (e) {
-        console.error('Failed to load user data:', e);
+        console.error('Failed to load user session:', e); // Updated error message
       }
     };
+
     loadUser();
   }, []);
+
 
   // 🔹 Splash Screen Timeout (fallback)
   useEffect(() => {
@@ -192,6 +235,11 @@ export default function App() {
     navigate: navigateTo,
     goBack,
   };
+  const showNavbarScreens = ['home', 'messages', 'profile', 'searchResults', 'favorites', 'builderDashboard', 'agentDashboard'];
+
+
+
+
 
   // 🔹 Render Screens
   const renderScreen = () => {
@@ -213,6 +261,7 @@ export default function App() {
 
       case 'login':
         return (
+
           <LoginScreen
             navigation={navigation}
             onBack={goBack}
@@ -220,6 +269,8 @@ export default function App() {
               if (user) setUserData(user);
               navigateTo('home');
             }}
+
+
             onForgotPassword={() => navigateTo('forgotPassword')}
             onRegister={() => navigateTo('register')}
           />
@@ -448,7 +499,7 @@ export default function App() {
 
 
 
-      case 'chatList':
+      case 'messages':
         return (
           <ChatListScreen
             navigation={navigation}
@@ -456,6 +507,16 @@ export default function App() {
             user={userData}
           />
         );
+
+
+      case 'favorites':
+        return (
+          <FavoritesScreen
+            navigation={navigation}
+            onBack={goBack}
+          />
+        );
+
 
       default:
         console.warn('⚠️ Unknown screen:', currentScreen);
@@ -469,22 +530,40 @@ export default function App() {
     }
   };
 
-
-
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: '#fff',
+    },
+  });
 
   return (
-    <View style={styles.container}>
-      {renderScreen()}
-    </View>
+    <SafeAreaProvider>
+      <View style={styles.container}>
+        {renderScreen()}
+
+        {/* ✅ Global Navbar */}
+        {showNavbarScreens.includes(currentScreen) && (
+          <UserNavigator
+            activeTab={currentScreen}
+            onTabPress={(tab) => {
+              console.log('📱 Tab pressed on global navbar:', tab);
+              if (tab === 'home') {
+
+                navigation.navigate('home');
+              }
+              if (tab === 'search') navigation.navigate('searchResults');
+              if (tab === 'favorites') navigation.navigate('favorites');
+              if (tab === 'messages') navigation.navigate('messages');
+              if (tab === 'profile') navigation.navigate('profile');
+            }}
+
+            messageCount={messageCount}
+            userRole={userData?.role}
+
+          />
+        )}
+      </View>
+    </SafeAreaProvider>
   );
 }
-
-
-
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-});

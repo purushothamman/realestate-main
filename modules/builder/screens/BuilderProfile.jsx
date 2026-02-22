@@ -32,6 +32,7 @@ import {
   Trash2,
   ArrowLeft,
 } from 'lucide-react-native';
+import { API_BASE_URL } from '../../../utils/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -42,13 +43,13 @@ const isMediumDevice = width >= 375 && width < 768;
 const isLargeDevice = width >= 768;
 
 const ProfileScreen = ({
-  onEditProfile = () => {},
-  onMyProperties = () => {},
-  onNotifications = () => {},
-  onHelpSupport = () => {},
-  onLogout = () => {},
-  onChangePassword = () => {},
-  onBack = () => {},
+  onEditProfile = () => { },
+  onMyProperties = () => { },
+  onNotifications = () => { },
+  onHelpSupport = () => { },
+  onLogout = () => { },
+  onChangePassword = () => { },
+  onBack = () => { },
 }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
@@ -195,8 +196,8 @@ const ProfileScreen = ({
       </View>
 
       {/* Scrollable Content */}
-      <ScrollView 
-        style={styles.scrollContent} 
+      <ScrollView
+        style={styles.scrollContent}
         contentContainerStyle={styles.scrollContentContainer}
         showsVerticalScrollIndicator={false}
       >

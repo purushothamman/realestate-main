@@ -16,6 +16,7 @@ import {
   Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../../../utils/api';
 
 
 const { width } = Dimensions.get('window');
@@ -92,22 +93,22 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
   const [loading, setLoading] = useState(true);
   const scrollViewRef = useRef(null);
   const inputRef = useRef(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
 
   // Animations
   const headerGradientAnim = useRef(new Animated.Value(0)).current;
   const sendButtonScale = useRef(new Animated.Value(1)).current;
 
   // API Configuration
-  const getApiUrl = () => {
-    const platform = Platform.OS;
-    if (platform === 'android') {
-      return 'http://10.0.2.2:5000/api';
-    } else {
-      return 'http://localhost:5000/api';
-    }
-  };
-  const API_BASE_URL = getApiUrl();
+  // const getApiUrl = () => {
+  //   const platform = Platform.OS;
+  //   if (platform === 'android') {
+  //     return 'http://10.0.2.2:5000/api';
+  //   } else {
+  //     return 'http://localhost:5000/api';
+  //   }
+  // };
+  // const API_BASE_URL = getApiUrl();
 
   // useEffect(() => {
   //   if (chatId) {
@@ -138,22 +139,9 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
   }, [chatId]);
 
   useEffect(() => {
-    // Keyboard listeners
-    const keyboardWillShow = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      (e) => setKeyboardHeight(e.endCoordinates.height)
-    );
-    const keyboardWillHide = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => setKeyboardHeight(0)
-    );
-
-    return () => {
-      // clearInterval(interval);
-      keyboardWillShow.remove();
-      keyboardWillHide.remove();
-    };
+    // Keyboard listeners moved to KeyboardAvoidingView management
   }, [chatId]);
+
 
   const fetchMessages = async () => {
     if (!chatId) {
@@ -240,10 +228,11 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
       style={styles.container}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
+
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
 
       {/* Header */}
@@ -254,8 +243,9 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
             <View style={styles.topBarLeft}>
 
               <TouchableOpacity
-                onPress={() => navigation.navigate('chatList')}
+                onPress={() => navigation.navigate('messages')}
                 style={styles.backButton}>
+
 
 
                 <ChevronLeftIcon />
@@ -303,7 +293,8 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
       </ScrollView>
 
       {/* Input */}
-      <View style={[styles.inputBar, { marginBottom: keyboardHeight }]}>
+      <View style={styles.inputBar}>
+
         <View style={styles.inputContainer}>
           <View style={styles.inputWrapper}>
             <TextInput

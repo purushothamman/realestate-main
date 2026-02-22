@@ -43,6 +43,7 @@ import {
     Award,
     CheckCircle,
 } from 'lucide-react-native';
+import { API_BASE_URL } from '../../../utils/api';
 
 const { width } = Dimensions.get('window');
 
@@ -106,18 +107,18 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
     }, []);
 
     // API Configuration
-    const getApiUrl = () => {
-        const platform = Platform.OS;
-        if (platform === 'android') {
-            return 'http://10.0.2.2:5000/api';
-        } else if (platform === 'ios') {
-            return 'http://localhost:5000/api';
-        } else {
-            return 'http://localhost:5000/api';
-        }
-    };
+    // const getApiUrl = () => {
+    //     const platform = Platform.OS;
+    //     if (platform === 'android') {
+    //         return 'http://10.0.2.2:5000/api';
+    //     } else if (platform === 'ios') {
+    //         return 'http://localhost:5000/api';
+    //     } else {
+    //         return 'http://localhost:5000/api';
+    //     }
+    // };
 
-    const API_BASE_URL = getApiUrl();
+    // const API_BASE_URL = getApiUrl();
 
     // Extract property data from route params
     const property = route?.params?.property || {};
@@ -257,7 +258,7 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
                     Alert.alert("Error", "Chat not created properly");
                     return;
                 }
-                navigation.navigate('chatList', {
+                navigation.navigate('messages', {
                     chatId: data.chat_id,
                     inquiryId: data.inquiry_id
                 });

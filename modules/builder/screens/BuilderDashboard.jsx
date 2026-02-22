@@ -34,19 +34,20 @@ import {
   Check,
   X,
 } from 'lucide-react-native';
+import { API_BASE_URL } from '../../../utils/api';
 
 const { width, height } = Dimensions.get('window');
 
 // API CONFIGURATION
-const getApiUrl = () => {
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:5000/api';
-  } else {
-    return 'http://localhost:5000/api';
-  }
-};
+// const getApiUrl = () => {
+//   if (Platform.OS === 'android') {
+//     return 'http://10.0.2.2:5000/api';
+//   } else {
+//     return 'http://localhost:5000/api';
+//   }
+// };
 
-const API_BASE_URL = getApiUrl();
+//const API_BASE_URL = getApiUrl();
 
 export default function BuilderDashboard({
   builderName = 'John Anderson',
@@ -615,46 +616,8 @@ export default function BuilderDashboard({
         </View>
       </ScrollView>
 
-      {/* Bottom Nav */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => navigation.navigate('builderDashboard')}>
-          <Home size={24} color="#2D6A4F" />
-          <Text style={styles.navTextActive}>Dashboard</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => {/* Navigate to listings */ }}
-        >
-          <Building2 size={24} color="#9ca3af" />
-          <Text style={styles.navTextInactive}>Projects</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => {/* Navigate to leads */ }}
-        >
-          <Users size={24} color="#9ca3af" />
-          <Text style={styles.navTextInactive}>Leads</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => {/* Navigate to analytics */ }}
-        >
-          <BarChart3 size={24} color="#9ca3af" />
-          <Text style={styles.navTextInactive}>Analytics</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.navItem}
-          onPress={() => navigation.navigate('profile')}
-        >
-          <User size={24} color="#9ca3af" />
-          <Text style={styles.navTextInactive}>Profile</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
+
   );
 }
 

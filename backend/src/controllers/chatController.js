@@ -98,14 +98,16 @@ exports.getAllChats = async (req, res) => {
         m.sent_at AS timestamp
       FROM chats c
 
-      -- Get last message
-      LEFT JOIN messages m 
-        ON m.chat_id = c.id
+      -- Get last message reliably using max ID
       LEFT JOIN (
-        SELECT chat_id, MAX(sent_at) AS max_time
-        FROM messages
-        GROUP BY chat_id
-      ) lm ON lm.chat_id = m.chat_id AND lm.max_time = m.sent_at
+        SELECT m1.*
+        FROM messages m1
+        JOIN (
+          SELECT chat_id, MAX(id) AS max_id
+          FROM messages
+          GROUP BY chat_id
+        ) m2 ON m1.id = m2.max_id
+      ) m ON m.chat_id = c.id
 
       -- Property
       LEFT JOIN properties p ON c.property_id = p.id

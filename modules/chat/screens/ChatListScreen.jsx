@@ -23,6 +23,7 @@ import {
   ArrowLeft,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../../../utils/api';
 const { width, height } = Dimensions.get('window');
 
 // ImageWithFallback Component
@@ -102,13 +103,7 @@ const ChatListItem = ({ chat, onPress }) => {
 export default function ChatListScreen({ navigation, onBack, route }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [chats, setChats] = useState([]);
-  const getApiUrl = () => {
-    return Platform.OS === 'android'
-      ? 'http://10.0.2.2:5000/api'
-      : 'http://localhost:5000/api';
-  };
 
-  const API_BASE_URL = getApiUrl();
 
   const fetchChats = async () => {
     try {
@@ -123,17 +118,24 @@ export default function ChatListScreen({ navigation, onBack, route }) {
       if (res.ok) {
         console.log("Chats:", data);
 
-        // 🔥 MAP backend → UI format
-        const formatted = data.map(chat => ({
-          id: chat.chat_id,
-          name: chat.other_user_name || "User",
-          property: chat.property_title || "Property",
-          lastMessage: chat.last_message || "",
-          timestamp: chat.timestamp || "",
-          unreadCount: chat.unread || 0,
-          avatar: null,
-          online: false
-        }));
+        // 🔥 MAP backend → UI format & Safety check for unique IDs
+        const seenIds = new Set();
+        const formatted = data
+          .map(chat => ({
+            id: chat.chat_id,
+            name: chat.other_user_name || "User",
+            property: chat.property_title || "Property",
+            lastMessage: chat.last_message || "",
+            timestamp: chat.timestamp || "",
+            unreadCount: chat.unread || 0,
+            avatar: null,
+            online: false
+          }))
+          .filter(chat => {
+            if (seenIds.has(chat.id)) return false;
+            seenIds.add(chat.id);
+            return true;
+          });
 
         setChats(formatted);
       }

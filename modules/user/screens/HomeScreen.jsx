@@ -31,28 +31,20 @@ import {
   AlertCircle,
 } from 'lucide-react-native';
 
-// Import screens
-import ProfileScreen from './ProfileScreen';
-import ChatListScreen from '../../chat/screens/ChatListScreen';
-import SearchResultsScreen from '../../property/screens/SearchResultsScreen';
-import FavoritesScreen from './FavoritesScreen';
-import PropertyDetailScreen from '../../property/screens/PropertyDetailScreen';
-import NotificationsScreen from './NotificationsScreen';
-
 // Import UserNavigator component
-import UserNavigator from '../../../navigation/UserNavigator';
+import { API_BASE_URL } from '../../../utils/api';
+
 
 // API Configuration
-const API_BASE_URL = 'http://localhost:5000/api';
+// const API_BASE_URL = getApiUrl();
 // For physical device testing, use your computer's IP:
 // const API_BASE_URL = 'http://192.168.1.100:5000/api';
 
 export default function HomeScreen({ navigation }) {
-  // State Management - Initialize activeTab first
-  const [activeTab, setActiveTab] = useState('home');
+  // State Management
   const [searchQuery, setSearchQuery] = useState('');
-  const [screen, setScreen] = useState('home');
   const [selectedProperty, setSelectedProperty] = useState(null);
+
 
   // User State
   const [user, setUser] = useState(null);
@@ -349,9 +341,11 @@ export default function HomeScreen({ navigation }) {
       console.error('Error tracking view:', err);
     }
 
-    setSelectedProperty(property);
-    setScreen('propertyDetail');
+    if (navigation?.navigate) {
+      navigation.navigate('propertyDetail', { property });
+    }
   };
+
 
   // Handle Search
   const handleSearch = async () => {
@@ -417,63 +411,8 @@ export default function HomeScreen({ navigation }) {
     );
   }
 
-  // Render different screens based on state but keep UserNavigator always visible
-  const renderScreen = () => {
-    if (screen === 'profile') {
-      return <ProfileScreen onBack={() => setScreen('home')} navigation={navigation} />;
-    }
-
-    if (screen === 'messages') {
-      return <ChatListScreen onBack={() => setScreen('home')} navigation={navigation} />;
-    }
-
-    if (screen === 'search') {
-      return <SearchResultsScreen onBack={() => setScreen('home')} navigation={navigation} />;
-    }
-
-    if (screen === 'favorites') {
-      return <FavoritesScreen onBack={() => setScreen('home')} navigation={navigation} />;
-    }
-
-    if (screen === 'notifications') {
-      return <NotificationsScreen onBack={() => setScreen('home')} navigation={navigation} />;
-    }
-
-    if (screen === 'propertyDetail' && selectedProperty) {
-      return (
-        <PropertyDetailScreen
-          onBack={() => {
-            setScreen('home');
-            setSelectedProperty(null);
-          }}
-          navigation={navigation}
-          route={{ params: { property: selectedProperty } }}
-        />
-      );
-    }
-
-    // Default: render home screen content
-    return null;
-  };
-
-  const screenContent = renderScreen();
-
-  // If we're showing a different screen, render it with UserNavigator at bottom
-  if (screenContent) {
-    return (
-      <View style={styles.container}>
-        {screenContent}
-        {/* Bottom Navigation - Always visible */}
-        <UserNavigator
-          activeTab={activeTab}
-          onTabPress={handleTabPress}
-          messageCount={messages.length}
-        />
-      </View>
-    );
-  }
-
   // Otherwise render the home screen
+
   return (
     <View style={styles.container}>
       {/* Fixed Header */}
@@ -487,9 +426,10 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={styles.notificationButton}
-            onPress={() => handleTabPress('notifications')}
+            onPress={() => navigation?.navigate('notifications')}
           >
             <Bell color="#374151" size={24} strokeWidth={2} />
+
             {notifications.length > 0 && (
               <View style={styles.notificationBadge}>
                 <Text style={styles.notificationBadgeText}>
@@ -622,9 +562,10 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.featuredSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Featured Properties</Text>
-            <TouchableOpacity onPress={() => handleTabPress('search')}>
+            <TouchableOpacity onPress={() => navigation?.navigate('searchResults')}>
               <Text style={styles.seeAllButton}>See All</Text>
             </TouchableOpacity>
+
           </View>
 
           {properties.length === 0 ? (
@@ -788,14 +729,9 @@ export default function HomeScreen({ navigation }) {
           </View>
         )}
       </ScrollView>
-
-      {/* Bottom Navigation */}
-      <UserNavigator
-        activeTab={activeTab}
-        onTabPress={handleTabPress}
-        messageCount={messages.length}
-      />
     </View>
+
+
   );
 }
 

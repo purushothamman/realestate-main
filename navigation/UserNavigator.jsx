@@ -12,31 +12,48 @@ import {
   MessageCircle,
   User,
 } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-export default function UserNavigator({ 
-  activeTab, 
-  onTabPress, 
-  messageCount = 0 
+
+
+
+
+export default function UserNavigator({
+  activeTab,
+  onTabPress,
+  messageCount = 0
+
+
+
+
+
 }) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.bottomNav}>
+    <View style={[styles.bottomNav,
+    {
+      paddingBottom: insets.bottom
+    }
+
+    ]}>
       <TouchableOpacity
         style={styles.navItem}
         onPress={() => onTabPress('home')}
       >
         <Home
-          color={activeTab === 'home' ? '#2D6A4F' : '#9CA3AF'}
+          color={['home', 'builderDashboard', 'agentDashboard'].includes(activeTab) ? '#2D6A4F' : '#9CA3AF'}
           size={24}
           strokeWidth={2}
         />
         <Text
           style={[
             styles.navLabel,
-            activeTab === 'home' && styles.navLabelActive,
+            ['home', 'builderDashboard', 'agentDashboard'].includes(activeTab) && styles.navLabelActive,
           ]}
         >
           Home
         </Text>
+
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -44,14 +61,14 @@ export default function UserNavigator({
         onPress={() => onTabPress('search')}
       >
         <Search
-          color={activeTab === 'search' ? '#2D6A4F' : '#9CA3AF'}
+          color={activeTab === 'searchResults' ? '#2D6A4F' : '#9CA3AF'}
           size={24}
           strokeWidth={2}
         />
         <Text
           style={[
             styles.navLabel,
-            activeTab === 'search' && styles.navLabelActive,
+            activeTab === 'searchResults' && styles.navLabelActive,
           ]}
         >
           Search
@@ -83,7 +100,7 @@ export default function UserNavigator({
       >
         <View>
           <MessageCircle
-            color={activeTab === 'messages' ? '#2D6A4F' : '#9CA3AF'}
+            color={['messages', 'chat'].includes(activeTab) ? '#2D6A4F' : '#9CA3AF'}
             size={24}
             strokeWidth={2}
           />
@@ -96,11 +113,12 @@ export default function UserNavigator({
         <Text
           style={[
             styles.navLabel,
-            activeTab === 'messages' && styles.navLabelActive,
+            ['messages', 'chat'].includes(activeTab) && styles.navLabelActive,
           ]}
         >
           Messages
         </Text>
+
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -143,7 +161,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 8,
+    zIndex: 9999,
   },
+
   navItem: {
     alignItems: 'center',
     gap: 4,

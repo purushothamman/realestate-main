@@ -44,11 +44,11 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import UserNavigator from '../../../navigation/UserNavigator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../../../utils/api';
+
 
 const { width, height } = Dimensions.get('window');
-const API_BASE_URL = 'http://localhost:5000/api';
 
 const isSmallDevice = width < 375;
 const isMediumDevice = width >= 375 && width < 768;
@@ -588,12 +588,8 @@ const ProfileScreen = ({
         </Animated.View>
       </Animated.ScrollView>
 
-      {/* Bottom Navigation */}
-      <UserNavigator
-        activeTab="profile"
-        onTabPress={handleTabPress}
-      />
     </View>
+
   );
 };
 

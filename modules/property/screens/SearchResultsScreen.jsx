@@ -33,9 +33,9 @@ import {
   Sparkles
 } from 'lucide-react-native';
 
-import UserNavigator from '../../../navigation/UserNavigator';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 const isWeb = Platform.OS === 'web';
 const isSmallScreen = SCREEN_WIDTH < 768;
 const isMediumScreen = SCREEN_WIDTH >= 768 && SCREEN_WIDTH < 1024;
@@ -626,13 +626,8 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Bottom Navigation */}
-      <UserNavigator
-        activeTab={activeTab}
-        onTabPress={handleTabPress}
-        messageCount={messages.length}
-      />
     </View>
+
   );
 }
 

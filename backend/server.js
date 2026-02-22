@@ -113,7 +113,7 @@ require("dotenv").config();
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   console.log("🔥 BACKEND INSTANCE RUNNING FROM:", __dirname);
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📡 API Base URL: http://localhost:${PORT}/api`);
