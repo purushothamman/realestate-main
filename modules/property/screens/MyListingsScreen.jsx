@@ -30,7 +30,8 @@ import {
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
-const API_BASE_URL = 'http://localhost:5000/api';
+import { API_BASE_URL } from '../../../utils/api';
+
 
 const AnimatedCard = ({ item, navigation, statusStyle, formatPrice, index }) => {
     const fadeAnim = useState(new Animated.Value(0))[0];
@@ -80,7 +81,7 @@ const AnimatedCard = ({ item, navigation, statusStyle, formatPrice, index }) => 
                         colors={['transparent', 'rgba(0,0,0,0.3)']}
                         style={styles.imageGradient}
                     />
-                    
+
                     {/* Status Badge on Image */}
                     <View style={[styles.statusBadgeFloat, { backgroundColor: statusStyle.bg }]}>
                         <View style={[styles.statusDot, { backgroundColor: statusStyle.text }]} />
@@ -130,9 +131,9 @@ const AnimatedCard = ({ item, navigation, statusStyle, formatPrice, index }) => 
                             <Text style={styles.featureLabel}>Bedrooms</Text>
                             <Text style={styles.featureValue}>{item.bedrooms}</Text>
                         </View>
-                        
+
                         <View style={styles.featureDivider} />
-                        
+
                         <View style={styles.featureBox}>
                             <View style={styles.featureIconContainer}>
                                 <Maximize2 width={16} height={16} color="#2D6A4F" />
@@ -140,9 +141,9 @@ const AnimatedCard = ({ item, navigation, statusStyle, formatPrice, index }) => 
                             <Text style={styles.featureLabel}>Area</Text>
                             <Text style={styles.featureValue}>{item.areaSqft} sqft</Text>
                         </View>
-                        
+
                         <View style={styles.featureDivider} />
-                        
+
                         <View style={styles.featureBox}>
                             <View style={styles.featureIconContainer}>
                                 <Calendar width={16} height={16} color="#2D6A4F" />
@@ -261,7 +262,7 @@ const MyListingsScreen = ({ navigation }) => {
             <StatusBar barStyle="dark-content" />
 
             {/* Enhanced Header */}
-            <Animated.View 
+            <Animated.View
                 style={[
                     styles.header,
                     {
@@ -281,12 +282,12 @@ const MyListingsScreen = ({ navigation }) => {
                 >
                     <ChevronLeft width={24} height={24} color="#1f2937" />
                 </TouchableOpacity>
-                
+
                 <View style={styles.headerCenter}>
                     <Text style={styles.headerTitle}>My Listings</Text>
                     <Text style={styles.headerSubtitle}>{listings.length} Properties</Text>
                 </View>
-                
+
                 <TouchableOpacity
                     style={styles.addButton}
                     onPress={() => navigation.navigate('addPropertyAgent')}
@@ -304,8 +305,8 @@ const MyListingsScreen = ({ navigation }) => {
                 style={styles.content}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                    <RefreshControl 
-                        refreshing={refreshing} 
+                    <RefreshControl
+                        refreshing={refreshing}
                         onRefresh={onRefresh}
                         tintColor="#2D6A4F"
                         colors={['#2D6A4F']}

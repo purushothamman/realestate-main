@@ -14,12 +14,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ChevronLeft, User, Mail, Phone, Check, X, MapPin, DollarSign } from 'lucide-react-native';
 
-const getApiUrl = () => {
-  if (Platform.OS === 'android') return 'http://10.0.2.2:5000/api';
-  return 'http://localhost:5000/api';
-};
+import { API_BASE_URL } from '../../../utils/api';
 
-const API_BASE_URL = getApiUrl();
 
 export default function BuilderRequestDetailScreen({ navigation, onBack, requestId }) {
   const [loading, setLoading] = useState(true);
@@ -79,7 +75,7 @@ export default function BuilderRequestDetailScreen({ navigation, onBack, request
       Alert.alert('Approved', 'Property is now active.', [
         {
           text: 'OK',
-          onPress: () => {},
+          onPress: () => { },
         },
       ]);
     } catch (e) {
@@ -110,7 +106,7 @@ export default function BuilderRequestDetailScreen({ navigation, onBack, request
       Alert.alert('Disapproved', 'Request rejected. Property remains blocked.', [
         {
           text: 'OK',
-          onPress: () => {},
+          onPress: () => { },
         },
       ]);
     } catch (e) {

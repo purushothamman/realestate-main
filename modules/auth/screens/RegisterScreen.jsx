@@ -41,10 +41,8 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 
-// Backend API configuration - UPDATE THIS WITH YOUR ACTUAL API URL
-const API_BASE_URL = 'http://localhost:5000/api'; // For local development
-// const API_BASE_URL = 'http://YOUR_IP_ADDRESS:5000/api'; // For mobile testing
-// const API_BASE_URL = 'https://your-production-api.com/api'; // For production
+import { API_BASE_URL } from '../../../utils/api';
+
 
 const USER_TYPES = [
   {

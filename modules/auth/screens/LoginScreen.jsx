@@ -16,25 +16,12 @@ import { Home, Mail, Lock, Eye, EyeOff, AlertCircle, X, ArrowLeft } from 'lucide
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { getDebugInfo, printSetupInstructions } from '../context/GoogleLoginConfig';
-import { getApiUrl } from '../../../utils/api';
+import { API_BASE_URL } from '../../../utils/api';
 
 WebBrowser.maybeCompleteAuthSession();
 
-// ==================== API CONFIGURATION ====================
-// const getApiUrl = () => {
-//     if (Platform.OS === 'android') {
-//         // return 'http://192.168.137.194:5000/api';
-//         return 'http://192.168.0.104:5000/api';
-
-
-//     } else {
-//         return 'http://localhost:5000/api';
-//     }
-// };
-
-const API_BASE_URL = getApiUrl();
-
 export default function LoginScreen({
+
     navigation,
     onNavigateToLoginSuccess,
     onRegister,

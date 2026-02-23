@@ -39,17 +39,8 @@ import {
 
 const { width } = Dimensions.get('window');
 
-//  API CONFIGURATION
-const getApiUrl = () => {
-    if (Platform.OS === 'android') {
-        return 'http://10.0.2.2:5000/api';
-    } else {
-        // For iOS and Web
-        return 'http://localhost:5000/api';
-    }
-};
+import { API_BASE_URL } from '../../../utils/api';
 
-const API_BASE_URL = getApiUrl();
 
 const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
     const [propertyData, setPropertyData] = useState({

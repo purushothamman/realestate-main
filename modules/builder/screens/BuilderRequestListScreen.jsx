@@ -14,12 +14,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ChevronLeft, Building2, User, Clock, ArrowRight } from 'lucide-react-native';
 
-const getApiUrl = () => {
-  if (Platform.OS === 'android') return 'http://10.0.2.2:5000/api';
-  return 'http://localhost:5000/api';
-};
+import { API_BASE_URL } from '../../../utils/api';
 
-const API_BASE_URL = getApiUrl();
 
 export default function BuilderRequestListScreen({ navigation, onBack }) {
   const [loading, setLoading] = useState(true);
