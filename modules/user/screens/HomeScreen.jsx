@@ -38,6 +38,8 @@ import SearchResultsScreen from '../../property/screens/SearchResultsScreen';
 import FavoritesScreen from './FavoritesScreen';
 import PropertyDetailScreen from '../../property/screens/PropertyDetailScreen';
 import NotificationsScreen from './NotificationsScreen';
+import AgentNotificationsScreen from '../../agent/AgentNotificationsScreen';
+import BuilderNotificationsScreen from '../../builder/screens/BuilderNotificationsScreen';
 
 // Import UserNavigator component
 import UserNavigator from '../../../navigation/UserNavigator';
@@ -436,6 +438,12 @@ export default function HomeScreen({ navigation }) {
     }
 
     if (screen === 'notifications') {
+      if (user?.role === 'agent') {
+        return <AgentNotificationsScreen onBack={() => setScreen('home')} navigation={navigation} />;
+      }
+      if (user?.role === 'builder') {
+        return <BuilderNotificationsScreen onBack={() => setScreen('home')} navigation={navigation} />;
+      }
       return <NotificationsScreen onBack={() => setScreen('home')} navigation={navigation} />;
     }
 

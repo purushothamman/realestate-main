@@ -1,1053 +1,796 @@
 /**
  * AgentNotificationsScreen.jsx
  *
- * Notification centre for Agents — receives messages/alerts from Builders.
+ * Agent-facing notification centre. Shows notifications from:
+ *  • Builders  → hire requests, property assignments
+ *  • Users     → property inquiries, messages
  *
- * Features:
- *  • Categorised tabs: All / Property / Assignment / Messages / Alerts
- *  • Swipe-to-dismiss (delete) individual notifications
- *  • Mark single or all as read
- *  • Notification detail bottom sheet on tap
- *  • Unread count badge on each tab
- *  • Empty states per category
- *  • Pull-to-refresh simulation
- *  • Green + White theme (forest green #1B5E3B family)
+ * Two views rendered inside a single file:
+ *  1. NotificationList   – filterable list with unread highlighting
+ *  2. NotificationDetail – full detail card with contextual actions
  *
- * Focus-safe: no TextInput flickering risk; no parent-state-on-keystroke pattern.
+ * Theme: Forest green #1B5E3B + white — consistent with the rest of the app
+ * Focus-safe: every reply TextInput uses the onBlur-commit pattern.
  */
 
-import React, {
-  useState,
-  useCallback,
-  useMemo,
-  useRef,
-  useEffect,
-} from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  FlatList,
-  Modal,
-  Animated,
-  PanResponder,
-  ScrollView,
-  RefreshControl,
-  Platform,
-  StatusBar,
-  Dimensions,
-  Image,
+  View, Text, TextInput, StyleSheet, TouchableOpacity,
+  FlatList, ScrollView, Image, Modal, Alert,
+  ActivityIndicator, Platform, StatusBar, Dimensions,
 } from 'react-native';
 import {
-  ArrowLeft,
-  Bell,
-  BellOff,
-  Building2,
-  UserCheck,
-  MessageSquare,
-  AlertTriangle,
-  CheckCheck,
-  Trash2,
-  X,
-  ChevronRight,
-  MapPin,
-  Clock,
-  Star,
-  Home,
-  FileText,
-  Phone,
-  Mail,
-  Calendar,
-  TrendingUp,
-  Award,
-  CircleCheck,
-  Info,
-  Zap,
+  ArrowLeft, Bell, BellOff, Search, X, CheckCheck,
+  ChevronRight, Building2, MapPin, Phone, Mail, Clock,
+  Home, MessageSquare, Briefcase, Send, AlertCircle,
+  CheckCircle2, XCircle, Eye, MoreVertical, CalendarDays,
+  BadgeCheck, TrendingUp, Filter,
 } from 'lucide-react-native';
 
-const { width: SW } = Dimensions.get('window');
+const { width: SW, height: SH } = Dimensions.get('window');
 
-/* ══════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════
    DESIGN TOKENS
-══════════════════════════════════════════════ */
+═══════════════════════════════════════════════════════════ */
 const T = {
-  // Forest greens
-  g900: '#0A2E1A',
-  g800: '#1B5E3B',
-  g700: '#1E7444',
-  g600: '#25904F',
-  g500: '#2EAD5F',
-  g400: '#52C47A',
-  g300: '#86D9A4',
-  g200: '#C0EDD1',
-  g100: '#E4F7EC',
-  g50:  '#F2FBF6',
-
-  // Neutrals
-  n900: '#0F1B14',
-  n700: '#374151',
-  n600: '#4B5563',
-  n500: '#6B7280',
-  n400: '#9CA3AF',
-  n300: '#D1D5DB',
-  n200: '#E5E7EB',
-  n100: '#F3F4F6',
-  white: '#FFFFFF',
-
-  // Semantic
-  blue:    '#3B82F6',
-  blueBg:  '#EFF6FF',
-  amber:   '#F59E0B',
-  amberBg: '#FFFBEB',
-  red:     '#EF4444',
-  redBg:   '#FEF2F2',
-  purple:  '#8B5CF6',
-  purpleBg:'#F5F3FF',
-
-  shadow: 'rgba(27,94,59,0.12)',
+  g900:'#0D3320', g800:'#1B5E3B', g700:'#1E7444', g600:'#25904F',
+  g500:'#2EAD5F', g400:'#5BC282', g200:'#C6E8D4', g100:'#E8F5ED', g50:'#F4FAF7',
+  n900:'#111827', n800:'#1F2937', n700:'#374151', n600:'#4B5563',
+  n500:'#6B7280', n400:'#9CA3AF', n300:'#D1D5DB', n200:'#E5E7EB',
+  n100:'#F3F4F6', white:'#FFFFFF',
+  amber:'#F59E0B', amberBg:'#FFFBEB', amberBdr:'#FCD34D',
+  red:'#EF4444',  redBg:'#FEF2F2',   redBdr:'#FECACA',
+  blue:'#3B82F6', blueBg:'#EFF6FF',  blueBdr:'#BFDBFE',
+  purple:'#8B5CF6', purpleBg:'#F5F3FF', purpleBdr:'#DDD6FE',
+  shadow:'rgba(27,94,59,0.12)',
 };
 
-/* ══════════════════════════════════════════════
-   NOTIFICATION TYPES CONFIG
-══════════════════════════════════════════════ */
-const N_TYPES = {
-  property:   { icon: Building2,    color: T.g700,   bg: T.g100,    label: 'Property'   },
-  assignment: { icon: UserCheck,    color: T.blue,   bg: T.blueBg,  label: 'Assignment' },
-  message:    { icon: MessageSquare,color: T.purple,  bg: T.purpleBg,label: 'Message'    },
-  alert:      { icon: AlertTriangle,color: T.amber,  bg: T.amberBg, label: 'Alert'      },
-  system:     { icon: Zap,          color: T.n600,   bg: T.n100,    label: 'System'     },
-};
-
-/* ══════════════════════════════════════════════
-   MOCK NOTIFICATIONS
-══════════════════════════════════════════════ */
-const INIT_NOTIFICATIONS = [
+/* ═══════════════════════════════════════════════════════════
+   MOCK DATA
+═══════════════════════════════════════════════════════════ */
+const NOTIFS_SEED = [
   {
-    id: 'n1',
-    type: 'assignment',
-    title: 'New Property Assigned',
-    body: 'Verdant Residences in Bandra West has been assigned to you. Please review the property details and contact the builder to begin marketing.',
-    builder: 'Greenfield Constructions',
-    builderAvatar: 'https://i.pravatar.cc/150?img=15',
-    property: 'Verdant Residences',
-    location: 'Bandra West, Mumbai',
-    time: '2 min ago',
-    timestamp: Date.now() - 2 * 60 * 1000,
-    read: false,
-    pinned: true,
-    meta: { units: 24, type: 'Residential', commission: '2%' },
+    id:'n1', type:'hire_request', read:false,
+    createdAt:'2025-02-23T09:15:00Z', status:'pending',
+    sender:{ name:'Ravi Constructions Pvt. Ltd.', role:'Builder', avatar:'https://i.pravatar.cc/150?img=57', email:'ravi@raviconstructions.com', phone:'9876543210' },
+    summary:'Wants to hire you as their exclusive agent',
+    message:'We at Ravi Constructions are looking for an experienced residential agent to manage our upcoming project "Greenfield Villas" in Bandra West. Based on your profile and 7 years of experience, we believe you would be an excellent fit. We offer a competitive commission structure and a long-term partnership opportunity.',
+    property:{ name:'Greenfield Villas', location:'Bandra West, Mumbai', type:'Residential', units:32, image:'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=600&q=80' },
+    offer:{ commission:'2.5%', duration:'12 months', startDate:'March 2025' },
   },
   {
-    id: 'n2',
-    type: 'message',
-    title: 'Message from Builder',
-    body: 'Please schedule a site visit for the Skyline Commercial Hub this week. The builder wants to brief you on the project highlights before you start showing it to clients.',
-    builder: 'Skyline Developers',
-    builderAvatar: 'https://i.pravatar.cc/150?img=33',
-    property: 'Skyline Commercial Hub',
-    location: 'Powai, Mumbai',
-    time: '18 min ago',
-    timestamp: Date.now() - 18 * 60 * 1000,
-    read: false,
-    pinned: false,
-    meta: {},
+    id:'n2', type:'property_assignment', read:false,
+    createdAt:'2025-02-23T07:40:00Z', status:'accepted',
+    sender:{ name:'Skyline Developers', role:'Builder', avatar:'https://i.pravatar.cc/150?img=14', email:'info@skylinedev.com', phone:'9823001122' },
+    summary:'You have been assigned to Skyline Commercial Hub',
+    message:'You have been officially assigned as the lead agent for Skyline Commercial Hub, Powai. Your responsibilities include handling inquiries, scheduling site visits, and managing the closing process. Please coordinate with our sales team to get started immediately.',
+    property:{ name:'Skyline Commercial Hub', location:'Powai, Mumbai', type:'Commercial', units:8, image:'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=600&q=80' },
+    offer:null,
   },
   {
-    id: 'n3',
-    type: 'property',
-    title: 'Property Details Updated',
-    body: 'The pricing for Emerald Heights has been revised. Unit rates have been updated from ₹1.2 Cr to ₹1.35 Cr for 2BHK. Please update your client presentations accordingly.',
-    builder: 'Emerald Group',
-    builderAvatar: 'https://i.pravatar.cc/150?img=60',
-    property: 'Emerald Heights',
-    location: 'Andheri East, Mumbai',
-    time: '1 hr ago',
-    timestamp: Date.now() - 60 * 60 * 1000,
-    read: false,
-    pinned: false,
-    meta: { units: 36, type: 'Residential' },
+    id:'n3', type:'user_inquiry', read:true,
+    createdAt:'2025-02-22T16:30:00Z', status:'pending',
+    sender:{ name:'Ananya Krishnan', role:'Buyer', avatar:'https://i.pravatar.cc/150?img=47', email:'ananya.k@gmail.com', phone:'9765001234' },
+    summary:'Inquiry about 2 BHK unit availability and pricing',
+    message:'Hi, I am interested in a 2 BHK unit at Emerald Heights. Could you please share the current pricing, floor availability, and payment plan options? We are a family of 3 and would prefer a unit above the 8th floor with a city view. Please let me know the earliest slot for a site visit this week.',
+    property:{ name:'Emerald Heights', location:'Andheri East, Mumbai', type:'Residential', units:36, image:'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80' },
+    offer:null,
   },
   {
-    id: 'n4',
-    type: 'alert',
-    title: 'Booking Deadline Reminder',
-    body: 'The pre-launch booking window for Harbor View Plaza closes in 3 days. Ensure all interested clients submit their EOI forms before the deadline to secure early-bird pricing.',
-    builder: 'Harbor Realty',
-    builderAvatar: 'https://i.pravatar.cc/150?img=44',
-    property: 'Harbor View Plaza',
-    location: 'Worli, Mumbai',
-    time: '3 hr ago',
-    timestamp: Date.now() - 3 * 60 * 60 * 1000,
-    read: true,
-    pinned: false,
-    meta: { deadline: '3 days', type: 'Mixed Use' },
+    id:'n4', type:'hire_request', read:true,
+    createdAt:'2025-02-22T11:00:00Z', status:'rejected',
+    sender:{ name:'HarborLand Realty', role:'Builder', avatar:'https://i.pravatar.cc/150?img=30', email:'hr@harborland.in', phone:'9812009988' },
+    summary:'Hire request for Harbor View Plaza project',
+    message:'We would like to onboard you as our agent for Harbor View Plaza in Worli. This is a premium mixed-use project with 12 units. Your expertise in mixed-use properties makes you an ideal candidate. We are offering an attractive commission and flexible timelines.',
+    property:{ name:'Harbor View Plaza', location:'Worli, Mumbai', type:'Mixed Use', units:12, image:'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=80' },
+    offer:{ commission:'2%', duration:'6 months', startDate:'April 2025' },
   },
   {
-    id: 'n5',
-    type: 'assignment',
-    title: 'Agent Rating Received',
-    body: 'The builder has given you a 5-star rating for your recent work on Palm Springs Villa. Your professionalism and client handling were specifically praised.',
-    builder: 'Palm Estates',
-    builderAvatar: 'https://i.pravatar.cc/150?img=22',
-    property: 'Palm Springs Villa',
-    location: 'Juhu, Mumbai',
-    time: 'Yesterday',
-    timestamp: Date.now() - 24 * 60 * 60 * 1000,
-    read: true,
-    pinned: false,
-    meta: { rating: 5 },
+    id:'n5', type:'user_inquiry', read:false,
+    createdAt:'2025-02-21T14:20:00Z', status:'pending',
+    sender:{ name:'Rohan Mehta', role:'Buyer', avatar:'https://i.pravatar.cc/150?img=68', email:'rohan.mehta@outlook.com', phone:'9654123456' },
+    summary:'Request for site visit at Palm Springs Villa this weekend',
+    message:'Hello, I came across Palm Springs Villa on your listing and am very interested in the 3 BHK villa unit. Can we schedule a site visit this Saturday or Sunday? I would also like to know if the price is negotiable for early booking. Please call or message me at your earliest convenience.',
+    property:{ name:'Palm Springs Villa', location:'Juhu, Mumbai', type:'Residential', units:6, image:'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80' },
+    offer:null,
   },
   {
-    id: 'n6',
-    type: 'message',
-    title: 'Documents Required',
-    body: 'Please submit your RERA certificate and updated ID proof to the builder portal by Friday. This is required to continue your listing for Greenwood Residences.',
-    builder: 'Greenfield Constructions',
-    builderAvatar: 'https://i.pravatar.cc/150?img=15',
-    property: 'Greenwood Residences',
-    location: 'Bandra West, Mumbai',
-    time: 'Yesterday',
-    timestamp: Date.now() - 26 * 60 * 60 * 1000,
-    read: true,
-    pinned: false,
-    meta: {},
-  },
-  {
-    id: 'n7',
-    type: 'property',
-    title: 'New Floor Plan Released',
-    body: 'Updated floor plans for the 3BHK and 4BHK units at Skyline Commercial Hub are now available in your builder portal. Download and share with prospective buyers.',
-    builder: 'Skyline Developers',
-    builderAvatar: 'https://i.pravatar.cc/150?img=33',
-    property: 'Skyline Commercial Hub',
-    location: 'Powai, Mumbai',
-    time: '2 days ago',
-    timestamp: Date.now() - 2 * 24 * 60 * 60 * 1000,
-    read: true,
-    pinned: false,
-    meta: {},
-  },
-  {
-    id: 'n8',
-    type: 'alert',
-    title: 'Commission Structure Change',
-    body: 'The commission structure for Emerald Heights has been revised effective immediately. New rate is 2.5% on first 10 units sold. Please review the updated agreement in your portal.',
-    builder: 'Emerald Group',
-    builderAvatar: 'https://i.pravatar.cc/150?img=60',
-    property: 'Emerald Heights',
-    location: 'Andheri East, Mumbai',
-    time: '3 days ago',
-    timestamp: Date.now() - 3 * 24 * 60 * 60 * 1000,
-    read: true,
-    pinned: false,
-    meta: {},
-  },
-  {
-    id: 'n9',
-    type: 'system',
-    title: 'Welcome to EstateHub Agent Portal',
-    body: 'Your agent profile has been verified and activated. You can now receive property assignments from builders and start managing your listings. Complete your profile to unlock all features.',
-    builder: 'EstateHub',
-    builderAvatar: null,
-    property: null,
-    location: null,
-    time: '5 days ago',
-    timestamp: Date.now() - 5 * 24 * 60 * 60 * 1000,
-    read: true,
-    pinned: false,
-    meta: {},
+    id:'n6', type:'property_assignment', read:true,
+    createdAt:'2025-02-20T09:00:00Z', status:'accepted',
+    sender:{ name:'Palm Developers Ltd.', role:'Builder', avatar:'https://i.pravatar.cc/150?img=22', email:'ops@palmdev.com', phone:'9988776655' },
+    summary:'Assigned to Palm Springs Villa as lead agent',
+    message:'Congratulations! You have been selected as the lead agent for Palm Springs Villa, Juhu. This is an exclusive luxury project and we look forward to a successful partnership. Please check in with our sales coordinator Meera at meera@palmdev.com to get started.',
+    property:{ name:'Palm Springs Villa', location:'Juhu, Mumbai', type:'Residential', units:6, image:'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80' },
+    offer:null,
   },
 ];
 
-const TABS = [
-  { key: 'all',        label: 'All',        types: null },
-  { key: 'assignment', label: 'Assigned',   types: ['assignment'] },
-  { key: 'property',   label: 'Property',   types: ['property'] },
-  { key: 'message',    label: 'Messages',   types: ['message'] },
-  { key: 'alert',      label: 'Alerts',     types: ['alert'] },
-];
+/* ═══════════════════════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════════════════════ */
+const TYPE_META = {
+  hire_request:        { label:'Hire Request', icon:Briefcase,     color:T.purple, bg:T.purpleBg, border:T.purpleBdr },
+  property_assignment: { label:'Assignment',   icon:Building2,     color:T.g700,   bg:T.g100,     border:T.g200 },
+  user_inquiry:        { label:'Inquiry',      icon:MessageSquare, color:T.blue,   bg:T.blueBg,   border:T.blueBdr },
+};
 
-/* ══════════════════════════════════════════════
-   SWIPEABLE NOTIFICATION CARD
-══════════════════════════════════════════════ */
-const SWIPE_THRESHOLD = SW * 0.35;
+const STATUS_META = {
+  pending:  { label:'Pending',  color:T.amber, bg:T.amberBg, icon:Clock },
+  accepted: { label:'Accepted', color:T.g700,  bg:T.g100,    icon:CheckCircle2 },
+  rejected: { label:'Rejected', color:T.red,   bg:T.redBg,   icon:XCircle },
+};
 
-const SwipeableCard = React.memo(({ item, onPress, onMarkRead, onDelete }) => {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const opacity    = useRef(new Animated.Value(1)).current;
-  const cfg        = N_TYPES[item.type] || N_TYPES.system;
-  const IconComp   = cfg.icon;
+const FILTERS = ['All','Unread','Hire Requests','Assignments','Inquiries'];
 
-  const panResponder = useRef(PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dy) < 20,
-    onPanResponderMove: (_, g) => {
-      if (g.dx < 0) translateX.setValue(g.dx);
-    },
-    onPanResponderRelease: (_, g) => {
-      if (g.dx < -SWIPE_THRESHOLD) {
-        // Delete animation
-        Animated.parallel([
-          Animated.timing(translateX, { toValue: -SW, duration: 260, useNativeDriver: true }),
-          Animated.timing(opacity,    { toValue: 0,   duration: 260, useNativeDriver: true }),
-        ]).start(() => onDelete(item.id));
-      } else {
-        Animated.spring(translateX, { toValue: 0, useNativeDriver: true, tension: 80, friction: 10 }).start();
-      }
-    },
-  })).current;
+/* ═══════════════════════════════════════════════════════════
+   DATE HELPERS
+═══════════════════════════════════════════════════════════ */
+const fmtRelative = (iso) => {
+  const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (diff < 60)     return 'Just now';
+  if (diff < 3600)   return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400)  return `${Math.floor(diff/3600)}h ago`;
+  if (diff < 172800) return 'Yesterday';
+  return new Date(iso).toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+};
 
-  const deleteIconOpacity = translateX.interpolate({
-    inputRange: [-SWIPE_THRESHOLD, 0],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
+const fmtFull = (iso) => {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-IN',{ weekday:'long', day:'numeric', month:'long', year:'numeric' })
+    + ' at ' + d.toLocaleTimeString('en-IN',{ hour:'2-digit', minute:'2-digit' });
+};
 
+/* ═══════════════════════════════════════════════════════════
+   SHARED MINI-COMPONENTS
+═══════════════════════════════════════════════════════════ */
+const StatusPill = ({ status }) => {
+  const m = STATUS_META[status];
+  const I = m.icon;
   return (
-    <Animated.View style={{ opacity }}>
-      {/* Delete reveal behind card */}
-      <Animated.View style={[card.deleteReveal, { opacity: deleteIconOpacity }]}>
-        <Trash2 color={T.white} size={22} strokeWidth={2} />
-        <Text style={card.deleteTxt}>Delete</Text>
-      </Animated.View>
-
-      <Animated.View
-        style={{ transform: [{ translateX }] }}
-        {...panResponder.panHandlers}
-      >
-        <TouchableOpacity
-          style={[card.wrap, !item.read && card.wrapUnread]}
-          onPress={() => onPress(item)}
-          onLongPress={() => onMarkRead(item.id)}
-          activeOpacity={0.88}
-          delayLongPress={400}
-        >
-          {/* Unread bar */}
-          {!item.read && <View style={card.unreadBar} />}
-
-          {/* Pinned badge */}
-          {item.pinned && (
-            <View style={card.pinnedBadge}>
-              <Zap color={T.g700} size={10} fill={T.g700} />
-              <Text style={card.pinnedTxt}>Priority</Text>
-            </View>
-          )}
-
-          <View style={card.inner}>
-            {/* Icon */}
-            <View style={[card.iconBox, { backgroundColor: cfg.bg }]}>
-              <IconComp color={cfg.color} size={20} strokeWidth={2} />
-            </View>
-
-            {/* Content */}
-            <View style={card.content}>
-              {/* Builder row */}
-              <View style={card.builderRow}>
-                {item.builderAvatar ? (
-                  <Image source={{ uri: item.builderAvatar }} style={card.builderAvatar} />
-                ) : (
-                  <View style={[card.builderAvatar, { backgroundColor: T.g200, justifyContent:'center', alignItems:'center' }]}>
-                    <Building2 color={T.g700} size={10} strokeWidth={2} />
-                  </View>
-                )}
-                <Text style={card.builderName} numberOfLines={1}>{item.builder}</Text>
-                <Text style={card.time}>{item.time}</Text>
-              </View>
-
-              {/* Title */}
-              <Text style={[card.title, !item.read && card.titleUnread]} numberOfLines={1}>
-                {item.title}
-              </Text>
-
-              {/* Body */}
-              <Text style={card.body} numberOfLines={2}>{item.body}</Text>
-
-              {/* Property chip */}
-              {item.property && (
-                <View style={card.propChip}>
-                  <MapPin color={T.g600} size={11} strokeWidth={2} />
-                  <Text style={card.propChipTxt} numberOfLines={1}>{item.property}</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Chevron */}
-            <ChevronRight color={T.n300} size={18} strokeWidth={2} />
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    </Animated.View>
+    <View style={[chip.statusWrap,{ backgroundColor:m.bg }]}>
+      <I color={m.color} size={11} strokeWidth={2.5} />
+      <Text style={[chip.statusTxt,{ color:m.color }]}>{m.label}</Text>
+    </View>
   );
+};
+
+const TypeBadge = ({ type }) => {
+  const m = TYPE_META[type];
+  const I = m.icon;
+  return (
+    <View style={[chip.typeWrap,{ backgroundColor:m.bg, borderColor:m.border }]}>
+      <I color={m.color} size={10} strokeWidth={2.5} />
+      <Text style={[chip.typeTxt,{ color:m.color }]}>{m.label}</Text>
+    </View>
+  );
+};
+
+const chip = StyleSheet.create({
+  statusWrap:{ flexDirection:'row', alignItems:'center', gap:4, paddingHorizontal:9, paddingVertical:4, borderRadius:20 },
+  statusTxt: { fontSize:11, fontWeight:'700' },
+  typeWrap:  { flexDirection:'row', alignItems:'center', gap:4, paddingHorizontal:8, paddingVertical:3, borderRadius:8, borderWidth:1 },
+  typeTxt:   { fontSize:10, fontWeight:'700', letterSpacing:0.2 },
 });
 
-/* ══════════════════════════════════════════════
-   NOTIFICATION DETAIL SHEET
-══════════════════════════════════════════════ */
-const DetailSheet = ({ item, onClose, onDelete }) => {
-  if (!item) return null;
-  const cfg = N_TYPES[item.type] || N_TYPES.system;
-  const IconComp = cfg.icon;
+/* ═══════════════════════════════════════════════════════════
+   FOCUS-SAFE REPLY INPUT
+═══════════════════════════════════════════════════════════ */
+const ReplyInput = React.memo(({ onSend }) => {
+  const [val, setVal] = useState('');
+  const [sending, setSending] = useState(false);
+  const wrapRef = useRef(null);
+
+  const onFocus = useCallback(() => {
+    wrapRef.current?.setNativeProps({ style:{ borderColor:T.g600 } });
+  }, []);
+  const onBlur = useCallback(() => {
+    wrapRef.current?.setNativeProps({ style:{ borderColor:T.n300 } });
+  }, []);
+
+  const handleSend = async () => {
+    if (!val.trim()) { Alert.alert('Empty Reply','Please type a message before sending.'); return; }
+    setSending(true);
+    await new Promise(r => setTimeout(r, 900));
+    setSending(false);
+    onSend?.(val.trim());
+    setVal('');
+  };
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={ds.backdrop}>
-        <View style={ds.sheet}>
-          {/* Handle */}
-          <View style={ds.handle} />
+    <View style={ri.outer}>
+      <View ref={wrapRef} style={ri.wrap}>
+        <TextInput
+          style={ri.input}
+          placeholder="Type your reply to the user…"
+          placeholderTextColor={T.n400}
+          value={val}
+          onChangeText={setVal}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          multiline
+          numberOfLines={3}
+          textAlignVertical="top"
+          blurOnSubmit={false}
+        />
+      </View>
+      <TouchableOpacity
+        style={[ri.sendBtn, sending && ri.sendDisabled]}
+        onPress={handleSend}
+        disabled={sending}
+        activeOpacity={0.85}
+      >
+        {sending
+          ? <ActivityIndicator color={T.white} size="small" />
+          : <><Send color={T.white} size={17} strokeWidth={2.5} /><Text style={ri.sendTxt}>Send Reply</Text></>
+        }
+      </TouchableOpacity>
+    </View>
+  );
+}, () => true);
 
-          {/* Header */}
-          <View style={ds.header}>
-            <View style={[ds.iconBox, { backgroundColor: cfg.bg }]}>
-              <IconComp color={cfg.color} size={24} strokeWidth={2} />
+const ri = StyleSheet.create({
+  outer:      { gap:12 },
+  wrap:       { backgroundColor:T.g50, borderWidth:1.5, borderColor:T.n300, borderRadius:14, padding:14, minHeight:90 },
+  input:      { fontSize:14, color:T.n900, minHeight:65 },
+  sendBtn:    { flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, backgroundColor:T.g800, borderRadius:14, paddingVertical:14, elevation:3, shadowColor:T.shadow, shadowOffset:{width:0,height:3}, shadowOpacity:1, shadowRadius:6 },
+  sendDisabled:{ opacity:0.55 },
+  sendTxt:    { color:T.white, fontSize:15, fontWeight:'700' },
+});
+
+/* ═══════════════════════════════════════════════════════════
+   NOTIFICATION LIST
+═══════════════════════════════════════════════════════════ */
+function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
+  const [filter,   setFilter]   = useState('All');
+  const [search,   setSearch]   = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const unreadCount = useMemo(() => notifs.filter(n => !n.read).length, [notifs]);
+
+  const filtered = useMemo(() => {
+    let list = notifs;
+    if (filter === 'Unread')        list = list.filter(n => !n.read);
+    else if (filter === 'Hire Requests') list = list.filter(n => n.type === 'hire_request');
+    else if (filter === 'Assignments')   list = list.filter(n => n.type === 'property_assignment');
+    else if (filter === 'Inquiries')     list = list.filter(n => n.type === 'user_inquiry');
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(n =>
+        n.sender.name.toLowerCase().includes(q) ||
+        n.summary.toLowerCase().includes(q) ||
+        (n.property?.name.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [notifs, filter, search]);
+
+  const renderItem = ({ item }) => {
+    const meta = TYPE_META[item.type];
+    const TIcon = meta.icon;
+    return (
+      <TouchableOpacity
+        style={[nl.card, !item.read && nl.cardUnread]}
+        onPress={() => onOpen(item)}
+        activeOpacity={0.85}
+      >
+        {!item.read && <View style={nl.stripe} />}
+        <View style={nl.inner}>
+          {/* Avatar + type icon */}
+          <View style={nl.avatarWrap}>
+            <Image source={{ uri:item.sender.avatar }} style={nl.avatar} />
+            <View style={[nl.typeIcon,{ backgroundColor:meta.bg, borderColor:meta.border }]}>
+              <TIcon color={meta.color} size={11} strokeWidth={2.5} />
             </View>
-            <View style={{ flex:1 }}>
-              <Text style={ds.typeLbl}>{cfg.label}</Text>
-              <Text style={ds.time}>{item.time}</Text>
-            </View>
-            <TouchableOpacity style={ds.closeBtn} onPress={onClose}>
-              <X color={T.n500} size={20} strokeWidth={2} />
-            </TouchableOpacity>
           </View>
-
-          <ScrollView contentContainerStyle={ds.body} showsVerticalScrollIndicator={false}>
-            {/* Builder info */}
-            <View style={ds.builderCard}>
-              {item.builderAvatar ? (
-                <Image source={{ uri: item.builderAvatar }} style={ds.builderAvatar} />
-              ) : (
-                <View style={[ds.builderAvatar, { backgroundColor: T.g200, justifyContent:'center', alignItems:'center' }]}>
-                  <Building2 color={T.g700} size={18} strokeWidth={2} />
-                </View>
-              )}
-              <View>
-                <Text style={ds.builderLabel}>From Builder</Text>
-                <Text style={ds.builderName}>{item.builder}</Text>
-              </View>
+          {/* Content */}
+          <View style={nl.body}>
+            <View style={nl.topRow}>
+              <Text style={nl.senderName} numberOfLines={1}>{item.sender.name}</Text>
+              <Text style={nl.time}>{fmtRelative(item.createdAt)}</Text>
             </View>
-
-            {/* Title */}
-            <Text style={ds.title}>{item.title}</Text>
-
-            {/* Body */}
-            <Text style={ds.bodyTxt}>{item.body}</Text>
-
-            {/* Property info */}
+            <View style={nl.badgeRow}>
+              <TypeBadge type={item.type} />
+              <Text style={nl.roleLabel}>{item.sender.role}</Text>
+            </View>
+            <Text style={[nl.summary, !item.read && nl.summaryBold]} numberOfLines={2}>
+              {item.summary}
+            </Text>
             {item.property && (
-              <View style={ds.propCard}>
-                <View style={ds.propCardHeader}>
-                  <Home color={T.g600} size={16} strokeWidth={2} />
-                  <Text style={ds.propCardTitle}>Property Details</Text>
-                </View>
-                <View style={ds.propRow}>
-                  <Building2 color={T.n500} size={13} strokeWidth={2} />
-                  <Text style={ds.propVal}>{item.property}</Text>
-                </View>
-                {item.location && (
-                  <View style={ds.propRow}>
-                    <MapPin color={T.n500} size={13} strokeWidth={2} />
-                    <Text style={ds.propVal}>{item.location}</Text>
-                  </View>
-                )}
-                {item.meta?.units && (
-                  <View style={ds.propRow}>
-                    <Home color={T.n500} size={13} strokeWidth={2} />
-                    <Text style={ds.propVal}>{item.meta.units} Units · {item.meta.type}</Text>
-                  </View>
-                )}
-                {item.meta?.commission && (
-                  <View style={ds.propRow}>
-                    <TrendingUp color={T.n500} size={13} strokeWidth={2} />
-                    <Text style={ds.propVal}>Commission: {item.meta.commission}</Text>
-                  </View>
-                )}
-                {item.meta?.rating && (
-                  <View style={ds.propRow}>
-                    <Star color={T.amber} fill={T.amber} size={13} strokeWidth={0} />
-                    <Text style={ds.propVal}>{item.meta.rating}-star rating from builder</Text>
-                  </View>
-                )}
-                {item.meta?.deadline && (
-                  <View style={ds.propRow}>
-                    <Clock color={T.red} size={13} strokeWidth={2} />
-                    <Text style={[ds.propVal, { color: T.red, fontWeight:'700' }]}>Deadline in {item.meta.deadline}</Text>
-                  </View>
-                )}
+              <View style={nl.propHint}>
+                <Home color={T.g600} size={11} strokeWidth={2} />
+                <Text style={nl.propHintTxt} numberOfLines={1}>{item.property.name}</Text>
               </View>
             )}
-
-            {/* Action buttons */}
-            <View style={ds.actions}>
-              <TouchableOpacity style={ds.primaryAction} onPress={onClose} activeOpacity={0.85}>
-                <CircleCheck color={T.white} size={17} strokeWidth={2.5} />
-                <Text style={ds.primaryActionTxt}>Mark as Done</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={ds.deleteAction}
-                onPress={() => { onDelete(item.id); onClose(); }}
-                activeOpacity={0.85}
-              >
-                <Trash2 color={T.red} size={17} strokeWidth={2} />
-              </TouchableOpacity>
+            <View style={nl.bottomRow}>
+              <StatusPill status={item.status} />
+              {!item.read && <View style={nl.dot} />}
             </View>
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
-/* ══════════════════════════════════════════════
-   MAIN SCREEN
-══════════════════════════════════════════════ */
-export default function AgentNotificationsScreen({ navigation, onBack }) {
-  const [notifications, setNotifications] = useState(INIT_NOTIFICATIONS);
-  const [activeTab,     setActiveTab]     = useState('all');
-  const [selectedItem,  setSelectedItem]  = useState(null);
-  const [refreshing,    setRefreshing]    = useState(false);
-
-  /* ── Derived ── */
-  const unreadCount = useMemo(
-    () => notifications.filter(n => !n.read).length,
-    [notifications]
-  );
-
-  const tabData = useMemo(() => {
-    const tab = TABS.find(t => t.key === activeTab);
-    if (!tab) return notifications;
-    if (!tab.types) return notifications;
-    return notifications.filter(n => tab.types.includes(n.type));
-  }, [notifications, activeTab]);
-
-  const unreadPerTab = useMemo(() => {
-    const counts = {};
-    TABS.forEach(tab => {
-      const list = tab.types
-        ? notifications.filter(n => tab.types.includes(n.type))
-        : notifications;
-      counts[tab.key] = list.filter(n => !n.read).length;
-    });
-    return counts;
-  }, [notifications]);
-
-  /* ── Actions ── */
-  const markRead = useCallback((id) => {
-    setNotifications(p => p.map(n => n.id === id ? { ...n, read: true } : n));
-  }, []);
-
-  const markAllRead = useCallback(() => {
-    setNotifications(p => p.map(n => ({ ...n, read: true })));
-  }, []);
-
-  const deleteNotif = useCallback((id) => {
-    setNotifications(p => p.filter(n => n.id !== id));
-  }, []);
-
-  const openDetail = useCallback((item) => {
-    setSelectedItem(item);
-    markRead(item.id);
-  }, [markRead]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await new Promise(r => setTimeout(r, 1200));
-    // Simulate a new notification arriving
-    const newNotif = {
-      id: `n${Date.now()}`,
-      type: 'message',
-      title: 'New Message from Builder',
-      body: 'Your builder has sent you an update about the latest property listing. Please check your portal for details.',
-      builder: 'Greenfield Constructions',
-      builderAvatar: 'https://i.pravatar.cc/150?img=15',
-      property: 'Verdant Residences',
-      location: 'Bandra West, Mumbai',
-      time: 'Just now',
-      timestamp: Date.now(),
-      read: false,
-      pinned: false,
-      meta: {},
-    };
-    setNotifications(p => [newNotif, ...p]);
-    setRefreshing(false);
-  }, []);
-
-  /* ── Render card ── */
-  const renderItem = useCallback(({ item }) => (
-    <SwipeableCard
-      item={item}
-      onPress={openDetail}
-      onMarkRead={markRead}
-      onDelete={deleteNotif}
-    />
-  ), [openDetail, markRead, deleteNotif]);
-
-  /* ══════════════════════════════════════════
-     RENDER
-  ══════════════════════════════════════════ */
-  return (
-    <View style={s.root}>
-      <StatusBar barStyle="light-content" backgroundColor={T.g800} />
-
-      {/* ─── HEADER ─── */}
-      <View style={s.header}>
-        {/* Top row */}
-        <View style={s.headerTop}>
-          <TouchableOpacity
-            style={s.backBtn}
-            onPress={() => navigation?.goBack?.() || onBack?.()}
-            activeOpacity={0.7}
-          >
-            <ArrowLeft color={T.white} size={22} strokeWidth={2.5} />
-          </TouchableOpacity>
-
-          <View style={{ flex:1 }}>
-            <Text style={s.headerTitle}>Notifications</Text>
-            <Text style={s.headerSub}>
-              {unreadCount > 0 ? `${unreadCount} unread message${unreadCount > 1 ? 's' : ''}` : 'All caught up!'}
-            </Text>
           </View>
-
-          {unreadCount > 0 && (
-            <TouchableOpacity style={s.markAllBtn} onPress={markAllRead} activeOpacity={0.8}>
-              <CheckCheck color={T.white} size={16} strokeWidth={2.5} />
-              <Text style={s.markAllTxt}>Mark all read</Text>
-            </TouchableOpacity>
-          )}
         </View>
+      </TouchableOpacity>
+    );
+  };
 
-        {/* Unread summary pill */}
+  return (
+    <View style={ss.root}>
+      <StatusBar barStyle="light-content" backgroundColor={T.g800} />
+      {/* Header */}
+      <View style={ss.header}>
+        <TouchableOpacity style={ss.iconBtn} onPress={onBack} activeOpacity={0.7}>
+          <ArrowLeft color={T.white} size={22} strokeWidth={2.5} />
+        </TouchableOpacity>
+        <View style={{ flex:1 }}>
+          <Text style={ss.headerTitle}>Notifications</Text>
+          <Text style={ss.headerSub}>{unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}</Text>
+        </View>
+        <TouchableOpacity style={ss.iconBtn} onPress={() => setMenuOpen(true)} activeOpacity={0.7}>
+          <MoreVertical color={T.white} size={22} strokeWidth={2} />
+        </TouchableOpacity>
         {unreadCount > 0 && (
-          <View style={s.summaryPill}>
-            <View style={s.summaryDot} />
-            <Text style={s.summaryTxt}>
-              You have <Text style={{ fontWeight:'800' }}>{unreadCount}</Text> unread{' '}
-              notification{unreadCount > 1 ? 's' : ''} from your builders
-            </Text>
+          <View style={ss.headerBadge}>
+            <Text style={ss.headerBadgeTxt}>{unreadCount}</Text>
           </View>
         )}
       </View>
 
-      {/* ─── TABS ─── */}
-      <View style={s.tabsWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={s.tabs}
-        >
-          {TABS.map(tab => {
-            const isActive = activeTab === tab.key;
-            const cnt = unreadPerTab[tab.key];
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[s.tab, isActive && s.tabActive]}
-                onPress={() => setActiveTab(tab.key)}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.tabTxt, isActive && s.tabTxtActive]}>{tab.label}</Text>
-                {cnt > 0 && (
-                  <View style={[s.tabBadge, isActive && s.tabBadgeActive]}>
-                    <Text style={[s.tabBadgeTxt, isActive && s.tabBadgeTxtActive]}>{cnt}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+      {/* Search */}
+      <View style={ss.searchRow}>
+        <View style={ss.searchBox}>
+          <Search color={T.n500} size={16} strokeWidth={2} />
+          <TextInput
+            style={ss.searchInput}
+            placeholder="Search notifications…"
+            placeholderTextColor={T.n500}
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <X color={T.n500} size={15} strokeWidth={2} />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
-      {/* ─── SWIPE HINT ─── */}
-      {tabData.length > 0 && (
-        <View style={s.hint}>
-          <Info color={T.g500} size={12} strokeWidth={2} />
-          <Text style={s.hintTxt}>Swipe left to delete · Long press to mark as read</Text>
-        </View>
-      )}
+      {/* Filter chips */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ss.chips}>
+        {FILTERS.map(f => (
+          <TouchableOpacity
+            key={f}
+            style={[ss.chip, filter === f && ss.chipActive]}
+            onPress={() => setFilter(f)}
+            activeOpacity={0.8}
+          >
+            {f === 'Unread' && unreadCount > 0 && (
+              <View style={[ss.chipDot, filter === f && ss.chipDotActive]} />
+            )}
+            <Text style={[ss.chipTxt, filter === f && ss.chipTxtActive]}>{f}</Text>
+            {f === 'Unread' && unreadCount > 0 && (
+              <View style={[ss.chipBadge, filter === f && ss.chipBadgeActive]}>
+                <Text style={[ss.chipBadgeTxt, filter === f && ss.chipBadgeTxtActive]}>{unreadCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
-      {/* ─── LIST ─── */}
+      {/* List */}
       <FlatList
-        data={tabData}
+        data={filtered}
         keyExtractor={i => i.id}
         renderItem={renderItem}
-        contentContainerStyle={s.list}
+        contentContainerStyle={nl.list}
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={T.g600}
-            colors={[T.g600, T.g400]}
-          />
-        }
-        ItemSeparatorComponent={() => <View style={s.separator} />}
+        ItemSeparatorComponent={() => <View style={{ height:10 }} />}
         ListEmptyComponent={
-          <View style={s.empty}>
-            <View style={s.emptyIconBox}>
-              <BellOff color={T.g400} size={44} strokeWidth={1.5} />
-            </View>
-            <Text style={s.emptyTitle}>No notifications here</Text>
-            <Text style={s.emptySub}>
-              {activeTab === 'all'
-                ? "You're all caught up! Builder notifications will appear here."
-                : `No ${activeTab} notifications yet.`}
+          <View style={ss.empty}>
+            <BellOff color={T.n300} size={56} strokeWidth={1.5} />
+            <Text style={ss.emptyTitle}>No notifications</Text>
+            <Text style={ss.emptySubtitle}>
+              {search ? 'No results match your search' : "You're all caught up!"}
             </Text>
           </View>
         }
-        ListFooterComponent={
-          tabData.length > 0 ? (
-            <View style={s.footer}>
-              <View style={s.footerLine} />
-              <Text style={s.footerTxt}>{tabData.length} notification{tabData.length !== 1 ? 's' : ''}</Text>
-              <View style={s.footerLine} />
-            </View>
-          ) : null
-        }
       />
 
-      {/* ─── DETAIL SHEET ─── */}
-      <DetailSheet
-        item={selectedItem}
-        onClose={() => setSelectedItem(null)}
-        onDelete={deleteNotif}
-      />
+      {/* Options menu */}
+      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+        <TouchableOpacity style={mn.backdrop} activeOpacity={1} onPress={() => setMenuOpen(false)}>
+          <View style={mn.menu}>
+            <TouchableOpacity style={mn.item} activeOpacity={0.8}
+              onPress={() => { onMarkAllRead(); setMenuOpen(false); }}>
+              <CheckCheck color={T.g700} size={18} strokeWidth={2} />
+              <Text style={mn.itemTxt}>Mark all as read</Text>
+            </TouchableOpacity>
+            <View style={mn.div} />
+            <TouchableOpacity style={mn.item} activeOpacity={0.8} onPress={() => setMenuOpen(false)}>
+              <Filter color={T.n600} size={18} strokeWidth={2} />
+              <Text style={mn.itemTxt}>Notification settings</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
 
-/* ══════════════════════════════════════════════
-   CARD STYLES
-══════════════════════════════════════════════ */
-const card = StyleSheet.create({
-  wrap: {
-    backgroundColor: T.white,
-    borderRadius: 16,
-    overflow: 'hidden',
-    position: 'relative',
-    elevation: 2,
-    shadowColor: T.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-  },
-  wrapUnread: {
-    borderLeftWidth: 0,
-    elevation: 4,
-    shadowOpacity: 1.5,
-  },
-  unreadBar: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    backgroundColor: T.g600,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
-    zIndex: 2,
-  },
-  pinnedBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: T.g100,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
-    zIndex: 3,
-  },
-  pinnedTxt: { fontSize: 10, fontWeight: '800', color: T.g700 },
-  inner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 14,
-    paddingLeft: 18,
-    gap: 12,
-  },
-  iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-    marginTop: 2,
-  },
-  content: { flex: 1 },
-  builderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  builderAvatar: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: T.n200,
-  },
-  builderName: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: T.n500,
-    flex: 1,
-  },
-  time: { fontSize: 11, color: T.n400 },
-  title: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: T.n700,
-    marginBottom: 4,
-    letterSpacing: -0.1,
-  },
-  titleUnread: {
-    fontWeight: '800',
-    color: T.n900,
-  },
-  body: {
-    fontSize: 13,
-    color: T.n500,
-    lineHeight: 18,
-    marginBottom: 8,
-  },
-  propChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: T.g50,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: T.g200,
-  },
-  propChipTxt: { fontSize: 11, fontWeight: '600', color: T.g700 },
-  // Delete reveal
-  deleteReveal: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 90,
-    backgroundColor: T.red,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-  },
-  deleteTxt: { color: T.white, fontSize: 11, fontWeight: '700' },
+const nl = StyleSheet.create({
+  list:       { paddingHorizontal:16, paddingTop:6, paddingBottom:36 },
+  card:       { backgroundColor:T.white, borderRadius:18, overflow:'hidden', elevation:2, shadowColor:T.shadow, shadowOffset:{width:0,height:2}, shadowOpacity:1, shadowRadius:6 },
+  cardUnread: { backgroundColor:'#FAFFFD', elevation:4 },
+  stripe:     { position:'absolute', left:0, top:0, bottom:0, width:4, backgroundColor:T.g600 },
+  inner:      { flexDirection:'row', padding:16, gap:13 },
+  avatarWrap: { position:'relative' },
+  avatar:     { width:50, height:50, borderRadius:25, borderWidth:2, borderColor:T.n200 },
+  typeIcon:   { position:'absolute', bottom:-3, right:-4, width:22, height:22, borderRadius:11, justifyContent:'center', alignItems:'center', borderWidth:1.5, borderColor:T.white },
+  body:       { flex:1 },
+  topRow:     { flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start', marginBottom:5 },
+  senderName: { fontSize:14, fontWeight:'800', color:T.n900, flex:1, letterSpacing:-0.2 },
+  time:       { fontSize:11, color:T.n400, marginLeft:6 },
+  badgeRow:   { flexDirection:'row', alignItems:'center', gap:8, marginBottom:6 },
+  roleLabel:  { fontSize:11, color:T.n500, fontWeight:'500' },
+  summary:    { fontSize:13, color:T.n600, lineHeight:18, marginBottom:8 },
+  summaryBold:{ color:T.n800, fontWeight:'600' },
+  propHint:   { flexDirection:'row', alignItems:'center', gap:4, marginBottom:8 },
+  propHintTxt:{ fontSize:11, color:T.g700, fontWeight:'600' },
+  bottomRow:  { flexDirection:'row', alignItems:'center', justifyContent:'space-between' },
+  dot:        { width:8, height:8, borderRadius:4, backgroundColor:T.g600 },
 });
 
-/* ══════════════════════════════════════════════
-   DETAIL SHEET STYLES
-══════════════════════════════════════════════ */
-const ds = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.46)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: T.white,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    maxHeight: '85%',
-    paddingBottom: Platform.OS === 'ios' ? 36 : 20,
-  },
-  handle: {
-    width: 44,
-    height: 4,
-    backgroundColor: T.n300,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: T.n200,
-  },
-  iconBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  typeLbl: { fontSize: 12, fontWeight: '700', color: T.n500, letterSpacing: 0.4, textTransform: 'uppercase' },
-  time:    { fontSize: 13, color: T.n500, marginTop: 2 },
-  closeBtn:{ width: 36, height: 36, borderRadius: 10, backgroundColor: T.n100, justifyContent: 'center', alignItems: 'center' },
-  body: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
-  builderCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: T.g50,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: T.g200,
-  },
-  builderAvatar: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: T.g300 },
-  builderLabel:  { fontSize: 11, color: T.n500, fontWeight: '600', marginBottom: 2 },
-  builderName:   { fontSize: 15, fontWeight: '800', color: T.n900 },
-  title:   { fontSize: 20, fontWeight: '800', color: T.n900, letterSpacing: -0.4, marginBottom: 10, lineHeight: 26 },
-  bodyTxt: { fontSize: 14, color: T.n600, lineHeight: 22, marginBottom: 20 },
-  propCard: {
-    backgroundColor: T.g50,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 24,
-    borderWidth: 1.5,
-    borderColor: T.g200,
-    gap: 10,
-  },
-  propCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  propCardTitle:  { fontSize: 13, fontWeight: '800', color: T.g800 },
-  propRow:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  propVal:  { fontSize: 13, color: T.n700, fontWeight: '500', flex: 1 },
-  actions: { flexDirection: 'row', gap: 12 },
-  primaryAction: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: T.g800,
-    borderRadius: 14,
-    paddingVertical: 14,
-    elevation: 3,
-    shadowColor: T.shadow,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 1,
-    shadowRadius: 6,
-  },
-  primaryActionTxt: { color: T.white, fontSize: 15, fontWeight: '700' },
-  deleteAction: {
-    width: 52,
-    backgroundColor: T.redBg,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FCA5A5',
-  },
+/* ═══════════════════════════════════════════════════════════
+   NOTIFICATION DETAIL
+═══════════════════════════════════════════════════════════ */
+function NotificationDetail({ notif, onBack, onAction }) {
+  const [localStatus, setLocalStatus] = useState(notif.status);
+  const [actioning,   setActioning]   = useState(null);  // 'accept' | 'reject'
+
+  const meta  = TYPE_META[notif.type];
+  const TIcon = meta.icon;
+  const smeta = STATUS_META[localStatus];
+  const SIcon = smeta.icon;
+
+  const handleRespond = async (action) => {
+    if (localStatus !== 'pending') return;
+    setActioning(action);
+    await new Promise(r => setTimeout(r, 900));
+    const next = action === 'accept' ? 'accepted' : 'rejected';
+    setLocalStatus(next);
+    setActioning(null);
+    onAction(notif.id, next);
+    Alert.alert(
+      action === 'accept' ? '✓ Accepted' : 'Declined',
+      action === 'accept'
+        ? `You accepted the request from ${notif.sender.name}.`
+        : `You declined the request from ${notif.sender.name}.`,
+      [{ text:'OK' }]
+    );
+  };
+
+  const handleReply = useCallback((text) => {
+    Alert.alert('Reply Sent', `Your message has been sent to ${notif.sender.name}.`);
+  }, [notif.sender.name]);
+
+  return (
+    <View style={ss.root}>
+      <StatusBar barStyle="light-content" backgroundColor={T.g800} />
+
+      {/* Header */}
+      <View style={ss.header}>
+        <TouchableOpacity style={ss.iconBtn} onPress={onBack} activeOpacity={0.7}>
+          <ArrowLeft color={T.white} size={22} strokeWidth={2.5} />
+        </TouchableOpacity>
+        <View style={{ flex:1 }}>
+          <Text style={ss.headerTitle}>Notification Detail</Text>
+          <Text style={ss.headerSub}>{meta.label}</Text>
+        </View>
+        <View style={[dv.hStatus,{ backgroundColor:smeta.bg }]}>
+          <SIcon color={smeta.color} size={13} strokeWidth={2.5} />
+          <Text style={[dv.hStatusTxt,{ color:smeta.color }]}>{smeta.label}</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={dv.scroll}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── Sender ── */}
+        <Text style={dv.secLabel}>FROM</Text>
+        <View style={dv.senderCard}>
+          <Image source={{ uri:notif.sender.avatar }} style={dv.senderAvatar} />
+          <View style={{ flex:1 }}>
+            <Text style={dv.senderName}>{notif.sender.name}</Text>
+            <View style={[dv.roleChip,{ backgroundColor:meta.bg, borderColor:meta.border }]}>
+              <TIcon color={meta.color} size={11} strokeWidth={2.5} />
+              <Text style={[dv.roleChipTxt,{ color:meta.color }]}>{notif.sender.role}</Text>
+            </View>
+            <View style={dv.contactLine}>
+              <Phone color={T.n500} size={13} strokeWidth={2} />
+              <Text style={dv.contactTxt}>{notif.sender.phone}</Text>
+            </View>
+            <View style={dv.contactLine}>
+              <Mail color={T.n500} size={13} strokeWidth={2} />
+              <Text style={dv.contactTxt}>{notif.sender.email}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── Timestamp + Status ── */}
+        <View style={dv.metaBar}>
+          <View style={{ flexDirection:'row', alignItems:'center', gap:6, flex:1 }}>
+            <CalendarDays color={T.n500} size={14} strokeWidth={2} />
+            <Text style={dv.metaBarTxt}>{fmtFull(notif.createdAt)}</Text>
+          </View>
+          <StatusPill status={localStatus} />
+        </View>
+
+        {/* ── Message ── */}
+        <Text style={dv.secLabel}>MESSAGE</Text>
+        <View style={dv.msgCard}>
+          <Text style={dv.msgTxt}>{notif.message}</Text>
+        </View>
+
+        {/* ── Property ── */}
+        {notif.property && (
+          <>
+            <Text style={[dv.secLabel,{ marginTop:20 }]}>RELATED PROPERTY</Text>
+            <View style={dv.propCard}>
+              <Image source={{ uri:notif.property.image }} style={dv.propImg} resizeMode="cover" />
+              <View style={dv.propImgOverlay} />
+              <View style={dv.propTypeBadge}>
+                <Text style={dv.propTypeTxt}>{notif.property.type}</Text>
+              </View>
+              <View style={dv.propBody}>
+                <Text style={dv.propName}>{notif.property.name}</Text>
+                <View style={dv.propRow}>
+                  <MapPin color={T.n500} size={12} strokeWidth={2} />
+                  <Text style={dv.propLoc}>{notif.property.location}</Text>
+                </View>
+                <View style={dv.propStatRow}>
+                  <View style={dv.propStat}>
+                    <Home color={T.g600} size={12} strokeWidth={2} />
+                    <Text style={dv.propStatTxt}>{notif.property.units} Units</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </>
+        )}
+
+        {/* ── Offer Details ── */}
+        {notif.offer && (
+          <>
+            <Text style={[dv.secLabel,{ marginTop:20 }]}>OFFER DETAILS</Text>
+            <View style={dv.offerCard}>
+              {[
+                { label:'Commission', value:notif.offer.commission, Icon:TrendingUp },
+                { label:'Duration',   value:notif.offer.duration,   Icon:CalendarDays },
+                { label:'Start Date', value:notif.offer.startDate,  Icon:BadgeCheck },
+              ].map(({ label, value, Icon:OI }) => (
+                <View key={label} style={dv.offerRow}>
+                  <View style={dv.offerIconBox}><OI color={T.g700} size={16} strokeWidth={2} /></View>
+                  <View>
+                    <Text style={dv.offerLabel}>{label}</Text>
+                    <Text style={dv.offerValue}>{value}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* ── Accept / Reject ── */}
+        {(notif.type === 'hire_request' || notif.type === 'property_assignment') && (
+          <>
+            <Text style={[dv.secLabel,{ marginTop:20 }]}>RESPOND</Text>
+            {localStatus === 'pending' ? (
+              <View style={dv.actionRow}>
+                <TouchableOpacity
+                  style={[dv.declineBtn, !!actioning && dv.btnOff]}
+                  onPress={() => handleRespond('reject')}
+                  disabled={!!actioning}
+                  activeOpacity={0.85}
+                >
+                  {actioning === 'reject'
+                    ? <ActivityIndicator color={T.red} size="small" />
+                    : <><XCircle color={T.red} size={18} strokeWidth={2.5} /><Text style={dv.declineTxt}>Decline</Text></>
+                  }
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[dv.acceptBtn, !!actioning && dv.btnOff]}
+                  onPress={() => handleRespond('accept')}
+                  disabled={!!actioning}
+                  activeOpacity={0.85}
+                >
+                  {actioning === 'accept'
+                    ? <ActivityIndicator color={T.white} size="small" />
+                    : <><CheckCircle2 color={T.white} size={18} strokeWidth={2.5} /><Text style={dv.acceptTxt}>Accept</Text></>
+                  }
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={[dv.resolvedBanner,{
+                backgroundColor: localStatus === 'accepted' ? T.g100 : T.redBg,
+                borderColor:     localStatus === 'accepted' ? T.g200 : T.redBdr,
+              }]}>
+                {localStatus === 'accepted'
+                  ? <CheckCircle2 color={T.g700} size={18} strokeWidth={2.5} />
+                  : <XCircle color={T.red} size={18} strokeWidth={2.5} />
+                }
+                <Text style={[dv.resolvedTxt,{ color: localStatus === 'accepted' ? T.g800 : T.red }]}>
+                  {localStatus === 'accepted'
+                    ? 'You accepted this request. The builder has been notified.'
+                    : 'You declined this request. The builder has been notified.'}
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+
+        {/* ── Reply (Inquiry) ── */}
+        {notif.type === 'user_inquiry' && (
+          <>
+            <Text style={[dv.secLabel,{ marginTop:20 }]}>REPLY TO INQUIRY</Text>
+            <ReplyInput onSend={handleReply} />
+          </>
+        )}
+
+        {/* ── View Property CTA ── */}
+        {notif.property && (
+          <TouchableOpacity
+            style={dv.viewPropBtn}
+            onPress={() => Alert.alert('Navigate', `Opening ${notif.property.name}…`)}
+            activeOpacity={0.85}
+          >
+            <Eye color={T.g800} size={17} strokeWidth={2.5} />
+            <Text style={dv.viewPropTxt}>View Full Property Details</Text>
+            <ChevronRight color={T.g800} size={17} strokeWidth={2.5} />
+          </TouchableOpacity>
+        )}
+
+        <View style={{ height:36 }} />
+      </ScrollView>
+    </View>
+  );
+}
+
+const dv = StyleSheet.create({
+  scroll:       { paddingHorizontal:16, paddingTop:18, paddingBottom:24 },
+  hStatus:      { flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:11, paddingVertical:6, borderRadius:20 },
+  hStatusTxt:   { fontSize:12, fontWeight:'700' },
+  secLabel:     { fontSize:10, fontWeight:'800', color:T.n400, letterSpacing:1.2, marginBottom:10 },
+
+  // Sender card
+  senderCard:   { flexDirection:'row', gap:14, backgroundColor:T.white, borderRadius:16, padding:16, borderWidth:1.5, borderColor:T.n200, elevation:2, shadowColor:T.shadow, shadowOffset:{width:0,height:2}, shadowOpacity:1, shadowRadius:4, marginBottom:14 },
+  senderAvatar: { width:60, height:60, borderRadius:30, borderWidth:2.5, borderColor:T.g400 },
+  senderName:   { fontSize:16, fontWeight:'800', color:T.n900, letterSpacing:-0.3, marginBottom:6 },
+  roleChip:     { flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:9, paddingVertical:4, borderRadius:8, borderWidth:1, alignSelf:'flex-start', marginBottom:8 },
+  roleChipTxt:  { fontSize:11, fontWeight:'700' },
+  contactLine:  { flexDirection:'row', alignItems:'center', gap:7, marginBottom:4 },
+  contactTxt:   { fontSize:13, color:T.n600 },
+
+  // Meta bar
+  metaBar:      { flexDirection:'row', alignItems:'center', justifyContent:'space-between', backgroundColor:T.white, borderRadius:12, padding:12, borderWidth:1, borderColor:T.n200, marginBottom:20 },
+  metaBarTxt:   { fontSize:12, color:T.n600, flex:1 },
+
+  // Message
+  msgCard:      { backgroundColor:T.white, borderRadius:16, padding:18, borderWidth:1.5, borderColor:T.n200, borderLeftWidth:4, borderLeftColor:T.g600, marginBottom:4 },
+  msgTxt:       { fontSize:14, color:T.n700, lineHeight:22 },
+
+  // Property
+  propCard:     { borderRadius:18, overflow:'hidden', elevation:3, shadowColor:T.shadow, shadowOffset:{width:0,height:3}, shadowOpacity:1, shadowRadius:8 },
+  propImg:      { width:'100%', height:155 },
+  propImgOverlay:{ position:'absolute', top:0, left:0, right:0, height:155, backgroundColor:'rgba(0,0,0,0.1)' },
+  propTypeBadge:{ position:'absolute', top:12, left:12, backgroundColor:'rgba(27,94,59,0.85)', paddingHorizontal:10, paddingVertical:4, borderRadius:8 },
+  propTypeTxt:  { color:T.white, fontSize:11, fontWeight:'700' },
+  propBody:     { backgroundColor:T.white, padding:14 },
+  propName:     { fontSize:16, fontWeight:'800', color:T.n900, marginBottom:4 },
+  propRow:      { flexDirection:'row', alignItems:'center', gap:4, marginBottom:8 },
+  propLoc:      { fontSize:12, color:T.n500 },
+  propStatRow:  { flexDirection:'row' },
+  propStat:     { flexDirection:'row', alignItems:'center', gap:5, backgroundColor:T.g100, paddingHorizontal:9, paddingVertical:4, borderRadius:8 },
+  propStatTxt:  { fontSize:12, fontWeight:'600', color:T.g700 },
+
+  // Offer
+  offerCard:    { backgroundColor:T.white, borderRadius:16, padding:16, borderWidth:1.5, borderColor:T.g200, gap:14 },
+  offerRow:     { flexDirection:'row', alignItems:'center', gap:14 },
+  offerIconBox: { width:38, height:38, borderRadius:10, backgroundColor:T.g100, justifyContent:'center', alignItems:'center' },
+  offerLabel:   { fontSize:11, color:T.n500, fontWeight:'500', marginBottom:2 },
+  offerValue:   { fontSize:15, fontWeight:'800', color:T.n900 },
+
+  // Actions
+  actionRow:    { flexDirection:'row', gap:12 },
+  declineBtn:   { flex:1, flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, backgroundColor:T.redBg, borderWidth:2, borderColor:T.redBdr, borderRadius:14, paddingVertical:14 },
+  declineTxt:   { color:T.red, fontSize:15, fontWeight:'700' },
+  acceptBtn:    { flex:1, flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, backgroundColor:T.g800, borderRadius:14, paddingVertical:14, elevation:4, shadowColor:T.shadow, shadowOffset:{width:0,height:3}, shadowOpacity:1, shadowRadius:6 },
+  acceptTxt:    { color:T.white, fontSize:15, fontWeight:'700' },
+  btnOff:       { opacity:0.55 },
+  resolvedBanner:{ flexDirection:'row', alignItems:'flex-start', gap:10, padding:14, borderRadius:14, borderWidth:1.5 },
+  resolvedTxt:  { flex:1, fontSize:13, fontWeight:'600', lineHeight:18 },
+
+  // View property CTA
+  viewPropBtn:  { flexDirection:'row', alignItems:'center', gap:10, backgroundColor:T.g100, borderWidth:2, borderColor:T.g200, borderRadius:14, padding:16, marginTop:20 },
+  viewPropTxt:  { flex:1, fontSize:14, fontWeight:'700', color:T.g800 },
 });
 
-/* ══════════════════════════════════════════════
-   SCREEN-LEVEL STYLES
-══════════════════════════════════════════════ */
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: T.g50 },
-
-  // Header
-  header: {
-    backgroundColor: T.g800,
-    paddingTop: Platform.OS === 'ios' ? 58 : 28,
-    paddingBottom: 18,
-    paddingHorizontal: 20,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    marginBottom: 0,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: T.white, letterSpacing: -0.5 },
-  headerSub:   { fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
-  markAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  markAllTxt: { color: T.white, fontSize: 12, fontWeight: '700' },
-  summaryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  summaryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: T.g400,
-  },
-  summaryTxt: { fontSize: 12, color: 'rgba(255,255,255,0.85)', flex: 1, lineHeight: 17 },
-
-  // Tabs
-  tabsWrapper: {
-    backgroundColor: T.white,
-    borderBottomWidth: 1,
-    borderBottomColor: T.n200,
-    elevation: 2,
-    shadowColor: T.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-  },
-  tabs:       { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  tab:        { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 22, backgroundColor: T.n100, borderWidth: 1.5, borderColor: T.n200 },
-  tabActive:  { backgroundColor: T.g800, borderColor: T.g800 },
-  tabTxt:     { fontSize: 13, fontWeight: '700', color: T.n500 },
-  tabTxtActive:{ color: T.white },
-  tabBadge:   { backgroundColor: T.g200, borderRadius: 9, paddingHorizontal: 6, paddingVertical: 1 },
-  tabBadgeActive:{ backgroundColor: 'rgba(255,255,255,0.25)' },
-  tabBadgeTxt:{ fontSize: 11, fontWeight: '800', color: T.g700 },
-  tabBadgeTxtActive:{ color: T.white },
-
-  // Hint
-  hint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 2,
-  },
-  hintTxt: { fontSize: 11, color: T.g500, fontStyle: 'italic' },
-
-  // List
-  list:      { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 30 },
-  separator: { height: 10 },
-
-  // Empty
-  empty:       { alignItems: 'center', paddingTop: 70, paddingHorizontal: 32, gap: 12 },
-  emptyIconBox:{ width: 90, height: 90, borderRadius: 45, backgroundColor: T.g100, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  emptyTitle:  { fontSize: 18, fontWeight: '800', color: T.n900, letterSpacing: -0.3 },
-  emptySub:    { fontSize: 14, color: T.n500, textAlign: 'center', lineHeight: 20 },
-
-  // Footer
-  footer:     { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 20, paddingHorizontal: 20 },
-  footerLine: { flex: 1, height: 1, backgroundColor: T.n200 },
-  footerTxt:  { fontSize: 12, color: T.n400, fontWeight: '600' },
+/* ═══════════════════════════════════════════════════════════
+   SHARED STYLES
+═══════════════════════════════════════════════════════════ */
+const ss = StyleSheet.create({
+  root:           { flex:1, backgroundColor:T.g50 },
+  header:         { backgroundColor:T.g800, paddingTop:Platform.OS === 'ios' ? 58 : 28, paddingBottom:22, paddingHorizontal:20, flexDirection:'row', alignItems:'center', gap:14 },
+  iconBtn:        { width:40, height:40, borderRadius:12, backgroundColor:'rgba(255,255,255,0.15)', justifyContent:'center', alignItems:'center' },
+  headerTitle:    { fontSize:20, fontWeight:'800', color:T.white, letterSpacing:-0.4 },
+  headerSub:      { fontSize:12, color:'rgba(255,255,255,0.65)', marginTop:2 },
+  headerBadge:    { position:'absolute', top:Platform.OS === 'ios' ? 56 : 26, right:10, backgroundColor:T.red, width:18, height:18, borderRadius:9, justifyContent:'center', alignItems:'center', borderWidth:2, borderColor:T.g800 },
+  headerBadgeTxt: { fontSize:9, fontWeight:'900', color:T.white },
+  searchRow:      { paddingHorizontal:16, paddingTop:14, paddingBottom:4 },
+  searchBox:      { flexDirection:'row', alignItems:'center', gap:8, backgroundColor:T.white, borderWidth:1.5, borderColor:T.n300, borderRadius:14, paddingHorizontal:13, height:46 },
+  searchInput:    { flex:1, fontSize:14, color:T.n900, height:'100%' },
+  chips:          { paddingHorizontal:16, paddingVertical:10, gap:8 },
+  chip:           { flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:13, paddingVertical:7, borderRadius:22, backgroundColor:T.white, borderWidth:1.5, borderColor:T.n300 },
+  chipActive:     { backgroundColor:T.g800, borderColor:T.g800 },
+  chipTxt:        { fontSize:12, fontWeight:'600', color:T.n500 },
+  chipTxtActive:  { color:T.white },
+  chipDot:        { width:6, height:6, borderRadius:3, backgroundColor:T.g600 },
+  chipDotActive:  { backgroundColor:T.white },
+  chipBadge:      { backgroundColor:T.g200, borderRadius:10, paddingHorizontal:6, paddingVertical:1 },
+  chipBadgeActive:{ backgroundColor:'rgba(255,255,255,0.25)' },
+  chipBadgeTxt:   { fontSize:10, fontWeight:'800', color:T.g700 },
+  chipBadgeTxtActive:{ color:T.white },
+  empty:          { alignItems:'center', paddingTop:80, gap:12 },
+  emptyTitle:     { fontSize:17, fontWeight:'800', color:T.n600 },
+  emptySubtitle:  { fontSize:14, color:T.n400, textAlign:'center' },
 });
+
+/* ═══════════════════════════════════════════════════════════
+   MENU STYLES
+═══════════════════════════════════════════════════════════ */
+const mn = StyleSheet.create({
+  backdrop: { flex:1, backgroundColor:'rgba(0,0,0,0.18)' },
+  menu:     { position:'absolute', top:Platform.OS === 'ios' ? 102 : 72, right:16, backgroundColor:T.white, borderRadius:16, elevation:10, shadowColor:'rgba(0,0,0,0.2)', shadowOffset:{width:0,height:4}, shadowOpacity:1, shadowRadius:12, minWidth:210 },
+  item:     { flexDirection:'row', alignItems:'center', gap:12, paddingHorizontal:18, paddingVertical:14 },
+  itemTxt:  { fontSize:14, fontWeight:'600', color:T.n700 },
+  div:      { height:1, backgroundColor:T.n200 },
+});
+
+/* ═══════════════════════════════════════════════════════════
+   ROOT EXPORT – wires list ↔ detail navigation
+═══════════════════════════════════════════════════════════ */
+export default function AgentNotificationsScreen({ navigation, onBack }) {
+  const [notifs,   setNotifs]   = useState(NOTIFS_SEED);
+  const [selected, setSelected] = useState(null);
+
+  const openDetail = useCallback((notif) => {
+    // Mark as read immediately on open
+    setNotifs(p => p.map(n => n.id === notif.id ? { ...n, read:true } : n));
+    setSelected({ ...notif, read:true });
+  }, []);
+
+  const markAllRead = useCallback(() => {
+    setNotifs(p => p.map(n => ({ ...n, read:true })));
+  }, []);
+
+  const handleAction = useCallback((id, newStatus) => {
+    setNotifs(p => p.map(n => n.id === id ? { ...n, status:newStatus } : n));
+  }, []);
+
+  if (selected) {
+    return (
+      <NotificationDetail
+        notif={selected}
+        onBack={() => setSelected(null)}
+        onAction={handleAction}
+      />
+    );
+  }
+
+  return (
+    <NotificationList
+      notifs={notifs}
+      onOpen={openDetail}
+      onMarkAllRead={markAllRead}
+      onBack={() => navigation?.goBack?.() || onBack?.()}
+    />
+  );
+}

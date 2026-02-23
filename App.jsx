@@ -26,6 +26,7 @@ import AddPropertiesAgent from './modules/property/screens/AddPropertiesAgent';
 import AgentDashboard from './modules/agent/AgentDashboardScreen';
 import MyListingsScreen from './modules/property/screens/MyListingsScreen';
 import AgentNotificationsScreen from './modules/agent/AgentNotificationsScreen';
+import BuilderNotificationsScreen from './modules/builder/screens/BuilderNotificationsScreen';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
@@ -383,6 +384,14 @@ export default function App() {
       case 'agentNotifications':
         return (
           <AgentNotificationsScreen
+            navigation={navigation}
+            onBack={goBack}
+          />
+        );
+
+      case 'builderNotifications':
+        return (
+          <BuilderNotificationsScreen
             navigation={navigation}
             onBack={goBack}
           />

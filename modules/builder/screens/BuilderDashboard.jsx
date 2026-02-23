@@ -337,7 +337,7 @@ export default function BuilderDashboard({
               <View style={styles.topBarRight}>
                 <TouchableOpacity
                   style={styles.notificationButton}
-                  onPress={() => navigation.navigate('builderRequests')}
+                  onPress={() => navigation.navigate('builderNotifications')}
                 >
                   <Bell size={24} color="#FFFFFF" strokeWidth={2} />
                   <View style={styles.notificationBadge}>
