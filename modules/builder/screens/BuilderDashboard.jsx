@@ -55,6 +55,7 @@ export default function BuilderDashboard({
   onBack,
   onPropertyClick,
   onAddProperty,
+  onAssignAgent,
   onMyProperties,
 }) {
   // State management
@@ -337,7 +338,7 @@ export default function BuilderDashboard({
               <View style={styles.topBarRight}>
                 <TouchableOpacity
                   style={styles.notificationButton}
-                  onPress={() => navigation.navigate('builderRequests')}
+                  onPress={() => navigation.navigate('builderNotifications')}
                 >
                   <Bell size={24} color="#FFFFFF" strokeWidth={2} />
                   <View style={styles.notificationBadge}>
@@ -432,7 +433,7 @@ export default function BuilderDashboard({
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.secondaryButton}
-            onPress={onMyProperties}
+            onPress={onAssignAgent}
             activeOpacity={0.8}
           >
             <Building2 size={20} color="#FFFFFF" strokeWidth={2} />

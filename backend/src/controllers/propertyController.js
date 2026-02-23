@@ -44,9 +44,9 @@ exports.createProperty = async (req, res) => {
 exports.getVerifiedProperties = async (req, res) => {
     try {
         const [rows] = await pool.query(
-            `SELECT property_id, title, price, city, state, verification_status
+            `SELECT id, title, price, city, state, is_verified
              FROM properties
-             WHERE status = 'active' AND verification_status = 'verified'`
+             WHERE status = 'active' AND is_verified = TRUE`
         );
 
         res.json(rows);
@@ -131,6 +131,8 @@ exports.addProperty = async (req, res) => {
                 });
             }
 
+            const autoForHiringBuilder = !!req.body.auto_for_hiring_builder;
+
             // Validate builder exists and is a builder
             const [builderRows] = await connection.query(
                 "SELECT id FROM users WHERE id = ? AND role = 'builder' AND is_blocked = FALSE",
@@ -147,9 +149,31 @@ exports.addProperty = async (req, res) => {
 
             propertyOwnerId = builder_id;
             propertyOwnerRole = 'builder';
-            propertyStatus = 'blocked';
-            agentIdForRequest = uploaded_by;
-            builderIdForRequest = builder_id;
+
+            // If this builder has formally hired the agent, and the flag is set,
+            // auto-approve: property is active immediately, no manual approval step.
+            if (autoForHiringBuilder) {
+                const [relRows] = await connection.query(
+                    "SELECT id FROM builder_agents WHERE builder_id = ? AND agent_id = ?",
+                    [builder_id, uploaded_by]
+                );
+
+                if (relRows && relRows.length > 0) {
+                    propertyStatus = 'active';
+                    agentIdForRequest = uploaded_by;
+                    builderIdForRequest = builder_id;
+                } else {
+                    // Fallback to normal approval flow if not actually hired
+                    propertyStatus = 'blocked';
+                    agentIdForRequest = uploaded_by;
+                    builderIdForRequest = builder_id;
+                }
+            } else {
+                // Original behaviour: needs builder approval
+                propertyStatus = 'blocked';
+                agentIdForRequest = uploaded_by;
+                builderIdForRequest = builder_id;
+            }
         }
 
         // 1. Insert into properties table
@@ -180,15 +204,18 @@ exports.addProperty = async (req, res) => {
 
         const property_id = propertyResult.insertId;
 
-        // 1b. If agent added property, create approval request for builder
+        // 1b. If agent added property, create request record for builder
         let request_id = null;
         if (uploaded_by_role === 'agent') {
-            const [requestResult] = await connection.query(
-                `INSERT INTO property_requests (property_id, agent_id, builder_id, status)
-                 VALUES (?, ?, ?, 'pending')`,
-                [property_id, agentIdForRequest, builderIdForRequest]
-            );
-            request_id = requestResult.insertId;
+            if (agentIdForRequest && builderIdForRequest) {
+                const initialStatus = propertyStatus === 'active' ? 'approved' : 'pending';
+                const [requestResult] = await connection.query(
+                    `INSERT INTO property_requests (property_id, agent_id, builder_id, status)
+                     VALUES (?, ?, ?, ?)`,
+                    [property_id, agentIdForRequest, builderIdForRequest, initialStatus]
+                );
+                request_id = requestResult.insertId;
+            }
         }
 
         // 2. Insert property images
@@ -236,7 +263,9 @@ exports.addProperty = async (req, res) => {
         res.status(201).json({
             success: true,
             message: uploaded_by_role === 'agent'
-                ? 'Property saved and sent to builder for approval'
+                ? (propertyStatus === 'active'
+                    ? 'Property added successfully for your builder'
+                    : 'Property saved and sent to builder for approval')
                 : 'Property added successfully',
             property_id,
             request_id,
@@ -525,7 +554,7 @@ exports.getAllProperties = async (req, res) => {
                 area_sqft: prop.area_sqft,
                 description: prop.description,
                 status: prop.status,
-                verificationStatus: prop.verification_status,
+                isVerified: Boolean(prop.is_verified),
                 isFavorited: Boolean(prop.is_favorited),
                 viewCount: prop.view_count,
                 favoriteCount: prop.favorite_count,
@@ -583,7 +612,7 @@ exports.getPropertyById = async (req, res) => {
             LEFT JOIN users u ON p.uploaded_by = u.id
             LEFT JOIN property_images pi ON p.id = pi.property_id
             LEFT JOIN property_features pf ON p.id = pf.property_id
-            WHERE p.id = ? AND p.is_active = TRUE
+            WHERE p.id = ?
             GROUP BY p.id`,
             [req.user?.id || 0, id]
         );
@@ -619,7 +648,7 @@ exports.getPropertyById = async (req, res) => {
                 sqft: property.area_sqft,
                 description: property.description,
                 status: property.status,
-                verificationStatus: property.verification_status,
+                isVerified: Boolean(property.is_verified),
                 isFavorited: Boolean(property.is_favorited),
                 createdAt: property.created_at,
                 updatedAt: property.updated_at,
@@ -668,7 +697,7 @@ exports.searchProperties = async (req, res) => {
                     WHERE property_id = p.property_id AND user_id = ?
                 ) as is_favorited
             FROM properties p
-            WHERE p.is_active = TRUE AND p.status = 'active'
+            WHERE p.status = 'active'
             AND (
                 p.title LIKE ? OR
                 p.description LIKE ? OR

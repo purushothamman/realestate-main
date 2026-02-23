@@ -214,7 +214,7 @@ exports.approveRequest = async (req, res) => {
     await connection.beginTransaction();
 
     const [reqRows] = await connection.query(
-      "SELECT id, property_id, status FROM property_requests WHERE id = ? AND builder_id = ? FOR UPDATE",
+      "SELECT id, agent_id, property_id, status FROM property_requests WHERE id = ? AND builder_id = ? FOR UPDATE",
       [requestId, builderId]
     );
 
@@ -236,9 +236,19 @@ exports.approveRequest = async (req, res) => {
     );
 
     await connection.query(
-      "UPDATE properties SET status = 'active', updated_at = NOW() WHERE id = ?",
+      "UPDATE properties SET status = 'active', is_verified = TRUE, updated_at = NOW() WHERE id = ?",
       [propertyId]
     );
+
+    // Notify the agent that their property was approved and is now live
+    const agentId = reqRows[0].agent_id;
+    if (agentId) {
+      await connection.query(
+        `INSERT INTO notifications (user_id, type, title, body, related_entity_type, related_entity_id)
+         VALUES (?, 'property_approved', 'Property Approved', 'Your property has been approved and is now live!', 'property', ?)`,
+        [agentId, propertyId]
+      );
+    }
 
     await connection.commit();
     res.json({ success: true, message: "Request approved. Property is now active.", property_id: propertyId });

@@ -1,4 +1,5 @@
 // backend/src/middlewares/authMiddleware.js
+const jwt = require("jsonwebtoken");
 /**
  * Middleware to protect routes - requires valid JWT token
  * Usage: router.get('/protected-route', protect, yourController)
@@ -109,7 +110,6 @@ exports.allow = (...allowedRoles) => {
 };
 
 // backend/src/middleware/authMiddleware.js
-const jwt = require("jsonwebtoken");
 
 exports.authenticate = (req, res, next) => {
     try {

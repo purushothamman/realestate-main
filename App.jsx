@@ -21,16 +21,19 @@ import BuilderInquiriesScreen from './modules/builder/screens/BuilderInquiriesSc
 import PaymentScreen from './store/PaymentScreen';
 import ChatScreen from './modules/chat/screens/ChatScreen';
 import ChatListScreen from './modules/chat/screens/ChatListScreen';
-import { API_BASE_URL } from './utils/api';
-
 import AddPropertiesAgent from './modules/property/screens/AddPropertiesAgent';
 import AgentDashboard from './modules/agent/AgentDashboardScreen';
 import MyListingsScreen from './modules/property/screens/MyListingsScreen';
 import UserNavigator from './navigation/UserNavigator';
 import FavoritesScreen from './modules/user/screens/FavoritesScreen';
+import AssignAgentScreen from './modules/builder/screens/AssignAgentScreen';
+import AgentNotificationsScreen from './modules/agent/AgentNotificationsScreen';
+import BuilderNotificationsScreen from './modules/builder/screens/BuilderNotificationsScreen';
+
 
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import { API_BASE_URL } from './utils/api';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
@@ -383,6 +386,15 @@ export default function App() {
               navigateTo('propertyDetail', { property })
             }
             onAddProperty={() => navigateTo('addProperty')}
+            onAssignAgent={() => navigateTo('assignAgent')}
+          />
+        );
+
+      case 'assignAgent':
+        return (
+          <AssignAgentScreen
+            navigation={navigation}
+            onBack={goBack}
           />
         );
 
@@ -419,6 +431,23 @@ export default function App() {
             onBack={goBack}
           />
         );
+
+      case 'agentNotifications':
+        return (
+          <AgentNotificationsScreen
+            navigation={navigation}
+            onBack={goBack}
+          />
+        );
+
+      case 'builderNotifications':
+        return (
+          <BuilderNotificationsScreen
+            navigation={navigation}
+            onBack={goBack}
+          />
+        );
+
 
       case 'addProperty':
         return (
@@ -539,31 +568,28 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <View style={styles.container}>
-        {renderScreen()}
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+        <View style={styles.container}>
+          {renderScreen()}
 
-        {/* ✅ Global Navbar */}
-        {showNavbarScreens.includes(currentScreen) && (
-          <UserNavigator
-            activeTab={currentScreen}
-            onTabPress={(tab) => {
-              console.log('📱 Tab pressed on global navbar:', tab);
-              if (tab === 'home') {
+          {showNavbarScreens.includes(currentScreen) && (
+            <UserNavigator
+              activeTab={currentScreen}
+              onTabPress={(tab) => {
+                console.log('📱 Tab pressed on global navbar:', tab);
 
-                navigation.navigate('home');
-              }
-              if (tab === 'search') navigation.navigate('searchResults');
-              if (tab === 'favorites') navigation.navigate('favorites');
-              if (tab === 'messages') navigation.navigate('messages');
-              if (tab === 'profile') navigation.navigate('profile');
-            }}
-
-            messageCount={messageCount}
-            userRole={userData?.role}
-
-          />
-        )}
-      </View>
+                if (tab === 'home') navigation.navigate('home');
+                if (tab === 'search') navigation.navigate('searchResults');
+                if (tab === 'favorites') navigation.navigate('favorites');
+                if (tab === 'messages') navigation.navigate('messages');
+                if (tab === 'profile') navigation.navigate('profile');
+              }}
+              messageCount={messageCount}
+              userRole={userData?.role}
+            />
+          )}
+        </View>
+      </SafeAreaView>
     </SafeAreaProvider>
   );
 }
