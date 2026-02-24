@@ -32,7 +32,7 @@ import {
   Trash2,
   ArrowLeft,
 } from 'lucide-react-native';
-import { API_BASE_URL } from '../../../utils/api';
+import { API_BASE_URL, getImageUrl } from '../../../utils/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -162,7 +162,7 @@ const ProfileScreen = ({
           <View style={styles.profileImageContainer}>
             <View style={styles.profileImageWrapper}>
               <Image
-                source={{ uri: userData.profileImage }}
+                source={{ uri: getImageUrl(userData.profileImage) }}
                 style={styles.profileImage}
               />
             </View>

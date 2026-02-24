@@ -45,7 +45,7 @@ import {
 } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../../../utils/api';
+import { API_BASE_URL, getImageUrl } from '../../../utils/api';
 
 
 const { width, height } = Dimensions.get('window');
@@ -340,7 +340,7 @@ const ProfileScreen = ({
             <View style={styles.profileImageContainer}>
               <View style={styles.profileImageWrapper}>
                 <Image
-                  source={userData.profileImage ? { uri: userData.profileImage } : { uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' }}
+                  source={userData.profileImage ? { uri: getImageUrl(userData.profileImage) } : { uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' }}
                   style={styles.profileImage}
                 />
                 <View style={styles.onlineIndicator} />
