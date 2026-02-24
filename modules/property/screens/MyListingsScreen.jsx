@@ -30,7 +30,7 @@ import {
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
-import { API_BASE_URL } from '../../../utils/api';
+import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../utils/api';
 
 
 const AnimatedCard = ({ item, navigation, statusStyle, formatPrice, index }) => {
@@ -74,7 +74,7 @@ const AnimatedCard = ({ item, navigation, statusStyle, formatPrice, index }) => 
                 {/* Image Container with Gradient Overlay */}
                 <View style={styles.imageContainer}>
                     <Image
-                        source={{ uri: item.primaryImage || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800' }}
+                        source={{ uri: getImageUrl(item.primaryImage) || DEFAULT_PROPERTY_IMAGE }}
                         style={styles.cardImage}
                     />
                     <LinearGradient

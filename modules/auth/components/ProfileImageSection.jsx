@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { User, Camera, Upload, AlertCircle } from 'lucide-react-native';
+import { getImageUrl } from '../../../utils/api';
 
 export const ProfileImageSection = React.memo(({
     profileImage,
@@ -18,7 +19,7 @@ export const ProfileImageSection = React.memo(({
                 <View style={styles.profileImageWrapper}>
                     {profileImage ? (
                         <Image
-                            source={{ uri: profileImage }}
+                            source={{ uri: getImageUrl(profileImage) }}
                             style={styles.profileImage}
                             resizeMode="cover"
                         />

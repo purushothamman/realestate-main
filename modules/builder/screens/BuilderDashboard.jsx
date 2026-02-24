@@ -34,7 +34,7 @@ import {
   Check,
   X,
 } from 'lucide-react-native';
-import { API_BASE_URL } from '../../../utils/api';
+import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../utils/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -263,7 +263,12 @@ export default function BuilderDashboard({
   const handlePropertyClick = (listing) => {
     console.log('Property clicked:', listing.title);
     if (onPropertyClick) {
-      onPropertyClick(listing);
+      // Ensure the image URL is resolved before passing it to the detail screen
+      const processedListing = {
+        ...listing,
+        image: getImageUrl(listing.image || listing.imageUrl) || DEFAULT_PROPERTY_IMAGE
+      };
+      onPropertyClick(processedListing);
     }
   };
 

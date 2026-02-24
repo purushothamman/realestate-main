@@ -21,7 +21,7 @@ import {
     Building2,
     Clock
 } from 'lucide-react-native';
-import { API_BASE_URL } from '../../../utils/api';
+import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../utils/api';
 
 // const getApiUrl = () => {
 //     if (Platform.OS === 'android') {
@@ -143,7 +143,7 @@ export default function BuilderInquiriesScreen({ navigation, onBack }) {
                         <View key={inquiry.id} style={styles.card}>
                             <View style={styles.cardMain}>
                                 <Image
-                                    source={{ uri: inquiry.property_images?.[0] || 'https://via.placeholder.com/100' }}
+                                    source={{ uri: getImageUrl(inquiry.property_images?.[0] || inquiry.property_image) || DEFAULT_PROPERTY_IMAGE }}
                                     style={styles.propertyImage}
                                 />
                                 <View style={styles.cardInfo}>

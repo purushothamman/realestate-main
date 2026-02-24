@@ -897,7 +897,7 @@ module.exports.register = async (req, res) => {
                 const filename = profileImage.split('/').pop();
                 const safeEmail = email.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
                 const uploadsDir = path.join(__dirname, '..', '..', '..', 'uploads');
-                const profileDir = path.join(__dirname, '..', '..', '..', 'images_rs', 'profiles', `${userId}_${safeEmail}`);
+                const profileDir = path.join(__dirname, '..', 'images_rs', 'profiles', `${userId}_${safeEmail}`);
 
                 fs.mkdirSync(profileDir, { recursive: true });
 

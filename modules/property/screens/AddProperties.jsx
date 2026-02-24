@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -12,6 +12,7 @@ import {
     StatusBar,
     Platform,
     Alert,
+    KeyboardAvoidingView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -40,6 +41,191 @@ const { width } = Dimensions.get('window');
 import { API_BASE_URL } from '../../../utils/api';
 
 
+const ShimmerOverlay = React.memo(() => {
+    const shimmerAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const shimmerLoop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(shimmerAnim, {
+                    toValue: 1,
+                    duration: 2000,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(shimmerAnim, {
+                    toValue: 0,
+                    duration: 2000,
+                    useNativeDriver: true,
+                }),
+            ])
+        );
+        shimmerLoop.start();
+        return () => shimmerLoop.stop();
+    }, [shimmerAnim]);
+
+    const shimmerTranslate = shimmerAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [-200, 200],
+    });
+
+    return (
+        <Animated.View
+            style={[
+                styles.shimmerOverlay,
+                {
+                    transform: [{ translateX: shimmerTranslate }],
+                },
+            ]}
+        />
+    );
+});
+
+const AnimatedHeader = React.memo(({ headerAnim, onBack }) => (
+    <Animated.View
+        style={[
+            styles.header,
+            {
+                opacity: headerAnim,
+                transform: [
+                    {
+                        translateY: headerAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-50, 0],
+                        }),
+                    },
+                ],
+            },
+        ]}
+    >
+        <Image
+            source={{
+                uri: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600',
+            }}
+            style={styles.headerImage}
+        />
+        <View style={styles.headerOverlay} />
+        <ShimmerOverlay />
+
+        <View style={styles.headerContent}>
+            <View style={styles.topBar}>
+                <TouchableOpacity
+                    onPress={onBack}
+                    style={styles.backButton}
+                    activeOpacity={0.7}
+                >
+                    <ArrowLeft color="#fff" size={20} strokeWidth={2.5} />
+                </TouchableOpacity>
+                <View style={styles.logoContainer}>
+                    <View style={styles.logoIcon}>
+                        <Building2 color="#2D6A4F" size={18} strokeWidth={2.5} />
+                    </View>
+                    <Text style={styles.logoText}>EstateHub</Text>
+                </View>
+            </View>
+
+            <View style={styles.titleSection}>
+                <View style={styles.titleRow}>
+                    <Sparkles color="#FCD34D" size={24} />
+                    <Text style={styles.title}>Add New Property</Text>
+                </View>
+                <Text style={styles.subtitle}>
+                    List your property in minutes and reach thousands of buyers
+                </Text>
+            </View>
+        </View>
+    </Animated.View>
+));
+
+const PropertyTypeButton = React.memo(({ type, isSelected, onPress }) => {
+    const Icon = type.icon;
+    return (
+        <TouchableOpacity
+            onPress={() => onPress(type.id)}
+            style={[
+                styles.optionButton,
+                isSelected && styles.optionButtonActive,
+            ]}
+            activeOpacity={0.7}
+        >
+            <Icon
+                color={isSelected ? '#2D6A4F' : '#6B7280'}
+                size={18}
+                strokeWidth={2.5}
+            />
+            <Text
+                style={[
+                    styles.optionText,
+                    isSelected && styles.optionTextActive,
+                ]}
+            >
+                {type.label}
+            </Text>
+            {isSelected && (
+                <CheckCircle2 color="#2D6A4F" size={16} fill="#2D6A4F" />
+            )}
+        </TouchableOpacity>
+    );
+});
+
+const AmenityButton = React.memo(({ amenity, isSelected, onPress }) => {
+    const Icon = amenity.icon;
+    return (
+        <TouchableOpacity
+            onPress={() => onPress(amenity.id)}
+            style={[
+                styles.amenityButton,
+                isSelected && styles.amenityButtonActive,
+            ]}
+            activeOpacity={0.7}
+        >
+            <Icon
+                color={isSelected ? '#2D6A4F' : '#6B7280'}
+                size={16}
+                strokeWidth={2.5}
+            />
+            <Text
+                style={[
+                    styles.amenityText,
+                    isSelected && styles.amenityTextActive,
+                ]}
+            >
+                {amenity.label}
+            </Text>
+            {isSelected && (
+                <Check color="#2D6A4F" size={14} strokeWidth={3} />
+            )}
+        </TouchableOpacity>
+    );
+});
+
+const FormSection = React.memo(({ children, title, icon: Icon, iconBg, anim, isFirst = false }) => (
+    <Animated.View
+        style={[
+            styles.section,
+            !isFirst && styles.sectionBorder,
+            {
+                opacity: anim,
+                transform: [
+                    {
+                        translateX: anim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [-20, 0],
+                        }),
+                    },
+                ],
+            },
+        ]}
+    >
+        <View style={styles.sectionHeader}>
+            <View style={[styles.sectionIconBox, iconBg && { backgroundColor: iconBg }]}>
+                <Icon color={iconBg === '#EFF6FF' ? '#3B82F6' : iconBg === '#FEF3C7' ? '#F59E0B' : iconBg === '#F3E8FF' ? '#A855F7' : '#2D6A4F'} size={20} />
+            </View>
+            <Text style={styles.sectionTitle}>{title}</Text>
+        </View>
+        {children}
+    </Animated.View>
+));
+
 const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
     const [propertyData, setPropertyData] = useState({
         title: '',
@@ -55,13 +241,13 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
     });
 
     const [uploadedImages, setUploadedImages] = useState([]);
+    const [focusedInput, setFocusedInput] = useState(null);
 
     // Animation values
     const headerAnim = useRef(new Animated.Value(0)).current;
     const contentAnim = useRef(new Animated.Value(50)).current;
     const buttonScale = useRef(new Animated.Value(1)).current;
     const fabAnim = useRef(new Animated.Value(0)).current;
-    const shimmerAnim = useRef(new Animated.Value(0)).current;
 
     // Section animations
     const sectionAnims = useRef(
@@ -104,23 +290,7 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
             useNativeDriver: true,
         }).start();
 
-        // Shimmer effect loop
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(shimmerAnim, {
-                    toValue: 1,
-                    duration: 2000,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(shimmerAnim, {
-                    toValue: 0,
-                    duration: 2000,
-                    useNativeDriver: true,
-                }),
-            ])
-        ).start();
     }, []);
-
     const propertyTypes = [
         { id: 'apartment', label: 'Apartment', icon: Building2 },
         { id: 'villa', label: 'Villa', icon: Home },
@@ -263,34 +433,18 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
         });
     };
 
-    const toggleAmenity = (amenityId) => {
-        const scaleAnim = new Animated.Value(1);
-        Animated.sequence([
-            Animated.spring(scaleAnim, {
-                toValue: 1.1,
-                tension: 100,
-                friction: 3,
-                useNativeDriver: true,
-            }),
-            Animated.spring(scaleAnim, {
-                toValue: 1,
-                tension: 100,
-                friction: 3,
-                useNativeDriver: true,
-            }),
-        ]).start();
-
+    const toggleAmenity = useCallback((amenityId) => {
         setPropertyData((prev) => ({
             ...prev,
             amenities: prev.amenities.includes(amenityId)
                 ? prev.amenities.filter((id) => id !== amenityId)
                 : [...prev.amenities, amenityId],
         }));
-    };
+    }, []);
 
-    const handleInputChange = (field, value) => {
+    const handleInputChange = useCallback((field, value) => {
         setPropertyData((prev) => ({ ...prev, [field]: value }));
-    };
+    }, []);
 
     const handlePublish = async () => {
         try {
@@ -413,78 +567,19 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
         );
     };
 
-    const shimmerTranslate = shimmerAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [-200, 200],
-    });
 
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
             <StatusBar barStyle="light-content" backgroundColor="#2D6A4F" />
 
-            {/* Animated Header */}
-            <Animated.View
-                style={[
-                    styles.header,
-                    {
-                        opacity: headerAnim,
-                        transform: [
-                            {
-                                translateY: headerAnim.interpolate({
-                                    inputRange: [0, 1],
-                                    outputRange: [-50, 0],
-                                }),
-                            },
-                        ],
-                    },
-                ]}
-            >
-                <Image
-                    source={{
-                        uri: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600',
-                    }}
-                    style={styles.headerImage}
-                />
-                <View style={styles.headerOverlay} />
-
-                {/* Animated shimmer overlay */}
-                <Animated.View
-                    style={[
-                        styles.shimmerOverlay,
-                        {
-                            transform: [{ translateX: shimmerTranslate }],
-                        },
-                    ]}
-                />
-
-                <View style={styles.headerContent}>
-                    <View style={styles.topBar}>
-                        <TouchableOpacity
-                            onPress={onBack}
-                            style={styles.backButton}
-                            activeOpacity={0.7}
-                        >
-                            <ArrowLeft color="#fff" size={20} strokeWidth={2.5} />
-                        </TouchableOpacity>
-                        <View style={styles.logoContainer}>
-                            <View style={styles.logoIcon}>
-                                <Building2 color="#2D6A4F" size={18} strokeWidth={2.5} />
-                            </View>
-                            <Text style={styles.logoText}>EstateHub</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.titleSection}>
-                        <View style={styles.titleRow}>
-                            <Sparkles color="#FCD34D" size={24} />
-                            <Text style={styles.title}>Add New Property</Text>
-                        </View>
-                        <Text style={styles.subtitle}>
-                            List your property in minutes and reach thousands of buyers
-                        </Text>
-                    </View>
-                </View>
-            </Animated.View>
+            <AnimatedHeader
+                headerAnim={headerAnim}
+                onBack={onBack}
+            />
 
             {/* Main Content */}
             <ScrollView
@@ -517,35 +612,18 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                         <Text style={styles.progressText}>Step 1 of 5</Text>
                     </View>
 
-                    {/* Basic Property Details */}
-                    <Animated.View
-                        style={[
-                            styles.section,
-                            {
-                                opacity: sectionAnims[0],
-                                transform: [
-                                    {
-                                        translateX: sectionAnims[0].interpolate({
-                                            inputRange: [0, 1],
-                                            outputRange: [-20, 0],
-                                        }),
-                                    },
-                                ],
-                            },
-                        ]}
+                    <FormSection
+                        title="Basic Property Details"
+                        icon={Building2}
+                        anim={sectionAnims[0]}
+                        isFirst
                     >
-                        <View style={styles.sectionHeader}>
-                            <View style={styles.sectionIconBox}>
-                                <Building2 color="#2D6A4F" size={20} />
-                            </View>
-                            <Text style={styles.sectionTitle}>Basic Property Details</Text>
-                        </View>
-
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Property Title *</Text>
                             <Animated.View
                                 style={[
                                     styles.inputWrapper,
+                                    focusedInput === 'title' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -554,6 +632,8 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     placeholderTextColor="#9CA3AF"
                                     value={propertyData.title}
                                     onChangeText={(value) => handleInputChange('title', value)}
+                                    onFocus={() => setFocusedInput('title')}
+                                    onBlur={() => setFocusedInput(null)}
                                 />
                             </Animated.View>
                         </View>
@@ -561,38 +641,14 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Property Type *</Text>
                             <View style={styles.optionsGrid}>
-                                {propertyTypes.map((type) => {
-                                    const Icon = type.icon;
-                                    const isSelected = propertyData.propertyType === type.id;
-                                    return (
-                                        <TouchableOpacity
-                                            key={type.id}
-                                            onPress={() => handleInputChange('propertyType', type.id)}
-                                            style={[
-                                                styles.optionButton,
-                                                isSelected && styles.optionButtonActive,
-                                            ]}
-                                            activeOpacity={0.7}
-                                        >
-                                            <Icon
-                                                color={isSelected ? '#2D6A4F' : '#6B7280'}
-                                                size={18}
-                                                strokeWidth={2.5}
-                                            />
-                                            <Text
-                                                style={[
-                                                    styles.optionText,
-                                                    isSelected && styles.optionTextActive,
-                                                ]}
-                                            >
-                                                {type.label}
-                                            </Text>
-                                            {isSelected && (
-                                                <CheckCircle2 color="#2D6A4F" size={16} fill="#2D6A4F" />
-                                            )}
-                                        </TouchableOpacity>
-                                    );
-                                })}
+                                {propertyTypes.map((type) => (
+                                    <PropertyTypeButton
+                                        key={type.id}
+                                        type={type}
+                                        isSelected={propertyData.propertyType === type.id}
+                                        onPress={(id) => handleInputChange('propertyType', id)}
+                                    />
+                                ))}
                             </View>
                         </View>
 
@@ -643,38 +699,21 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                 </TouchableOpacity>
                             </View>
                         </View>
-                    </Animated.View>
+                    </FormSection>
 
                     {/* Location Details */}
-                    <Animated.View
-                        style={[
-                            styles.section,
-                            styles.sectionBorder,
-                            {
-                                opacity: sectionAnims[1],
-                                transform: [
-                                    {
-                                        translateX: sectionAnims[1].interpolate({
-                                            inputRange: [0, 1],
-                                            outputRange: [-20, 0],
-                                        }),
-                                    },
-                                ],
-                            },
-                        ]}
+                    <FormSection
+                        title="Location Details"
+                        icon={MapPin}
+                        iconBg="#EFF6FF"
+                        anim={sectionAnims[1]}
                     >
-                        <View style={styles.sectionHeader}>
-                            <View style={[styles.sectionIconBox, { backgroundColor: '#EFF6FF' }]}>
-                                <MapPin color="#3B82F6" size={20} />
-                            </View>
-                            <Text style={styles.sectionTitle}>Location Details</Text>
-                        </View>
-
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>City / Area *</Text>
                             <View
                                 style={[
                                     styles.inputWrapper,
+                                    focusedInput === 'city' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -683,6 +722,8 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     placeholderTextColor="#9CA3AF"
                                     value={propertyData.city}
                                     onChangeText={(value) => handleInputChange('city', value)}
+                                    onFocus={() => setFocusedInput('city')}
+                                    onBlur={() => setFocusedInput(null)}
                                 />
                                 <MapPin color="#9CA3AF" size={18} />
                             </View>
@@ -693,6 +734,7 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                             <View
                                 style={[
                                     styles.inputWrapper,
+                                    focusedInput === 'address' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -701,36 +743,20 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     placeholderTextColor="#9CA3AF"
                                     value={propertyData.address}
                                     onChangeText={(value) => handleInputChange('address', value)}
+                                    onFocus={() => setFocusedInput('address')}
+                                    onBlur={() => setFocusedInput(null)}
                                 />
                             </View>
                         </View>
-                    </Animated.View>
+                    </FormSection>
 
                     {/* Pricing & Size */}
-                    <Animated.View
-                        style={[
-                            styles.section,
-                            styles.sectionBorder,
-                            {
-                                opacity: sectionAnims[2],
-                                transform: [
-                                    {
-                                        translateX: sectionAnims[2].interpolate({
-                                            inputRange: [0, 1],
-                                            outputRange: [-20, 0],
-                                        }),
-                                    },
-                                ],
-                            },
-                        ]}
+                    <FormSection
+                        title="Pricing & Size"
+                        icon={DollarSign}
+                        iconBg="#FEF3C7"
+                        anim={sectionAnims[2]}
                     >
-                        <View style={styles.sectionHeader}>
-                            <View style={[styles.sectionIconBox, { backgroundColor: '#FEF3C7' }]}>
-                                <DollarSign color="#F59E0B" size={20} />
-                            </View>
-                            <Text style={styles.sectionTitle}>Pricing & Size</Text>
-                        </View>
-
                         <View style={styles.rowInputs}>
                             <View style={styles.halfInput}>
                                 <Text style={styles.label}>
@@ -739,6 +765,7 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                 <View
                                     style={[
                                         styles.priceInputWrapper,
+                                        focusedInput === 'price' && styles.inputWrapperFocused,
                                     ]}
                                 >
                                     <Text style={styles.priceSymbol}>$</Text>
@@ -749,6 +776,8 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                         keyboardType="numeric"
                                         value={propertyData.price}
                                         onChangeText={(value) => handleInputChange('price', value)}
+                                        onFocus={() => setFocusedInput('price')}
+                                        onBlur={() => setFocusedInput(null)}
                                     />
                                 </View>
                             </View>
@@ -758,6 +787,7 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                 <View
                                     style={[
                                         styles.inputWrapper,
+                                        focusedInput === 'area' && styles.inputWrapperFocused,
                                     ]}
                                 >
                                     <TextInput
@@ -767,37 +797,21 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                         keyboardType="numeric"
                                         value={propertyData.area}
                                         onChangeText={(value) => handleInputChange('area', value)}
+                                        onFocus={() => setFocusedInput('area')}
+                                        onBlur={() => setFocusedInput(null)}
                                     />
                                 </View>
                             </View>
                         </View>
-                    </Animated.View>
+                    </FormSection>
 
                     {/* Property Images */}
-                    <Animated.View
-                        style={[
-                            styles.section,
-                            styles.sectionBorder,
-                            {
-                                opacity: sectionAnims[3],
-                                transform: [
-                                    {
-                                        translateX: sectionAnims[3].interpolate({
-                                            inputRange: [0, 1],
-                                            outputRange: [-20, 0],
-                                        }),
-                                    },
-                                ],
-                            },
-                        ]}
+                    <FormSection
+                        title="Property Images"
+                        icon={ImageIcon}
+                        iconBg="#F3E8FF"
+                        anim={sectionAnims[3]}
                     >
-                        <View style={styles.sectionHeader}>
-                            <View style={[styles.sectionIconBox, { backgroundColor: '#F3E8FF' }]}>
-                                <ImageIcon color="#A855F7" size={20} />
-                            </View>
-                            <Text style={styles.sectionTitle}>Property Images</Text>
-                        </View>
-
                         <View style={styles.imageGrid}>
                             {uploadedImages.map((image, index) => (
                                 <View key={index} style={styles.imageBox}>
@@ -840,33 +854,20 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                 Add up to 6 images • First image will be cover photo
                             </Text>
                         </View>
-                    </Animated.View>
+                    </FormSection>
 
                     {/* Additional Information */}
-                    <Animated.View
-                        style={[
-                            styles.section,
-                            styles.sectionBorder,
-                            {
-                                opacity: sectionAnims[4],
-                                transform: [
-                                    {
-                                        translateX: sectionAnims[4].interpolate({
-                                            inputRange: [0, 1],
-                                            outputRange: [-20, 0],
-                                        }),
-                                    },
-                                ],
-                            },
-                        ]}
+                    <FormSection
+                        title="Additional Information"
+                        icon={Sparkles}
+                        anim={sectionAnims[4]}
                     >
-                        <Text style={styles.sectionTitle}>Additional Information</Text>
-
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Description (Optional)</Text>
                             <View
                                 style={[
                                     styles.textAreaWrapper,
+                                    focusedInput === 'description' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -878,6 +879,8 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     textAlignVertical="top"
                                     value={propertyData.description}
                                     onChangeText={(value) => handleInputChange('description', value)}
+                                    onFocus={() => setFocusedInput('description')}
+                                    onBlur={() => setFocusedInput(null)}
                                 />
                             </View>
                         </View>
@@ -885,41 +888,17 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Amenities (Optional)</Text>
                             <View style={styles.amenitiesGrid}>
-                                {amenitiesList.map((amenity) => {
-                                    const Icon = amenity.icon;
-                                    const isSelected = propertyData.amenities.includes(amenity.id);
-                                    return (
-                                        <TouchableOpacity
-                                            key={amenity.id}
-                                            onPress={() => toggleAmenity(amenity.id)}
-                                            style={[
-                                                styles.amenityButton,
-                                                isSelected && styles.amenityButtonActive,
-                                            ]}
-                                            activeOpacity={0.7}
-                                        >
-                                            <Icon
-                                                color={isSelected ? '#2D6A4F' : '#6B7280'}
-                                                size={16}
-                                                strokeWidth={2.5}
-                                            />
-                                            <Text
-                                                style={[
-                                                    styles.amenityText,
-                                                    isSelected && styles.amenityTextActive,
-                                                ]}
-                                            >
-                                                {amenity.label}
-                                            </Text>
-                                            {isSelected && (
-                                                <Check color="#2D6A4F" size={14} strokeWidth={3} />
-                                            )}
-                                        </TouchableOpacity>
-                                    );
-                                })}
+                                {amenitiesList.map((amenity) => (
+                                    <AmenityButton
+                                        key={amenity.id}
+                                        amenity={amenity}
+                                        isSelected={propertyData.amenities.includes(amenity.id)}
+                                        onPress={toggleAmenity}
+                                    />
+                                ))}
                             </View>
                         </View>
-                    </Animated.View>
+                    </FormSection>
                 </Animated.View>
 
                 <View style={{ height: 180 }} />
@@ -972,7 +951,7 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                     </TouchableOpacity>
                 </View>
             </Animated.View>
-        </View>
+        </KeyboardAvoidingView>
     );
 };
 
@@ -1115,7 +1094,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 20,
     },
-    ssectionIconBox: {
+    sectionIconBox: {
         width: 40,
         height: 40,
         borderRadius: 12,

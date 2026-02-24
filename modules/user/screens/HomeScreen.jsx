@@ -32,7 +32,7 @@ import {
 } from 'lucide-react-native';
 
 // Import UserNavigator component
-import { API_BASE_URL } from '../../../utils/api';
+import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../utils/api';
 
 
 // API Configuration
@@ -589,7 +589,7 @@ export default function HomeScreen({ navigation }) {
                   {/* Property Image */}
                   <View style={styles.propertyImageContainer}>
                     <Image
-                      source={{ uri: property.image || property.imageUrl }}
+                      source={{ uri: getImageUrl(property.image || property.imageUrl) || DEFAULT_PROPERTY_IMAGE }}
                       style={styles.propertyImage}
                       resizeMode="cover"
                     />
@@ -674,7 +674,7 @@ export default function HomeScreen({ navigation }) {
                   activeOpacity={0.9}
                 >
                   <Image
-                    source={{ uri: property.image || property.imageUrl }}
+                    source={{ uri: getImageUrl(property.image || property.imageUrl) || DEFAULT_PROPERTY_IMAGE }}
                     style={styles.recommendedImage}
                     resizeMode="cover"
                   />

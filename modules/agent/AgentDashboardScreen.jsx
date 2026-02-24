@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE, DEFAULT_PROFILE_IMAGE } from '../../utils/api';
 import {
     View,
     Text,
@@ -47,8 +48,6 @@ import {
 } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
-
-import { API_BASE_URL } from '../../../utils/api';
 
 
 const AnimatedKPICard = ({ icon, label, value, trend, trendValue, color, delay = 0 }) => {
@@ -350,7 +349,7 @@ const AgentDashboard = ({ navigation, route }) => {
                         <View style={styles.agentAvatarContainer}>
                             <Image
                                 source={{
-                                    uri: agentData?.avatar || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200'
+                                    uri: getImageUrl(agentData?.avatar) || DEFAULT_PROFILE_IMAGE
                                 }}
                                 style={styles.agentAvatar}
                             />
@@ -714,11 +713,7 @@ const AgentDashboard = ({ navigation, route }) => {
                             {activeListings.length > 0 ? (
                                 activeListings.slice(0, 5).map((listing) => {
                                     const statusStyle = getStatusStyle(listing.status);
-                                    const primaryImage =
-                                        typeof listing.primaryImage === 'string' &&
-                                            listing.primaryImage.startsWith('http')
-                                            ? listing.primaryImage
-                                            : 'https://images.unsplash.com/photo-1640109478916-f445f8f19b11?w=800';
+                                    const primaryImage = getImageUrl(listing.primaryImage) || DEFAULT_PROPERTY_IMAGE;
 
                                     return (
                                         <TouchableOpacity

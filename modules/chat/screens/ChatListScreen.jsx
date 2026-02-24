@@ -23,7 +23,7 @@ import {
   ArrowLeft,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../../../utils/api';
+import { API_BASE_URL, getImageUrl, DEFAULT_PROFILE_IMAGE } from '../../../utils/api';
 const { width, height } = Dimensions.get('window');
 
 // ImageWithFallback Component
@@ -42,7 +42,7 @@ const ImageWithFallback = ({ src, alt, style }) => {
 
   return (
     <Image
-      source={{ uri: src }}
+      source={{ uri: src || DEFAULT_PROFILE_IMAGE }}
       style={style}
       onError={() => setImgError(true)}
     />
@@ -128,7 +128,7 @@ export default function ChatListScreen({ navigation, onBack, route }) {
             lastMessage: chat.last_message || "",
             timestamp: chat.timestamp || "",
             unreadCount: chat.unread || 0,
-            avatar: null,
+            avatar: getImageUrl(chat.other_user_image || chat.image),
             online: false
           }))
           .filter(chat => {

@@ -43,7 +43,7 @@ import {
     Award,
     CheckCircle,
 } from 'lucide-react-native';
-import { API_BASE_URL } from '../../../utils/api';
+import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../utils/api';
 
 const { width } = Dimensions.get('window');
 
@@ -180,19 +180,16 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
     };
 
     // Images
-    const placeholderImage = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800';
     let propertyImages = [];
 
-    // 1. Try the images array (populated by the updated backend)
-    if (property.images && (Array.isArray(property.images) || typeof property.images === 'string')) {
+    // 1. Try the images array
+    if (property.images) {
         try {
             const parsedImages = typeof property.images === 'string' ? JSON.parse(property.images) : property.images;
             if (Array.isArray(parsedImages) && parsedImages.length > 0) {
                 propertyImages = parsedImages.map(img => {
-                    if (typeof img === 'object' && img !== null) {
-                        return img.url || img.image_url || null;
-                    }
-                    return typeof img === 'string' ? img : null;
+                    const path = (typeof img === 'object' && img !== null) ? (img.url || img.image_url) : img;
+                    return getImageUrl(path);
                 }).filter(Boolean);
             }
         } catch (e) {
@@ -200,20 +197,18 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
         }
     }
 
-    // 2. Fall back to single-image fields from the list API
+    // 2. Fall back to single-image fields
     if (propertyImages.length === 0) {
         const single = property.primaryImage || property.imageUrl || property.image;
-        if (single) propertyImages = [single];
+        if (single) {
+            const url = getImageUrl(single);
+            if (url) propertyImages = [url];
+        }
     }
 
-    // 3. Filter out non-http/https URIs (blob:, file:, etc.)
-    propertyImages = propertyImages
-        .map(uri => (typeof uri === 'string' ? uri.trim() : ''))
-        .filter(uri => uri.startsWith('http'));
-
-    // 4. Last resort: show placeholder
+    // 3. Last resort: show placeholder
     if (propertyImages.length === 0) {
-        propertyImages = [placeholderImage];
+        propertyImages = [DEFAULT_PROPERTY_IMAGE];
     }
 
     const handleBack = () => {

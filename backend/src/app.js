@@ -56,7 +56,7 @@ app.use("/uploads", (req, res, next) => {
 }, express.static(uploadsPath));
 
 // Serve structured property images (images_rs)
-const imagesRsPath = path.join(__dirname, "..", "..", "images_rs");
+const imagesRsPath = path.join(__dirname, "images_rs");
 try {
   fs.mkdirSync(imagesRsPath, { recursive: true });
 } catch (e) { }
