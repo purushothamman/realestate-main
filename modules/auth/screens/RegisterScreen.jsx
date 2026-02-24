@@ -1,29 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
   Image,
-  Modal,
-  Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  Camera,
-  Upload,
-  User,
-  Mail,
-  Phone,
-  Lock,
-  Eye,
-  EyeOff,
-  ChevronDown,
   ShoppingBag,
   Building2,
   UserCheck,
@@ -32,18 +19,15 @@ import {
   Home,
   AlertCircle,
   X,
-  TrendingUp,
-  MapPin,
-  Briefcase,
-  FileText,
-  MessageSquare,
 } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
 
-import { API_BASE_URL } from '../../../utils/api';
+import { useRegistrationForm } from '../hooks/useRegistrationForm';
+import { ProfileImageSection } from '../components/ProfileImageSection';
+import { CoreRegistrationFields } from '../components/CoreRegistrationFields';
+import { RoleSelector } from '../components/RoleSelector';
+import { BuilderFields } from '../components/BuilderFields';
 
-
+// 🔹 Constants outside component to prevent recreation on re-render
 const USER_TYPES = [
   {
     value: 'buyer',
@@ -68,625 +52,77 @@ const USER_TYPES = [
   },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FocusableInput
-// KEY FIX: Each input manages its OWN focused state locally via React.memo +
-// useState. This means tapping a field only re-renders THAT field, not the
-// entire form. The original bug was caused by a parent-level `focusedInput`
-// state that triggered a full-form re-render on every focus/blur event, which
-// on physical devices caused the cursor to flicker and jump between fields.
-// ─────────────────────────────────────────────────────────────────────────────
-const FocusableInput = React.memo(({
-  icon: Icon,
-  error,
-  containerStyle,
-  inputStyle,
-  rightElement,
-  multiline,
-  numberOfLines,
-  ...inputProps
+// 🔹 Optimized sub-components for zero-flicker
+const LogoSection = React.memo(() => (
+  <View style={styles.logoContainer}>
+    <View style={styles.logoBox}>
+      <Home color="#FFFFFF" size={28} strokeWidth={2.5} />
+    </View>
+    <Text style={styles.logoText}>EstateHub</Text>
+  </View>
+));
+
+const RegisterScreen = React.memo(({
+  navigation,
+  onNavigateToLogin,
+  onBack,
+  onRegisterSuccess
 }) => {
-  const [focused, setFocused] = useState(false);
-
-  if (multiline) {
-    return (
-      <>
-        <View
-          style={[
-            styles.textAreaWrapper,
-            focused && styles.inputWrapperFocused,
-            error && styles.inputWrapperError,
-            containerStyle,
-          ]}
-        >
-          {Icon && (
-            <Icon
-              color={focused ? '#2D6A4F' : '#9CA3AF'}
-              size={20}
-              strokeWidth={2}
-              style={styles.textAreaIcon}
-            />
-          )}
-          <TextInput
-            style={[styles.textArea, inputStyle]}
-            placeholderTextColor="#9CA3AF"
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            multiline
-            numberOfLines={numberOfLines || 4}
-            textAlignVertical="top"
-            {...inputProps}
-          />
-        </View>
-        {error ? (
-          <View style={styles.errorContainer}>
-            <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
-      </>
-    );
-  }
-
-  return (
-    <>
-      <View
-        style={[
-          styles.inputWrapper,
-          focused && styles.inputWrapperFocused,
-          error && styles.inputWrapperError,
-          containerStyle,
-        ]}
-      >
-        {Icon && (
-          <Icon
-            color={focused ? '#2D6A4F' : '#9CA3AF'}
-            size={20}
-            strokeWidth={2}
-            style={styles.inputIcon}
-          />
-        )}
-        <TextInput
-          style={[styles.input, inputStyle]}
-          placeholderTextColor="#9CA3AF"
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          {...inputProps}
-        />
-        {rightElement}
-      </View>
-      {error ? (
-        <View style={styles.errorContainer}>
-          <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
-    </>
-  );
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PasswordInput
-// Wraps FocusableInput and manages its own show/hide toggle state locally,
-// also isolated from the parent so toggling visibility never re-renders the form.
-// ─────────────────────────────────────────────────────────────────────────────
-const PasswordInput = React.memo(({ error, ...inputProps }) => {
-  const [showPassword, setShowPassword] = useState(false);
-
-  return (
-    <FocusableInput
-      icon={Lock}
-      error={error}
-      secureTextEntry={!showPassword}
-      autoCapitalize="none"
-      autoCorrect={false}
-      autoComplete="off"
-      blurOnSubmit={false}
-      inputStyle={styles.passwordInput}
-      rightElement={
-        <TouchableOpacity
-          onPress={() => setShowPassword((v) => !v)}
-          style={styles.eyeButton}
-        >
-          {showPassword ? (
-            <EyeOff color="#9CA3AF" size={20} strokeWidth={2} />
-          ) : (
-            <Eye color="#9CA3AF" size={20} strokeWidth={2} />
-          )}
-        </TouchableOpacity>
-      }
-      {...inputProps}
-    />
-  );
-});
-
-export default function RegisterScreen({ navigation, onNavigateToLogin }) {
   const isAndroid = Platform.OS === 'android';
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    password: '',
-    role: '',
-    profileImage: null,
-    companyName: '',
-    gstNo: '',
-    panNo: '',
-    website: '',
-    description: '',
-    experienceYears: '',
-    totalProjects: '',
-    registrationCertificate: null,
-    address: '',
-    city: '',
-    state: '',
-    pincode: '',
-  });
+  const {
+    formData,
+    errors,
+    isLoading,
+    apiError,
+    successMessage,
+    uploadingImage,
+    uploadingDocument,
+    termsAccepted,
+    setTermsAccepted,
+    setApiError,
+    handleInputChange,
+    handleImageUpload,
+    handleRemoveImage,
+    handleDocumentUpload,
+    handleRemoveDocument,
+    handleRegister,
+  } = useRegistrationForm(navigation, onNavigateToLogin || onBack, onRegisterSuccess);
 
-  // REMOVED: const [showPassword, setShowPassword] = useState(false);
-  // REMOVED: const [focusedInput, setFocusedInput] = useState(null);
-  // Both are now managed locally inside FocusableInput / PasswordInput.
+  const [showRoleModal, setShowRoleModal] = useState(false);
 
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [showroleModal, setShowroleModal] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [apiError, setApiError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [uploadingDocument, setUploadingDocument] = useState(false);
+  // Memoized selection logic
+  const selectedRole = React.useMemo(
+    () => USER_TYPES.find((type) => type.value === formData.role),
+    [formData.role]
+  );
 
-  // Validation functions
-  const validateEmail = (email) => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(String(email).toLowerCase());
-  };
-
-  const validatePhone = (phone) => {
-    const re = /^[0-9]{10,15}$/;
-    return re.test(phone.replace(/[\s\-\(\)]/g, ''));
-  };
-
-  const validatePassword = (password) => {
-    return password.length >= 8 && /[a-zA-Z]/.test(password) && /[0-9]/.test(password);
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Full name is required';
-    } else if (formData.name.trim().length < 3) {
-      newErrors.name = 'Name must be at least 3 characters';
-    }
-
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!validateEmail(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
-    }
-
-    if (!formData.phone) {
-      newErrors.phone = 'Phone number is required';
-    } else if (!validatePhone(formData.phone)) {
-      newErrors.phone = 'Please enter a valid 10-15 digit phone number';
-    }
-
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (!validatePassword(formData.password)) {
-      newErrors.password = 'Password must be 8+ characters with letters and numbers';
-    }
-
-    if (!formData.role) {
-      newErrors.role = 'Please select your role';
-    }
-
-    // Builder-specific client-side validation
-    if (formData.role === 'builder') {
-      if (!formData.companyName || !formData.companyName.trim()) {
-        newErrors.companyName = 'Company name is required for builders';
-      }
-      if (!formData.panNo || !formData.panNo.trim()) {
-        newErrors.panNo = 'PAN number is required for builders';
-      } else {
-        const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]$/i;
-        if (!panRegex.test(formData.panNo.trim())) {
-          newErrors.panNo = 'Please enter a valid PAN (e.g. AAAAA1111A)';
-        }
-      }
-      if (formData.gstNo && formData.gstNo.trim()) {
-        const gstRegex = /^[0-9A-Z]{15}$/i;
-        if (!gstRegex.test(formData.gstNo.trim())) {
-          newErrors.gstNo = 'Please enter a valid GST number (15 characters)';
-        }
-      }
-    }
-
-    if (!termsAccepted) {
-      newErrors.terms = 'You must accept the terms and conditions';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleInputChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    // Batch state updates: only clear error if one exists, avoid double re-render
-    setErrors((prev) => {
-      if (prev[field]) {
-        return { ...prev, [field]: '' };
-      }
-      return prev;
-    });
-    // Clear API error only once
-    setApiError((prev) => (prev ? '' : prev));
-  };
-
-  const handleImageUpload = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload an image.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0];
-
-        if (asset.fileSize && asset.fileSize > 5 * 1024 * 1024) {
-          setErrors((prev) => ({ ...prev, profileImage: 'Image must be less than 5MB' }));
-          return;
-        }
-
-        setUploadingImage(true);
-        setErrors((prev) => ({ ...prev, profileImage: '' }));
-
-        try {
-          const formDataUpload = new FormData();
-
-          // Handle web vs native differently (like property images)
-          if (Platform.OS === 'web') {
-            if (asset.file) {
-              // On web, expo-image-picker provides a real File
-              formDataUpload.append('profileImage', asset.file);
-            } else {
-              // Fallback: fetch blob from uri
-              const response = await fetch(asset.uri);
-              const blob = await response.blob();
-              const name = asset.fileName || `profile-${Date.now()}.jpg`;
-              formDataUpload.append('profileImage', blob, name);
-            }
-          } else {
-            // On native (iOS/Android), use uri/name/type object
-            const name = asset.fileName || `profile-${Date.now()}.jpg`;
-            const type = asset.mimeType || 'image/jpeg';
-            formDataUpload.append('profileImage', {
-              uri: asset.uri,
-              name,
-              type,
-            });
-          }
-
-          const response = await fetch(`${API_BASE_URL}/upload/profile-image`, {
-            method: 'POST',
-            body: formDataUpload,
-          });
-
-          const data = await response.json();
-
-          if (!response.ok || !data.success) {
-            throw new Error(data.message || 'Failed to upload image');
-          }
-
-          const imageUrl = data.url || data.imageUrl;
-          if (!imageUrl) {
-            throw new Error('No image URL returned from server');
-          }
-
-          setFormData((prev) => ({
-            ...prev,
-            profileImage: imageUrl,
-          }));
-        } catch (error) {
-          console.error('Image upload error:', error);
-          Alert.alert('Upload Failed', error.message || 'Failed to upload image. Please try again.');
-          setFormData((prev) => ({ ...prev, profileImage: null }));
-        } finally {
-          setUploadingImage(false);
-        }
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image. Please try again.');
-      setUploadingImage(false);
-    }
-  };
-
-  const handleRemoveImage = () => {
-    setFormData((prev) => ({ ...prev, profileImage: null }));
-    setErrors((prev) => ({ ...prev, profileImage: '' }));
-  };
-
-  const handleDocumentUpload = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'image/*'],
-        copyToCacheDirectory: true,
-      });
-
-      if (result.type === 'cancel') {
-        return;
-      }
-
-      if (result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-
-        if (asset.size && asset.size > 10 * 1024 * 1024) {
-          setErrors((prev) => ({ ...prev, registrationCertificate: 'Document must be less than 10MB' }));
-          return;
-        }
-
-        setUploadingDocument(true);
-        setErrors((prev) => ({ ...prev, registrationCertificate: '' }));
-
-        try {
-          const formDataUpload = new FormData();
-          formDataUpload.append('registrationCertificate', {
-            uri: asset.uri,
-            type: asset.mimeType || 'application/pdf',
-            name: asset.name || 'certificate.pdf',
-          });
-
-          const response = await fetch(`${API_BASE_URL}/upload/registration-certificate`, {
-            method: 'POST',
-            body: formDataUpload,
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-          });
-
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(data.message || 'Failed to upload document');
-          }
-
-          setFormData((prev) => ({
-            ...prev,
-            registrationCertificate: {
-              uri: data.documentUrl || data.url || asset.uri,
-              name: asset.name,
-              size: asset.size,
-            },
-          }));
-        } catch (error) {
-          console.error('Document upload error:', error);
-          // Fallback: use local data if backend fails
-          setFormData((prev) => ({
-            ...prev,
-            registrationCertificate: {
-              uri: asset.uri,
-              name: asset.name,
-              size: asset.size,
-            },
-          }));
-          Alert.alert('Info', 'Document will be uploaded after registration');
-        } finally {
-          setUploadingDocument(false);
-        }
-      }
-    } catch (error) {
-      console.error('Error picking document:', error);
-      Alert.alert('Error', 'Failed to pick document. Please try again.');
-      setUploadingDocument(false);
-    }
-  };
-
-  const handleRemoveDocument = () => {
-    setFormData((prev) => ({ ...prev, registrationCertificate: null }));
-    setErrors((prev) => ({ ...prev, registrationCertificate: '' }));
-  };
-
-  const formatFileSize = (bytes) => {
+  const formatFileSize = React.useCallback((bytes) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  };
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+  }, []);
 
-  const handleRegister = async () => {
-    setApiError('');
-    setSuccessMessage('');
-
-    if (!validateForm()) {
-      setApiError('Please fix all errors before submitting');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const registrationData = {
-        name: formData.name.trim(),
-        email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.replace(/[\s\-\(\)]/g, ''),
-        password: formData.password,
-        role: formData.role,
-        profileImage: formData.profileImage || null, // Include profile image URL
-      };
-
-      // Add builder-specific fields if role is builder
-      if (formData.role === 'builder') {
-        registrationData.companyName = formData.companyName?.trim() || null;
-        registrationData.gstNo = formData.gstNo?.trim() || null;
-        registrationData.panNo = formData.panNo?.trim() || null;
-        registrationData.website = formData.website?.trim() || null;
-        registrationData.description = formData.description?.trim() || null;
-        registrationData.experienceYears = formData.experienceYears || null;
-        registrationData.totalProjects = formData.totalProjects || null;
-        registrationData.registrationCertificate = formData.registrationCertificate?.uri || null;
-        registrationData.address = formData.address?.trim() || null;
-        registrationData.city = formData.city?.trim() || null;
-        registrationData.state = formData.state?.trim() || null;
-        registrationData.pincode = formData.pincode?.trim() || null;
-      }
-
-      console.log('Sending registration request:', { ...registrationData, password: '***' });
-
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify(registrationData),
-      });
-
-      // Clone response to avoid "Body already read" error
-      const responseClone = response.clone();
-      let data;
-
-      try {
-        data = await response.json();
-      } catch (jsonError) {
-        console.error('JSON parse error:', jsonError);
-        // Try to get text if JSON parsing fails
-        const text = await responseClone.text();
-        console.log('Response text:', text);
-        throw new Error('Invalid server response');
-      }
-
-      console.log('Server response:', data);
-
-      if (!response.ok) {
-        if (response.status === 409) {
-          throw new Error(data.message || 'This email is already registered. Please login instead.');
-        } else if (response.status === 400) {
-          throw new Error(data.message || 'Invalid registration data');
-        } else if (response.status === 500) {
-          throw new Error(data.message || 'Server error. Please try again later.');
-        } else {
-          throw new Error(data.message || 'Registration failed');
-        }
-      }
-
-      // Registration successful
-      setSuccessMessage(data.message || 'Registration successful! Redirecting to login...');
-
-      // Store authentication token and user data for immediate login
-      if (data.token) {
-        try {
-          await AsyncStorage.setItem('authToken', data.token);
-          await AsyncStorage.setItem('user', JSON.stringify(data.user));
-          console.log('✅ Token and user data stored successfully');
-        } catch (storageError) {
-          console.error('Storage error:', storageError);
-        }
-      }
-
-      // Reset form
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        password: '',
-        role: '',
-        profileImage: null,
-        companyName: '',
-        gstNo: '',
-        panNo: '',
-        website: '',
-        description: '',
-        experienceYears: '',
-        totalProjects: '',
-        registrationCertificate: null,
-        address: '',
-        city: '',
-        state: '',
-        pincode: '',
-      });
-      setTermsAccepted(false);
-
-      // Navigate to Login page after 1.5 seconds, then to Home if token exists
-      setTimeout(() => {
-        if (data.token && navigation) {
-          // If registration includes auto-login, go directly to Home
-          console.log('🏠 Auto-login: Navigating to Home');
-          navigation.navigate('home');
-        } else if (navigation) {
-          // Otherwise navigate to Login
-          console.log('🔐 Navigating to Login');
-          navigation.navigate('login');
-        } else if (onNavigateToLogin) {
-          onNavigateToLogin();
-        }
-      }, 1500);
-
-    } catch (error) {
-      console.error('Registration error:', error);
-      setApiError(error.message || 'Registration failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSelectrole = (role) => {
-    setFormData((prev) => ({ ...prev, role }));
-    setShowroleModal(false);
-    if (errors.role) {
-      setErrors((prev) => ({ ...prev, role: '' }));
-    }
-  };
-
-  const selectedrole = USER_TYPES.find((type) => type.value === formData.role);
+  const handleSelectRole = React.useCallback((role) => {
+    handleInputChange('role', role);
+    setShowRoleModal(false);
+  }, [handleInputChange]);
 
   return (
     <View style={styles.container}>
-      {/* Background */}
-      <View style={styles.backgroundContainer}>
-        <Image
-          source={{
-            uri: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=1080',
-          }}
-          style={styles.backgroundImage}
-          resizeMode="cover"
-        />
-        <View style={styles.backgroundOverlay} />
-      </View>
-
-      {/* Main Content */}
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-        enabled={Platform.OS === 'ios'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollViewContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          removeClippedSubviews={false}
-          windowSize={5}
         >
-          {/* Logo */}
-          <View style={styles.logoContainer}>
-            <View style={styles.logoBox}>
-              <Home color="#FFFFFF" size={28} strokeWidth={2.5} />
-            </View>
-            <Text style={styles.logoText}>EstateHub</Text>
-          </View>
+          <LogoSection />
 
           {/* Headline */}
           <View style={styles.headlineContainer}>
@@ -696,469 +132,71 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
             </Text>
           </View>
 
-          {/* Success Message */}
-          {successMessage ? (
-            <View style={styles.successMessage}>
-              <Check color="#059669" size={20} strokeWidth={2} />
-              <Text style={styles.successMessageText}>{successMessage}</Text>
-            </View>
-          ) : null}
+          {/* Messages Container - Fixed height or controlled visibility to prevent flickering */}
+          <View style={styles.messageContainer}>
+            {successMessage ? (
+              <View style={styles.successMessage}>
+                <Check color="#059669" size={20} strokeWidth={2} />
+                <Text style={styles.successMessageText}>{successMessage}</Text>
+              </View>
+            ) : null}
 
-          {/* API Error Message */}
-          {apiError ? (
-            <View style={styles.errorMessage}>
-              <AlertCircle color="#DC2626" size={20} strokeWidth={2} />
-              <Text style={styles.errorMessageText}>{apiError}</Text>
-              <TouchableOpacity onPress={() => setApiError('')}>
-                <X color="#EF4444" size={16} strokeWidth={2} />
-              </TouchableOpacity>
-            </View>
-          ) : null}
+            {apiError ? (
+              <View style={styles.errorMessage}>
+                <AlertCircle color="#DC2626" size={20} strokeWidth={2} />
+                <Text style={styles.errorMessageText}>{apiError}</Text>
+                <TouchableOpacity onPress={() => setApiError('')}>
+                  <X color="#EF4444" size={16} strokeWidth={2} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
 
           {/* Form */}
           <View
             style={styles.form}
             importantForAutofill={isAndroid ? 'noExcludeDescendants' : 'auto'}
           >
-            {/* Profile Image Upload */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                Profile Picture{' '}
-                <Text style={styles.labelOptional}>(Optional)</Text>
-              </Text>
-              <View style={styles.profileImageContainer}>
-                <View style={styles.profileImageWrapper}>
-                  {formData.profileImage ? (
-                    <Image
-                      source={{ uri: formData.profileImage }}
-                      style={styles.profileImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.profileImagePlaceholder}>
-                      <User color="#9CA3AF" size={32} strokeWidth={2} />
-                    </View>
-                  )}
-                  <TouchableOpacity
-                    onPress={handleImageUpload}
-                    disabled={uploadingImage}
-                    style={styles.cameraButton}
-                    activeOpacity={0.8}
-                  >
-                    {uploadingImage ? (
-                      <ActivityIndicator color="#FFFFFF" size="small" />
-                    ) : (
-                      <Camera color="#FFFFFF" size={16} strokeWidth={2} />
-                    )}
-                  </TouchableOpacity>
-                </View>
+            <ProfileImageSection
+              profileImage={formData.profileImage}
+              uploadingImage={uploadingImage}
+              onUpload={handleImageUpload}
+              onRemove={handleRemoveImage}
+              error={errors.profileImage}
+            />
 
-                <View style={styles.profileImageInfo}>
-                  <Text style={styles.profileImageTitle}>
-                    {formData.profileImage ? 'Change Photo' : 'Upload Photo'}
-                  </Text>
-                  <Text style={styles.profileImageSubtitle}>
-                    JPG, PNG or GIF • Max 5MB
-                  </Text>
-                  <View style={styles.profileImageButtons}>
-                    <TouchableOpacity
-                      onPress={handleImageUpload}
-                      disabled={uploadingImage}
-                      style={styles.chooseFileButton}
-                      activeOpacity={0.8}
-                    >
-                      <Upload color="#2D6A4F" size={14} strokeWidth={2} />
-                      <Text style={styles.chooseFileButtonText}>
-                        {uploadingImage ? 'Uploading...' : 'Choose File'}
-                      </Text>
-                    </TouchableOpacity>
-                    {formData.profileImage && (
-                      <TouchableOpacity
-                        onPress={handleRemoveImage}
-                        style={styles.removeButton}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.removeButtonText}>Remove</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                  {errors.profileImage && (
-                    <View style={styles.errorContainer}>
-                      <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                      <Text style={styles.errorText}>{errors.profileImage}</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-            </View>
+            <CoreRegistrationFields
+              formData={formData}
+              errors={errors}
+              handleInputChange={handleInputChange}
+            />
 
-            {/* Full Name */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                Full Name <Text style={styles.required}>*</Text>
-              </Text>
-              {/* FIX: replaced inline TextInput + parent focusedInput state with FocusableInput */}
-              <FocusableInput
-                icon={User}
-                placeholder="Enter your full name"
-                value={formData.name}
-                onChangeText={(value) => handleInputChange('name', value)}
-                error={errors.name}
-                autoCapitalize="words"
-                autoCorrect={false}
-                autoComplete="off"
-                blurOnSubmit={false}
-              />
-            </View>
+            <RoleSelector
+              userTypes={USER_TYPES}
+              formData={formData}
+              errors={errors}
+              showRoleModal={showRoleModal}
+              setShowRoleModal={setShowRoleModal}
+              handleSelectRole={handleSelectRole}
+              selectedRole={selectedRole}
+            />
 
-            {/* Email */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                Email Address <Text style={styles.required}>*</Text>
-              </Text>
-              <FocusableInput
-                icon={Mail}
-                placeholder="Enter your email"
-                value={formData.email}
-                onChangeText={(value) => handleInputChange('email', value)}
-                error={errors.email}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="off"
-                blurOnSubmit={false}
-              />
-            </View>
-
-            {/* Phone */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                Phone Number <Text style={styles.required}>*</Text>
-              </Text>
-              <FocusableInput
-                icon={Phone}
-                placeholder="Enter your phone number"
-                value={formData.phone}
-                onChangeText={(value) => handleInputChange('phone', value)}
-                error={errors.phone}
-                keyboardType="phone-pad"
-                autoCorrect={false}
-                autoComplete="off"
-                blurOnSubmit={false}
-              />
-            </View>
-
-            {/* Password */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                Password <Text style={styles.required}>*</Text>
-              </Text>
-              {/* FIX: PasswordInput manages show/hide and focus state internally */}
-              <PasswordInput
-                placeholder="Create a password"
-                value={formData.password}
-                onChangeText={(value) => handleInputChange('password', value)}
-                error={errors.password}
-              />
-              {!errors.password ? (
-                <Text style={styles.passwordHint}>
-                  Must be at least 8 characters with letters and numbers
-                </Text>
-              ) : null}
-            </View>
-
-            {/* User Type */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                I am a... <Text style={styles.required}>*</Text>
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowroleModal(true)}
-                style={[
-                  styles.roleButton,
-                  formData.role && styles.roleButtonSelected,
-                  errors.role && styles.roleButtonError,
-                ]}
-                activeOpacity={0.8}
-              >
-                {selectedrole ? (
-                  <View style={styles.roleSelected}>
-                    <View
-                      style={[
-                        styles.roleIcon,
-                        { backgroundColor: `${selectedrole.color}15` },
-                      ]}
-                    >
-                      <selectedrole.icon
-                        color={selectedrole.color}
-                        size={20}
-                        strokeWidth={2}
-                      />
-                    </View>
-                    <View style={styles.roleText}>
-                      <Text style={styles.roleLabel}>
-                        {selectedrole.label}
-                      </Text>
-                      <Text style={styles.roleDescription}>
-                        {selectedrole.description}
-                      </Text>
-                    </View>
-                  </View>
-                ) : (
-                  <Text style={styles.rolePlaceholder}>Select your role</Text>
-                )}
-                <ChevronDown color="#9CA3AF" size={20} strokeWidth={2} />
-              </TouchableOpacity>
-              {errors.role && (
-                <View style={styles.errorContainer}>
-                  <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                  <Text style={styles.errorText}>{errors.role}</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Builder Specific Fields */}
             {formData.role === 'builder' && (
-              <View style={styles.builderFieldsContainer}>
-                <Text style={styles.sectionHeader}>Builder Details</Text>
-
-                {/* Company Name */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>
-                    Company Name <Text style={styles.required}>*</Text>
-                  </Text>
-                  <FocusableInput
-                    icon={Building2}
-                    placeholder="Enter company name"
-                    value={formData.companyName}
-                    onChangeText={(value) => handleInputChange('companyName', value)}
-                    error={errors.companyName}
-                    blurOnSubmit={false}
-                  />
-                </View>
-
-                {/* Description */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>
-                    Company Description <Text style={styles.labelOptional}>(Optional)</Text>
-                  </Text>
-                  <FocusableInput
-                    icon={MessageSquare}
-                    placeholder="Brief description about your company and projects..."
-                    value={formData.description}
-                    onChangeText={(value) => handleInputChange('description', value)}
-                    multiline
-                    numberOfLines={4}
-                    blurOnSubmit={false}
-                  />
-                </View>
-
-                {/* GST Number (Optional) */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>
-                    GST Number <Text style={styles.labelOptional}>(Optional)</Text>
-                  </Text>
-                  <FocusableInput
-                    icon={Shield}
-                    placeholder="Enter GST number"
-                    value={formData.gstNo}
-                    onChangeText={(value) => handleInputChange('gstNo', value)}
-                    error={errors.gstNo}
-                    autoCapitalize="characters"
-                    blurOnSubmit={false}
-                  />
-                </View>
-
-                {/* PAN Number (Required for builders) */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>
-                    PAN Number <Text style={styles.required}>*</Text>
-                  </Text>
-                  <FocusableInput
-                    icon={Shield}
-                    placeholder="Enter PAN number (e.g. AAAAA1111A)"
-                    value={formData.panNo}
-                    onChangeText={(value) => handleInputChange('panNo', value)}
-                    error={errors.panNo}
-                    autoCapitalize="characters"
-                    blurOnSubmit={false}
-                  />
-                </View>
-
-                {/* Registration Certificate Upload */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>
-                    Registration Certificate <Text style={styles.labelOptional}>(Optional)</Text>
-                  </Text>
-                  <View style={styles.documentUploadContainer}>
-                    {formData.registrationCertificate ? (
-                      <View style={styles.documentPreview}>
-                        <View style={styles.documentInfo}>
-                          <FileText color="#2D6A4F" size={24} strokeWidth={2} />
-                          <View style={styles.documentDetails}>
-                            <Text style={styles.documentName} numberOfLines={1}>
-                              {formData.registrationCertificate.name}
-                            </Text>
-                            <Text style={styles.documentSize}>
-                              {formatFileSize(formData.registrationCertificate.size || 0)}
-                            </Text>
-                          </View>
-                        </View>
-                        <TouchableOpacity
-                          onPress={handleRemoveDocument}
-                          style={styles.documentRemoveButton}
-                          activeOpacity={0.8}
-                        >
-                          <X color="#DC2626" size={18} strokeWidth={2} />
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        onPress={handleDocumentUpload}
-                        disabled={uploadingDocument}
-                        style={styles.documentUploadButton}
-                        activeOpacity={0.8}
-                      >
-                        {uploadingDocument ? (
-                          <ActivityIndicator color="#2D6A4F" size="small" />
-                        ) : (
-                          <>
-                            <Upload color="#2D6A4F" size={20} strokeWidth={2} />
-                            <Text style={styles.documentUploadText}>
-                              Upload Certificate (PDF or Image)
-                            </Text>
-                            <Text style={styles.documentUploadSubtext}>
-                              Max 10MB
-                            </Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    )}
-                    {errors.registrationCertificate && (
-                      <View style={styles.errorContainer}>
-                        <AlertCircle color="#DC2626" size={12} strokeWidth={2} />
-                        <Text style={styles.errorText}>{errors.registrationCertificate}</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                {/* Website */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>
-                    Website <Text style={styles.labelOptional}>(Optional)</Text>
-                  </Text>
-                  <FocusableInput
-                    icon={TrendingUp}
-                    placeholder="https://example.com"
-                    value={formData.website}
-                    onChangeText={(value) => handleInputChange('website', value)}
-                    keyboardType="url"
-                    autoCapitalize="none"
-                    blurOnSubmit={false}
-                  />
-                </View>
-
-                {/* Experience Years and Total Projects in a row */}
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>
-                      Experience (Years) <Text style={styles.labelOptional}>(Optional)</Text>
-                    </Text>
-                    <FocusableInput
-                      icon={Briefcase}
-                      placeholder="e.g. 5"
-                      value={formData.experienceYears}
-                      onChangeText={(value) => handleInputChange('experienceYears', value)}
-                      keyboardType="numeric"
-                      blurOnSubmit={false}
-                    />
-                  </View>
-
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>
-                      Total Projects <Text style={styles.labelOptional}>(Optional)</Text>
-                    </Text>
-                    <FocusableInput
-                      icon={Building2}
-                      placeholder="e.g. 10"
-                      value={formData.totalProjects}
-                      onChangeText={(value) => handleInputChange('totalProjects', value)}
-                      keyboardType="numeric"
-                      blurOnSubmit={false}
-                    />
-                  </View>
-                </View>
-
-                {/* Address Section */}
-                <Text style={[styles.label, { marginTop: 8 }]}>
-                  Street Address / Building <Text style={styles.labelOptional}>(Optional)</Text>
-                </Text>
-
-                <View style={styles.inputGroup}>
-                  <FocusableInput
-                    icon={MapPin}
-                    placeholder="Floor, Building Name, Street"
-                    value={formData.address}
-                    onChangeText={(value) => handleInputChange('address', value)}
-                    blurOnSubmit={false}
-                  />
-                </View>
-
-                {/* City and State in a row */}
-                <View style={{ flexDirection: 'row', gap: 12 }}>
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>
-                      City <Text style={styles.labelOptional}>(Optional)</Text>
-                    </Text>
-                    <FocusableInput
-                      placeholder="City"
-                      value={formData.city}
-                      onChangeText={(value) => handleInputChange('city', value)}
-                      blurOnSubmit={false}
-                    />
-                  </View>
-
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.label}>
-                      State <Text style={styles.labelOptional}>(Optional)</Text>
-                    </Text>
-                    <FocusableInput
-                      placeholder="State"
-                      value={formData.state}
-                      onChangeText={(value) => handleInputChange('state', value)}
-                      blurOnSubmit={false}
-                    />
-                  </View>
-                </View>
-
-                {/* Pincode */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>
-                    Pincode <Text style={styles.labelOptional}>(Optional)</Text>
-                  </Text>
-                  <FocusableInput
-                    icon={MapPin}
-                    placeholder="Pincode"
-                    value={formData.pincode}
-                    onChangeText={(value) => handleInputChange('pincode', value)}
-                    keyboardType="numeric"
-                    maxLength={6}
-                    blurOnSubmit={false}
-                  />
-                </View>
-              </View>
+              <BuilderFields
+                formData={formData}
+                errors={errors}
+                handleInputChange={handleInputChange}
+                handleDocumentUpload={handleDocumentUpload}
+                handleRemoveDocument={handleRemoveDocument}
+                uploadingDocument={uploadingDocument}
+                formatFileSize={formatFileSize}
+              />
             )}
 
             {/* Terms and Conditions */}
             <View style={styles.inputGroup}>
               <TouchableOpacity
-                onPress={() => {
-                  setTermsAccepted(!termsAccepted);
-                  if (errors.terms) {
-                    setErrors((prev) => ({ ...prev, terms: '' }));
-                  }
-                }}
+                onPress={() => setTermsAccepted(!termsAccepted)}
                 style={styles.termsButton}
                 activeOpacity={0.7}
               >
@@ -1206,30 +244,26 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
               )}
             </TouchableOpacity>
 
-            {/* Divider */}
+            {/* Footer */}
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or continue with</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Login Link */}
             <View style={styles.loginLinkContainer}>
               <Text style={styles.loginLinkText}>Already have an account? </Text>
               <TouchableOpacity
                 onPress={() => {
-                  if (navigation) {
-                    navigation.navigate('login');
-                  } else if (onNavigateToLogin) {
-                    onNavigateToLogin();
-                  }
+                  if (onNavigateToLogin) onNavigateToLogin();
+                  else if (onBack) onBack();
+                  else if (navigation) navigation.navigate('login');
                 }}
               >
                 <Text style={styles.loginLink}>Login</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Trust Badge */}
             <View style={styles.trustBadge}>
               <View style={styles.trustIcon}>
                 <Shield color="#FFFFFF" size={12} strokeWidth={2} />
@@ -1241,103 +275,16 @@ export default function RegisterScreen({ navigation, onNavigateToLogin }) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {/* User Type Modal */}
-      <Modal
-        visible={showroleModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowroleModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowroleModal(false)}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Select Your Role</Text>
-                <Text style={styles.modalSubtitle}>
-                  Choose how you want to use EstateHub
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowroleModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <X color="#6B7280" size={20} strokeWidth={2} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              {USER_TYPES.map((type) => {
-                const IconComponent = type.icon;
-                return (
-                  <TouchableOpacity
-                    key={type.value}
-                    onPress={() => handleSelectrole(type.value)}
-                    style={[
-                      styles.roleOption,
-                      formData.role === type.value &&
-                      styles.roleOptionSelected,
-                    ]}
-                    activeOpacity={0.8}
-                  >
-                    <View
-                      style={[
-                        styles.roleOptionIcon,
-                        { backgroundColor: `${type.color}15` },
-                      ]}
-                    >
-                      <IconComponent
-                        color={type.color}
-                        size={24}
-                        strokeWidth={2}
-                      />
-                    </View>
-                    <View style={styles.roleOptionText}>
-                      <Text style={styles.roleOptionLabel}>{type.label}</Text>
-                      <Text style={styles.roleOptionDescription}>
-                        {type.description}
-                      </Text>
-                    </View>
-                    {formData.role === type.value && (
-                      <View style={styles.roleOptionCheck}>
-                        <Check color="#FFFFFF" size={14} strokeWidth={3} />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
     </View>
   );
-}
+});
+
+export default RegisterScreen;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-  },
-  backgroundContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 192,
-    overflow: 'hidden',
-  },
-  backgroundImage: {
-    width: '100%',
-    height: '100%',
-  },
-  backgroundOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
   },
   scrollView: {
     flex: 1,
@@ -1387,6 +334,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
+  messageContainer: {
+    minHeight: 80,
+    marginBottom: 8,
+    justifyContent: 'center',
+  },
   successMessage: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -1396,7 +348,6 @@ const styles = StyleSheet.create({
     borderColor: '#BBF7D0',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 24,
   },
   successMessageText: {
     flex: 1,
@@ -1413,7 +364,6 @@ const styles = StyleSheet.create({
     borderColor: '#FECACA',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 24,
   },
   errorMessageText: {
     flex: 1,
@@ -1426,295 +376,6 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  labelOptional: {
-    fontWeight: '400',
-    color: '#9CA3AF',
-  },
-  required: {
-    color: '#EF4444',
-  },
-  profileImageContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
-  },
-  profileImageWrapper: {
-    position: 'relative',
-  },
-  profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  profileImagePlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F3F4F6',
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: '#D1D5DB',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cameraButton: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    width: 32,
-    height: 32,
-    backgroundColor: '#2D6A4F',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  profileImageInfo: {
-    flex: 1,
-  },
-  profileImageTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  profileImageSubtitle: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 12,
-  },
-  profileImageButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  chooseFileButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#2D6A4F',
-    borderRadius: 8,
-  },
-  chooseFileButtonText: {
-    color: '#2D6A4F',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  removeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 2,
-    borderColor: '#FECACA',
-    borderRadius: 8,
-  },
-  removeButtonText: {
-    color: '#DC2626',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 52,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-  },
-  inputWrapperFocused: {
-    borderColor: '#2D6A4F',
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#2D6A4F',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  inputWrapperError: {
-    borderColor: '#FECACA',
-  },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    color: '#111827',
-    height: '100%',
-  },
-  passwordInput: {
-    paddingRight: 40,
-  },
-  eyeButton: {
-    position: 'absolute',
-    right: 16,
-    padding: 4,
-  },
-  textAreaWrapper: {
-    flexDirection: 'row',
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
-    minHeight: 100,
-  },
-  textAreaIcon: {
-    marginRight: 12,
-    marginTop: 2,
-  },
-  textArea: {
-    flex: 1,
-    fontSize: 14,
-    color: '#111827',
-    minHeight: 80,
-  },
-  documentUploadContainer: {
-    marginTop: 4,
-  },
-  documentUploadButton: {
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-    gap: 8,
-  },
-  documentUploadText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2D6A4F',
-    marginTop: 8,
-  },
-  documentUploadSubtext: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  documentPreview: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    padding: 16,
-  },
-  documentInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  documentDetails: {
-    flex: 1,
-  },
-  documentName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  documentSize: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  documentRemoveButton: {
-    padding: 8,
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  errorContainerIndent: {
-    marginLeft: 32,
-  },
-  errorText: {
-    fontSize: 12,
-    color: '#DC2626',
-  },
-  passwordHint: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 4,
-    marginLeft: 4,
-  },
-  roleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 56,
-    paddingHorizontal: 16,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-  },
-  roleButtonSelected: {
-    borderColor: '#2D6A4F',
-    backgroundColor: '#FFFFFF',
-  },
-  roleButtonError: {
-    borderColor: '#FECACA',
-  },
-  roleSelected: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  roleIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  roleText: {
-    flex: 1,
-  },
-  roleLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  roleDescription: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  rolePlaceholder: {
-    fontSize: 14,
-    color: '#9CA3AF',
   },
   termsButton: {
     flexDirection: 'row',
@@ -1746,6 +407,20 @@ const styles = StyleSheet.create({
     color: '#2D6A4F',
     fontWeight: '600',
   },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+    marginLeft: 4,
+  },
+  errorContainerIndent: {
+    marginLeft: 32,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#DC2626',
+  },
   registerButton: {
     height: 56,
     backgroundColor: '#2D6A4F',
@@ -1754,9 +429,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
+    //shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 8,
+    //elevation: 8,
     marginTop: 4,
   },
   registerButtonDisabled: {
@@ -1823,103 +498,5 @@ const styles = StyleSheet.create({
   trustText: {
     fontSize: 12,
     color: '#6B7280',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 32,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  modalCloseButton: {
-    padding: 4,
-  },
-  modalBody: {
-    padding: 16,
-    gap: 12,
-  },
-  roleOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 16,
-  },
-  roleOptionSelected: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#2D6A4F',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  roleOptionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  roleOptionText: {
-    flex: 1,
-  },
-  roleOptionLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  roleOptionDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  roleOptionCheck: {
-    width: 24,
-    height: 24,
-    backgroundColor: '#2D6A4F',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  builderFieldsContainer: {
-    gap: 16,
-    padding: 16,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  sectionHeader: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
   },
 });

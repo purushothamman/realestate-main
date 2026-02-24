@@ -61,18 +61,14 @@ import {
   Globe,
   Filter,
 } from 'lucide-react-native';
+import { API_BASE_URL } from '../../../utils/api';
+
 
 const { width: SW, height: SH } = Dimensions.get('window');
 
 /* ═══════════════════════════════════════════════════════════
    API CONFIGURATION
 ═══════════════════════════════════════════════════════════ */
-const getApiUrl = () => {
-  if (Platform.OS === 'android') return 'http://10.0.2.2:5000/api';
-  return 'http://localhost:5000/api';
-};
-
-const API_BASE_URL = getApiUrl();
 
 /* ═══════════════════════════════════════════════════════════
    DESIGN TOKENS

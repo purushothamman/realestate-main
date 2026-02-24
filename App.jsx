@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SplashScreen } from './modules/user/screens/SplashScreen';
@@ -85,7 +85,7 @@ export default function App() {
         if (savedUser) {
           setUserData(JSON.parse(savedUser));
           if (token) {
-            setAuthToken(token);
+            // setAuthToken(token); // Removed non-existent setter
           }
         }
       } catch (e) {
@@ -234,10 +234,18 @@ export default function App() {
     }
   };
 
-  const navigation = {
+  const navigation = useMemo(() => ({
     navigate: navigateTo,
     goBack,
-  };
+  }), [navigateTo, goBack]);
+
+  const handleRegisterSuccess = useCallback((user) => {
+    if (user) setUserData(user);
+    navigateTo('otp');
+  }, [navigateTo]);
+
+  const handleNavigateToLogin = useCallback(() => navigateTo('login'), [navigateTo]);
+
   const showNavbarScreens = ['home', 'messages', 'profile', 'searchResults', 'favorites', 'builderDashboard', 'agentDashboard'];
 
 
@@ -284,11 +292,8 @@ export default function App() {
           <RegisterScreen
             navigation={navigation}
             onBack={goBack}
-            onRegisterSuccess={(user) => {
-              if (user) setUserData(user);
-              navigateTo('otp');
-            }}
-            onNavigateToLogin={() => navigateTo('login')}
+            onRegisterSuccess={handleRegisterSuccess}
+            onNavigateToLogin={handleNavigateToLogin}
           />
         );
 
