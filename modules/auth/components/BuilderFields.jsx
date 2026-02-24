@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'rea
 import { Building2, MessageSquare, Shield, FileText, X, Upload, TrendingUp, Briefcase, MapPin, AlertCircle } from 'lucide-react-native';
 import { FocusableInput } from './FocusableInput';
 
-export const BuilderFields = React.memo(({
+export const BuilderFields = ({
     formData,
     errors,
     handleInputChange,
@@ -223,7 +223,7 @@ export const BuilderFields = React.memo(({
             </View>
         </View>
     );
-});
+};
 
 const styles = StyleSheet.create({
     builderFieldsContainer: {

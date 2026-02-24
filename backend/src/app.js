@@ -39,15 +39,34 @@ app.use(express.json());
 app.use(cors());
 app.use(helmet());
 
-// Serve uploaded files (profile images, property images, etc.)
+// Serve uploaded files (profile images, temporary property images, etc.)
 // Allow cross-origin so images load when app is on a different origin (e.g. localhost:8081 vs localhost:5000)
 const uploadsPath = path.join(__dirname, "..", "..", "uploads");
+const fs = require('fs');
+
+try {
+  fs.mkdirSync(uploadsPath, { recursive: true });
+} catch (e) { }
+
 console.log("✅ Serving /uploads from:", uploadsPath);
 app.use("/uploads", (req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
 }, express.static(uploadsPath));
+
+// Serve structured property images (images_rs)
+const imagesRsPath = path.join(__dirname, "..", "..", "images_rs");
+try {
+  fs.mkdirSync(imagesRsPath, { recursive: true });
+} catch (e) { }
+
+console.log("✅ Serving /images_rs from:", imagesRsPath);
+app.use("/images_rs", (req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  next();
+}, express.static(imagesRsPath));
 
 // Routes
 console.log(" Registering /api/auth routes");

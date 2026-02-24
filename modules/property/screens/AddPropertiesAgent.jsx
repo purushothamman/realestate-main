@@ -57,7 +57,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
     });
 
     const [uploadedImages, setUploadedImages] = useState([]);
-    const [focusedInput, setFocusedInput] = useState(null);
 
     // Builder selection (required for agent flow)
     const [builders, setBuilders] = useState([]);
@@ -798,7 +797,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                             <Animated.View
                                 style={[
                                     styles.inputWrapper,
-                                    focusedInput === 'title' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -807,8 +805,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     placeholderTextColor="#9CA3AF"
                                     value={propertyData.title}
                                     onChangeText={(value) => handleInputChange('title', value)}
-                                    onFocus={() => setFocusedInput('title')}
-                                    onBlur={() => setFocusedInput(null)}
                                 />
                             </Animated.View>
                         </View>
@@ -930,7 +926,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                             <View
                                 style={[
                                     styles.inputWrapper,
-                                    focusedInput === 'city' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -939,8 +934,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     placeholderTextColor="#9CA3AF"
                                     value={propertyData.city}
                                     onChangeText={(value) => handleInputChange('city', value)}
-                                    onFocus={() => setFocusedInput('city')}
-                                    onBlur={() => setFocusedInput(null)}
                                 />
                                 <MapPin color="#9CA3AF" size={18} />
                             </View>
@@ -951,7 +944,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                             <View
                                 style={[
                                     styles.inputWrapper,
-                                    focusedInput === 'address' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -960,8 +952,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     placeholderTextColor="#9CA3AF"
                                     value={propertyData.address}
                                     onChangeText={(value) => handleInputChange('address', value)}
-                                    onFocus={() => setFocusedInput('address')}
-                                    onBlur={() => setFocusedInput(null)}
                                 />
                             </View>
                         </View>
@@ -1000,7 +990,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                 <View
                                     style={[
                                         styles.priceInputWrapper,
-                                        focusedInput === 'price' && styles.inputWrapperFocused,
                                     ]}
                                 >
                                     <Text style={styles.priceSymbol}>$</Text>
@@ -1011,8 +1000,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                         keyboardType="numeric"
                                         value={propertyData.price}
                                         onChangeText={(value) => handleInputChange('price', value)}
-                                        onFocus={() => setFocusedInput('price')}
-                                        onBlur={() => setFocusedInput(null)}
                                     />
                                 </View>
                             </View>
@@ -1022,7 +1009,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                 <View
                                     style={[
                                         styles.inputWrapper,
-                                        focusedInput === 'area' && styles.inputWrapperFocused,
                                     ]}
                                 >
                                     <TextInput
@@ -1032,8 +1018,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                         keyboardType="numeric"
                                         value={propertyData.area}
                                         onChangeText={(value) => handleInputChange('area', value)}
-                                        onFocus={() => setFocusedInput('area')}
-                                        onBlur={() => setFocusedInput(null)}
                                     />
                                 </View>
                             </View>
@@ -1143,7 +1127,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                             <View
                                 style={[
                                     styles.textAreaWrapper,
-                                    focusedInput === 'description' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -1155,8 +1138,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     textAlignVertical="top"
                                     value={propertyData.description}
                                     onChangeText={(value) => handleInputChange('description', value)}
-                                    onFocus={() => setFocusedInput('description')}
-                                    onBlur={() => setFocusedInput(null)}
                                 />
                             </View>
                         </View>

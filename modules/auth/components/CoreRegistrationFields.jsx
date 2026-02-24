@@ -4,7 +4,7 @@ import { User, Mail, Phone } from 'lucide-react-native';
 import { FocusableInput } from './FocusableInput';
 import { PasswordInput } from './PasswordInput';
 
-export const CoreRegistrationFields = React.memo(({
+export const CoreRegistrationFields = ({
     formData,
     errors,
     handleInputChange
@@ -81,7 +81,7 @@ export const CoreRegistrationFields = React.memo(({
             </View>
         </>
     );
-});
+};
 
 const styles = StyleSheet.create({
     inputGroup: {

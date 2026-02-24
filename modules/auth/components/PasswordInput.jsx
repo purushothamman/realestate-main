@@ -3,7 +3,7 @@ import { StyleSheet, TouchableOpacity } from 'react-native';
 import { Eye, EyeOff, Lock } from 'lucide-react-native';
 import { FocusableInput } from './FocusableInput';
 
-export const PasswordInput = React.memo(({ error, ...inputProps }) => {
+export const PasswordInput = ({ error, ...inputProps }) => {
     const [showPassword, setShowPassword] = useState(false);
 
     return (
@@ -31,7 +31,7 @@ export const PasswordInput = React.memo(({ error, ...inputProps }) => {
             {...inputProps}
         />
     );
-});
+};
 
 const styles = StyleSheet.create({
     passwordInput: {

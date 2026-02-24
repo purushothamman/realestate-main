@@ -1,4 +1,6 @@
 const pool = require("../config/db");
+const fs = require("fs");
+const path = require("path");
 
 // create property
 exports.createProperty = async (req, res) => {
@@ -218,14 +220,77 @@ exports.addProperty = async (req, res) => {
             }
         }
 
-        // 2. Insert property images
+        // 2. Insert property images and move files to structured storage
         if (images && images.length > 0) {
+            // Fetch builder email for folder structure
+            const [ownerRows] = await connection.query(
+                "SELECT email FROM users WHERE id = ?",
+                [propertyOwnerId]
+            );
+            const ownerEmail = ownerRows[0]?.email || 'unknown';
+            
+            // Format safe folder names
+            const safeEmail = ownerEmail.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+            const safeTitle = title.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+            
+            const builderFolderName = `${propertyOwnerId}_${safeEmail}`;
+            const propertyFolderName = `${property_id}_${safeTitle}`;
+            
+            const uploadsDir = path.join(__dirname, '..', '..', '..', 'uploads');
+            const imagesRsDir = path.join(__dirname, '..', '..', '..', 'images_rs', builderFolderName, propertyFolderName);
+            
+            // Create target directory
+            try {
+                fs.mkdirSync(imagesRsDir, { recursive: true });
+            } catch (err) {
+                console.warn('Could not create images_rs directory:', imagesRsDir, err.message);
+            }
+
             for (let i = 0; i < images.length; i++) {
                 const image = images[i];
+                let finalUrl = image.image_url || image.url;
+                
+                console.log(`[images_rs] Processing image ${i}: finalUrl = ${finalUrl}`);
+                
+                // If the URL points to our temp uploads directory, move it
+                if (finalUrl && finalUrl.includes('/uploads/')) {
+                    const filename = finalUrl.split('/').pop();
+                    const sourcePath = path.join(uploadsDir, filename);
+                    const destPath = path.join(imagesRsDir, filename);
+                    
+                    console.log(`[images_rs] filename=${filename}`);
+                    console.log(`[images_rs] sourcePath=${sourcePath}`);
+                    console.log(`[images_rs] destPath=${destPath}`);
+                    console.log(`[images_rs] source exists? ${fs.existsSync(sourcePath)}`);
+                    
+                    try {
+                        if (fs.existsSync(sourcePath)) {
+                            // Copy then unlink to ensure we don't lose the file if something crashes mid-move
+                            fs.copyFileSync(sourcePath, destPath);
+                            fs.unlinkSync(sourcePath);
+                            
+                            // Update the URL to point to the new structured path
+                            finalUrl = finalUrl.replace('/uploads/', `/images_rs/${builderFolderName}/${propertyFolderName}/`);
+                            console.log(`[images_rs] ✅ Moved successfully. New URL: ${finalUrl}`);
+                        } else {
+                            console.error(`[images_rs] ❌ Source file NOT found: ${sourcePath}`);
+                            // List what IS in uploadsDir for debugging
+                            try {
+                                const filesInUploads = fs.readdirSync(uploadsDir).filter(f => f.startsWith('property-')).slice(0, 5);
+                                console.log(`[images_rs] Sample files in uploads/: ${filesInUploads.join(', ')}`);
+                            } catch (e) {}
+                        }
+                    } catch (err) {
+                        console.error(`[images_rs] Failed to move image ${filename}:`, err.message);
+                    }
+                } else {
+                    console.log(`[images_rs] URL does not contain /uploads/, skipping move`);
+                }
+
                 await connection.query(
                     `INSERT INTO property_images (property_id, image_url, is_primary, sort_order)
-           VALUES (?, ?, ?, ?)`,
-                    [property_id, image.image_url || image.url, i === 0, i]
+                     VALUES (?, ?, ?, ?)`,
+                    [property_id, finalUrl, i === 0, i]
                 );
             }
         }

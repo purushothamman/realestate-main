@@ -55,7 +55,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
     });
 
     const [uploadedImages, setUploadedImages] = useState([]);
-    const [focusedInput, setFocusedInput] = useState(null);
 
     // Animation values
     const headerAnim = useRef(new Animated.Value(0)).current;
@@ -138,6 +137,49 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
         { id: 'pool', label: 'Swimming Pool', icon: Droplets },
     ];
 
+    const uploadImageToServer = async (asset, token) => {
+        try {
+            const formData = new FormData();
+
+            if (Platform.OS === 'web') {
+                if (asset.file) {
+                    formData.append('image', asset.file);
+                } else {
+                    const response = await fetch(asset.uri);
+                    const blob = await response.blob();
+                    const name = asset.fileName || `property-${Date.now()}.jpg`;
+                    formData.append('image', blob, name);
+                }
+            } else {
+                const name = asset.fileName || `property-${Date.now()}.jpg`;
+                const type = asset.mimeType || 'image/jpeg';
+                formData.append('image', {
+                    uri: asset.uri,
+                    name,
+                    type,
+                });
+            }
+
+            const response = await fetch(`${API_BASE_URL}/upload/property-image`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: formData,
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success || !data.url) {
+                throw new Error(data.message || 'Failed to upload image');
+            }
+
+            return data.url;
+        } catch (error) {
+            console.error('Upload image error:', error);
+            throw error;
+        }
+    };
+
     const handleImageUpload = async () => {
         try {
             // Request permission to access media library
@@ -164,18 +206,15 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
 
             // Launch image picker
             const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                mediaTypes: ['images'],
                 allowsMultipleSelection: true,
                 quality: 0.8,
                 aspect: [4, 3],
             });
 
             if (!result.canceled && result.assets) {
-                // Get the selected images
-                const newImages = result.assets.map(asset => asset.uri);
-
                 // Check total count
-                const totalImages = uploadedImages.length + newImages.length;
+                const totalImages = uploadedImages.length + result.assets.length;
                 if (totalImages > 6) {
                     Alert.alert(
                         'Too Many Images',
@@ -185,8 +224,26 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                     return;
                 }
 
-                // Add new images to state
-                setUploadedImages(prev => [...prev, ...newImages]);
+                const token = await AsyncStorage.getItem('authToken');
+                if (!token) {
+                    Alert.alert('Error', 'You must be logged in to upload images');
+                    return;
+                }
+
+                // Upload each selected image to backend and store the returned URLs
+                const uploadedUrls = [];
+                for (const asset of result.assets) {
+                    try {
+                        const remoteUrl = await uploadImageToServer(asset, token);
+                        uploadedUrls.push(remoteUrl);
+                    } catch (e) {
+                        Alert.alert('Image Upload Failed', 'One of the images could not be uploaded.');
+                    }
+                }
+
+                if (uploadedUrls.length > 0) {
+                    setUploadedImages(prev => [...prev, ...uploadedUrls]);
+                }
             }
         } catch (error) {
             console.error('Image upload error:', error);
@@ -489,7 +546,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                             <Animated.View
                                 style={[
                                     styles.inputWrapper,
-                                    focusedInput === 'title' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -498,8 +554,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     placeholderTextColor="#9CA3AF"
                                     value={propertyData.title}
                                     onChangeText={(value) => handleInputChange('title', value)}
-                                    onFocus={() => setFocusedInput('title')}
-                                    onBlur={() => setFocusedInput(null)}
                                 />
                             </Animated.View>
                         </View>
@@ -621,7 +675,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                             <View
                                 style={[
                                     styles.inputWrapper,
-                                    focusedInput === 'city' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -630,8 +683,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     placeholderTextColor="#9CA3AF"
                                     value={propertyData.city}
                                     onChangeText={(value) => handleInputChange('city', value)}
-                                    onFocus={() => setFocusedInput('city')}
-                                    onBlur={() => setFocusedInput(null)}
                                 />
                                 <MapPin color="#9CA3AF" size={18} />
                             </View>
@@ -642,7 +693,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                             <View
                                 style={[
                                     styles.inputWrapper,
-                                    focusedInput === 'address' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -651,8 +701,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     placeholderTextColor="#9CA3AF"
                                     value={propertyData.address}
                                     onChangeText={(value) => handleInputChange('address', value)}
-                                    onFocus={() => setFocusedInput('address')}
-                                    onBlur={() => setFocusedInput(null)}
                                 />
                             </View>
                         </View>
@@ -691,7 +739,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                 <View
                                     style={[
                                         styles.priceInputWrapper,
-                                        focusedInput === 'price' && styles.inputWrapperFocused,
                                     ]}
                                 >
                                     <Text style={styles.priceSymbol}>$</Text>
@@ -702,8 +749,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                         keyboardType="numeric"
                                         value={propertyData.price}
                                         onChangeText={(value) => handleInputChange('price', value)}
-                                        onFocus={() => setFocusedInput('price')}
-                                        onBlur={() => setFocusedInput(null)}
                                     />
                                 </View>
                             </View>
@@ -713,7 +758,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                 <View
                                     style={[
                                         styles.inputWrapper,
-                                        focusedInput === 'area' && styles.inputWrapperFocused,
                                     ]}
                                 >
                                     <TextInput
@@ -723,8 +767,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                         keyboardType="numeric"
                                         value={propertyData.area}
                                         onChangeText={(value) => handleInputChange('area', value)}
-                                        onFocus={() => setFocusedInput('area')}
-                                        onBlur={() => setFocusedInput(null)}
                                     />
                                 </View>
                             </View>
@@ -825,7 +867,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                             <View
                                 style={[
                                     styles.textAreaWrapper,
-                                    focusedInput === 'description' && styles.inputWrapperFocused,
                                 ]}
                             >
                                 <TextInput
@@ -837,8 +878,6 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                     textAlignVertical="top"
                                     value={propertyData.description}
                                     onChangeText={(value) => handleInputChange('description', value)}
-                                    onFocus={() => setFocusedInput('description')}
-                                    onBlur={() => setFocusedInput(null)}
                                 />
                             </View>
                         </View>

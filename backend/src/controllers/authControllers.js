@@ -3,6 +3,8 @@ const pool = require("../config/db");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const { OAuth2Client } = require('google-auth-library');
 const { getRequestMetadata, getDeviceType, getBrowser, getOS } = require("../utils/requestUtils");
 
@@ -887,6 +889,38 @@ module.exports.register = async (req, res) => {
                     profileImage?.trim() || null
                 ]
             );
+        }
+
+        // Move profile image to structured storage (images_rs/profiles/{userId}_{email}/)
+        if (profileImage && profileImage.includes('/uploads/')) {
+            try {
+                const filename = profileImage.split('/').pop();
+                const safeEmail = email.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+                const uploadsDir = path.join(__dirname, '..', '..', '..', 'uploads');
+                const profileDir = path.join(__dirname, '..', '..', '..', 'images_rs', 'profiles', `${userId}_${safeEmail}`);
+
+                fs.mkdirSync(profileDir, { recursive: true });
+
+                const sourcePath = path.join(uploadsDir, filename);
+                const destPath = path.join(profileDir, filename);
+
+                if (fs.existsSync(sourcePath)) {
+                    fs.copyFileSync(sourcePath, destPath);
+                    fs.unlinkSync(sourcePath);
+
+                    const relativePath = `/images_rs/profiles/${userId}_${safeEmail}/${filename}`;
+                    await connection.query("UPDATE users SET profile_image = ? WHERE id = ?", [relativePath, userId]);
+                    if (role === 'builder') {
+                        await connection.query("UPDATE builders SET profile_image = ? WHERE user_id = ?", [relativePath, userId]);
+                    }
+                    console.log(`[profile_image] ✅ Moved to ${relativePath}`);
+                } else {
+                    console.warn(`[profile_image] ⚠️ Source not found: ${sourcePath}`);
+                }
+            } catch (moveErr) {
+                console.error('[profile_image] Failed to move profile image:', moveErr.message);
+                // Non-fatal: registration still succeeds with old URL
+            }
         }
 
         // Commit transaction
