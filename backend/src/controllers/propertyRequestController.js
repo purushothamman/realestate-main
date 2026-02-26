@@ -80,6 +80,7 @@ exports.getBuilderRequestById = async (req, res) => {
         a.name as agent_name,
         a.email as agent_email,
         a.phone as agent_phone,
+        a.profile_image as agent_profile_image,
 
         p.id as property_id,
         p.title as title,
@@ -115,6 +116,7 @@ exports.getBuilderRequestById = async (req, res) => {
         a.name,
         a.email,
         a.phone,
+        a.profile_image,
         p.id,
         p.title,
         p.description,
@@ -175,7 +177,8 @@ exports.getBuilderRequestById = async (req, res) => {
           id: row.agent_id,
           name: row.agent_name,
           email: row.agent_email,
-          phone: row.agent_phone
+          phone: row.agent_phone,
+          profile_image: row.agent_profile_image || null
         },
         property: {
           id: row.property_id,

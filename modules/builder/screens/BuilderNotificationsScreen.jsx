@@ -18,7 +18,9 @@
  * Safety : Every TextInput uses the onBlur-commit pattern — no focus flicker.
  */
 
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL, getImageUrl } from '../../../utils/api';
 import {
   View, Text, TextInput, StyleSheet, TouchableOpacity,
   FlatList, ScrollView, Image, Modal, Alert,
@@ -40,18 +42,18 @@ const { width: SW, height: SH } = Dimensions.get('window');
 ══════════════════════════════════════════════════════════ */
 const T = {
   // Greens
-  g900:'#0D3320', g800:'#1B5E3B', g700:'#1E7444', g600:'#25904F',
-  g500:'#2EAD5F', g400:'#5BC282', g200:'#C6E8D4', g100:'#E8F5ED', g50:'#F4FAF7',
+  g900: '#0D3320', g800: '#1B5E3B', g700: '#1E7444', g600: '#25904F',
+  g500: '#2EAD5F', g400: '#5BC282', g200: '#C6E8D4', g100: '#E8F5ED', g50: '#F4FAF7',
   // Neutrals
-  n900:'#111827', n800:'#1F2937', n700:'#374151', n600:'#4B5563',
-  n500:'#6B7280', n400:'#9CA3AF', n300:'#D1D5DB', n200:'#E5E7EB',
-  n100:'#F3F4F6', white:'#FFFFFF',
+  n900: '#111827', n800: '#1F2937', n700: '#374151', n600: '#4B5563',
+  n500: '#6B7280', n400: '#9CA3AF', n300: '#D1D5DB', n200: '#E5E7EB',
+  n100: '#F3F4F6', white: '#FFFFFF',
   // Accents
-  amber:'#F59E0B', amberBg:'#FFFBEB', amberBdr:'#FCD34D',
-  red:'#EF4444',   redBg:'#FEF2F2',   redBdr:'#FECACA',
-  blue:'#3B82F6',  blueBg:'#EFF6FF',  blueBdr:'#BFDBFE',
-  teal:'#0D9488',  tealBg:'#F0FDFA',  tealBdr:'#99F6E4',
-  shadow:'rgba(27,94,59,0.12)',
+  amber: '#F59E0B', amberBg: '#FFFBEB', amberBdr: '#FCD34D',
+  red: '#EF4444', redBg: '#FEF2F2', redBdr: '#FECACA',
+  blue: '#3B82F6', blueBg: '#EFF6FF', blueBdr: '#BFDBFE',
+  teal: '#0D9488', tealBg: '#F0FDFA', tealBdr: '#99F6E4',
+  shadow: 'rgba(27,94,59,0.12)',
 };
 
 /* ══════════════════════════════════════════════════════════
@@ -59,131 +61,131 @@ const T = {
 ══════════════════════════════════════════════════════════ */
 const SEED = [
   {
-    id:'b1', type:'agent_hire_response', read:false,
-    createdAt:'2025-02-23T10:05:00Z', status:'accepted',
-    sender:{
-      name:'Priya Sharma', role:'Agent',
-      avatar:'https://i.pravatar.cc/150?img=47',
-      email:'priya@realty.com', phone:'9876543210',
-      experience:7, rating:4.8, deals:142, spec:'Residential',
+    id: 'b1', type: 'agent_hire_response', read: false,
+    createdAt: '2025-02-23T10:05:00Z', status: 'accepted',
+    sender: {
+      name: 'Priya Sharma', role: 'Agent',
+      avatar: 'https://i.pravatar.cc/150?img=47',
+      email: 'priya@realty.com', phone: '9876543210',
+      experience: 7, rating: 4.8, deals: 142, spec: 'Residential',
     },
-    summary:'Priya Sharma accepted your hire request',
-    message:'Thank you for the opportunity. I am pleased to accept the hire request for Greenfield Villas. I have reviewed the project in full and am confident I can deliver excellent results. I will coordinate with your team immediately to begin the onboarding process.',
-    property:{
-      name:'Greenfield Villas', location:'Bandra West, Mumbai',
-      type:'Residential', units:32,
-      image:'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=600&q=80',
+    summary: 'Priya Sharma accepted your hire request',
+    message: 'Thank you for the opportunity. I am pleased to accept the hire request for Greenfield Villas. I have reviewed the project in full and am confident I can deliver excellent results. I will coordinate with your team immediately to begin the onboarding process.',
+    property: {
+      name: 'Greenfield Villas', location: 'Bandra West, Mumbai',
+      type: 'Residential', units: 32,
+      image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?w=600&q=80',
     },
-    offer:{ commission:'2.5%', duration:'12 months' },
-    submission:null,
+    offer: { commission: '2.5%', duration: '12 months' },
+    submission: null,
   },
   {
-    id:'b2', type:'property_submission', read:false,
-    createdAt:'2025-02-23T08:30:00Z', status:'pending',
-    sender:{
-      name:'Rahul Verma', role:'Agent',
-      avatar:'https://i.pravatar.cc/150?img=12',
-      email:'rahul@realty.com', phone:'9823456789',
-      experience:5, rating:4.5, deals:98, spec:'Commercial',
+    id: 'b2', type: 'property_submission', read: false,
+    createdAt: '2025-02-23T08:30:00Z', status: 'pending',
+    sender: {
+      name: 'Rahul Verma', role: 'Agent',
+      avatar: 'https://i.pravatar.cc/150?img=12',
+      email: 'rahul@realty.com', phone: '9823456789',
+      experience: 5, rating: 4.5, deals: 98, spec: 'Commercial',
     },
-    summary:'Rahul submitted Skyline Commercial Hub for your approval',
-    message:'I have completed the full listing for Skyline Commercial Hub including unit specs, pricing tiers, floor plans, and RERA compliance details. All four supporting documents are attached. Please review and approve so we can go live on the platform at the earliest.',
-    property:{
-      name:'Skyline Commercial Hub', location:'Powai, Mumbai',
-      type:'Commercial', units:8,
-      image:'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=600&q=80',
+    summary: 'Rahul submitted Skyline Commercial Hub for your approval',
+    message: 'I have completed the full listing for Skyline Commercial Hub including unit specs, pricing tiers, floor plans, and RERA compliance details. All four supporting documents are attached. Please review and approve so we can go live on the platform at the earliest.',
+    property: {
+      name: 'Skyline Commercial Hub', location: 'Powai, Mumbai',
+      type: 'Commercial', units: 8,
+      image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=600&q=80',
     },
-    offer:null,
-    submission:{ listedPrice:'₹4.2 Cr / unit', listedArea:'2,400 sq ft / unit', docsAttached:4 },
+    offer: null,
+    submission: { listedPrice: '₹4.2 Cr / unit', listedArea: '2,400 sq ft / unit', docsAttached: 4 },
   },
   {
-    id:'b3', type:'user_inquiry', read:true,
-    createdAt:'2025-02-22T17:10:00Z', status:'pending',
-    sender:{
-      name:'Ananya Krishnan', role:'Buyer',
-      avatar:'https://i.pravatar.cc/150?img=43',
-      email:'ananya.k@gmail.com', phone:'9765001234',
+    id: 'b3', type: 'user_inquiry', read: true,
+    createdAt: '2025-02-22T17:10:00Z', status: 'pending',
+    sender: {
+      name: 'Ananya Krishnan', role: 'Buyer',
+      avatar: 'https://i.pravatar.cc/150?img=43',
+      email: 'ananya.k@gmail.com', phone: '9765001234',
     },
-    summary:'2 BHK availability and pricing inquiry — Emerald Heights',
-    message:'Hi, I came across Emerald Heights and I am very interested. Could you share current 2 BHK availability, pricing, and payment plan options? My budget is ₹1.8–2.1 Cr. I would also love to schedule a site visit this week if possible.',
-    property:{
-      name:'Emerald Heights', location:'Andheri East, Mumbai',
-      type:'Residential', units:36,
-      image:'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80',
+    summary: '2 BHK availability and pricing inquiry — Emerald Heights',
+    message: 'Hi, I came across Emerald Heights and I am very interested. Could you share current 2 BHK availability, pricing, and payment plan options? My budget is ₹1.8–2.1 Cr. I would also love to schedule a site visit this week if possible.',
+    property: {
+      name: 'Emerald Heights', location: 'Andheri East, Mumbai',
+      type: 'Residential', units: 36,
+      image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80',
     },
-    offer:null, submission:null,
+    offer: null, submission: null,
   },
   {
-    id:'b4', type:'agent_assignment_response', read:false,
-    createdAt:'2025-02-22T14:20:00Z', status:'rejected',
-    sender:{
-      name:'Arjun Mehta', role:'Agent',
-      avatar:'https://i.pravatar.cc/150?img=68',
-      email:'arjun@realty.com', phone:'9812345678',
-      experience:10, rating:4.9, deals:230, spec:'Luxury',
+    id: 'b4', type: 'agent_assignment_response', read: false,
+    createdAt: '2025-02-22T14:20:00Z', status: 'rejected',
+    sender: {
+      name: 'Arjun Mehta', role: 'Agent',
+      avatar: 'https://i.pravatar.cc/150?img=68',
+      email: 'arjun@realty.com', phone: '9812345678',
+      experience: 10, rating: 4.9, deals: 230, spec: 'Luxury',
     },
-    summary:'Arjun Mehta declined the Harbor View Plaza assignment',
-    message:'Thank you for considering me. I must unfortunately decline the assignment for Harbor View Plaza as I am currently at full capacity with existing projects. My schedule opens up in Q3 2025 and I would love to collaborate on future projects then.',
-    property:{
-      name:'Harbor View Plaza', location:'Worli, Mumbai',
-      type:'Mixed Use', units:12,
-      image:'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=80',
+    summary: 'Arjun Mehta declined the Harbor View Plaza assignment',
+    message: 'Thank you for considering me. I must unfortunately decline the assignment for Harbor View Plaza as I am currently at full capacity with existing projects. My schedule opens up in Q3 2025 and I would love to collaborate on future projects then.',
+    property: {
+      name: 'Harbor View Plaza', location: 'Worli, Mumbai',
+      type: 'Mixed Use', units: 12,
+      image: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=80',
     },
-    offer:null, submission:null,
+    offer: null, submission: null,
   },
   {
-    id:'b5', type:'property_submission', read:true,
-    createdAt:'2025-02-21T11:45:00Z', status:'approved',
-    sender:{
-      name:'Kavita Nair', role:'Agent',
-      avatar:'https://i.pravatar.cc/150?img=25',
-      email:'kavita@realty.com', phone:'9654321098',
-      experience:4, rating:4.3, deals:76, spec:'Mixed Use',
+    id: 'b5', type: 'property_submission', read: true,
+    createdAt: '2025-02-21T11:45:00Z', status: 'approved',
+    sender: {
+      name: 'Kavita Nair', role: 'Agent',
+      avatar: 'https://i.pravatar.cc/150?img=25',
+      email: 'kavita@realty.com', phone: '9654321098',
+      experience: 4, rating: 4.3, deals: 76, spec: 'Mixed Use',
     },
-    summary:'Palm Springs Villa listing submitted for approval',
-    message:'The full listing for Palm Springs Villa has been submitted with virtual tour links, floor plan PDFs, and a detailed pricing matrix. Please review and approve so we can begin receiving buyer inquiries as soon as possible.',
-    property:{
-      name:'Palm Springs Villa', location:'Juhu, Mumbai',
-      type:'Residential', units:6,
-      image:'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80',
+    summary: 'Palm Springs Villa listing submitted for approval',
+    message: 'The full listing for Palm Springs Villa has been submitted with virtual tour links, floor plan PDFs, and a detailed pricing matrix. Please review and approve so we can begin receiving buyer inquiries as soon as possible.',
+    property: {
+      name: 'Palm Springs Villa', location: 'Juhu, Mumbai',
+      type: 'Residential', units: 6,
+      image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80',
     },
-    offer:null,
-    submission:{ listedPrice:'₹6.5 Cr / villa', listedArea:'4,800 sq ft / villa', docsAttached:7 },
+    offer: null,
+    submission: { listedPrice: '₹6.5 Cr / villa', listedArea: '4,800 sq ft / villa', docsAttached: 7 },
   },
   {
-    id:'b6', type:'user_inquiry', read:false,
-    createdAt:'2025-02-20T09:30:00Z', status:'pending',
-    sender:{
-      name:'Rohan Mehta', role:'Buyer',
-      avatar:'https://i.pravatar.cc/150?img=68',
-      email:'rohan.mehta@outlook.com', phone:'9654123456',
+    id: 'b6', type: 'user_inquiry', read: false,
+    createdAt: '2025-02-20T09:30:00Z', status: 'pending',
+    sender: {
+      name: 'Rohan Mehta', role: 'Buyer',
+      avatar: 'https://i.pravatar.cc/150?img=68',
+      email: 'rohan.mehta@outlook.com', phone: '9654123456',
     },
-    summary:'Site-visit request for Palm Springs Villa this weekend',
-    message:'Hello, I am very interested in Palm Springs Villa and would love to schedule a site visit this Saturday or Sunday morning. I am a serious buyer with funds ready and would like to discuss the payment plan and any early-booking benefits.',
-    property:{
-      name:'Palm Springs Villa', location:'Juhu, Mumbai',
-      type:'Residential', units:6,
-      image:'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80',
+    summary: 'Site-visit request for Palm Springs Villa this weekend',
+    message: 'Hello, I am very interested in Palm Springs Villa and would love to schedule a site visit this Saturday or Sunday morning. I am a serious buyer with funds ready and would like to discuss the payment plan and any early-booking benefits.',
+    property: {
+      name: 'Palm Springs Villa', location: 'Juhu, Mumbai',
+      type: 'Residential', units: 6,
+      image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80',
     },
-    offer:null, submission:null,
+    offer: null, submission: null,
   },
   {
-    id:'b7', type:'agent_hire_response', read:true,
-    createdAt:'2025-02-19T16:00:00Z', status:'rejected',
-    sender:{
-      name:'Sneha Patil', role:'Agent',
-      avatar:'https://i.pravatar.cc/150?img=32',
-      email:'sneha@realty.com', phone:'9765432100',
-      experience:3, rating:4.2, deals:54, spec:'Residential',
+    id: 'b7', type: 'agent_hire_response', read: true,
+    createdAt: '2025-02-19T16:00:00Z', status: 'rejected',
+    sender: {
+      name: 'Sneha Patil', role: 'Agent',
+      avatar: 'https://i.pravatar.cc/150?img=32',
+      email: 'sneha@realty.com', phone: '9765432100',
+      experience: 3, rating: 4.2, deals: 54, spec: 'Residential',
     },
-    summary:'Sneha Patil declined your hire request',
-    message:'Thank you for the kind offer. I must respectfully decline the hire request for Emerald Heights due to prior commitments running through Q3. I would be happy to revisit collaborating in Q4 2025 once my schedule opens up.',
-    property:{
-      name:'Emerald Heights', location:'Andheri East, Mumbai',
-      type:'Residential', units:36,
-      image:'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80',
+    summary: 'Sneha Patil declined your hire request',
+    message: 'Thank you for the kind offer. I must respectfully decline the hire request for Emerald Heights due to prior commitments running through Q3. I would be happy to revisit collaborating in Q4 2025 once my schedule opens up.',
+    property: {
+      name: 'Emerald Heights', location: 'Andheri East, Mumbai',
+      type: 'Residential', units: 36,
+      image: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=600&q=80',
     },
-    offer:null, submission:null,
+    offer: null, submission: null,
   },
 ];
 
@@ -191,37 +193,41 @@ const SEED = [
    TYPE + STATUS CONFIG
 ══════════════════════════════════════════════════════════ */
 const TYPE_CFG = {
-  agent_hire_response:       { label:'Hire Response',    Icon:UserCheck,     color:T.teal,  bg:T.tealBg,  border:T.tealBdr  },
-  agent_assignment_response: { label:'Assignment Reply', Icon:Building2,     color:T.g700,  bg:T.g100,    border:T.g200     },
-  property_submission:       { label:'Submission',       Icon:FileText,      color:T.blue,  bg:T.blueBg,  border:T.blueBdr  },
-  user_inquiry:              { label:'User Inquiry',     Icon:MessageSquare, color:T.amber, bg:T.amberBg, border:T.amberBdr },
+  agent_hire_response: { label: 'Hire Response', Icon: UserCheck, color: T.teal, bg: T.tealBg, border: T.tealBdr },
+  agent_assignment_response: { label: 'Assignment Reply', Icon: Building2, color: T.g700, bg: T.g100, border: T.g200 },
+  property_submission: { label: 'Submission', Icon: FileText, color: T.blue, bg: T.blueBg, border: T.blueBdr },
+  user_inquiry: { label: 'User Inquiry', Icon: MessageSquare, color: T.amber, bg: T.amberBg, border: T.amberBdr },
+  hire_response: { label: 'Hire Response', Icon: UserCheck, color: T.teal, bg: T.tealBg, border: T.tealBdr },
+  hire_request: { label: 'Hire Request', Icon: Briefcase, color: T.blue, bg: T.blueBg, border: T.blueBdr },
+  property_approved: { label: 'Approved', Icon: BadgeCheck, color: T.g700, bg: T.g100, border: T.g200 },
+  _default: { label: 'Notification', Icon: MessageSquare, color: T.n500, bg: T.n100, border: T.n200 },
 };
 
 const STATUS_CFG = {
-  pending:  { label:'Pending',  color:T.amber, bg:T.amberBg, Icon:Clock        },
-  accepted: { label:'Accepted', color:T.g700,  bg:T.g100,    Icon:CheckCircle2 },
-  rejected: { label:'Rejected', color:T.red,   bg:T.redBg,   Icon:XCircle      },
-  approved: { label:'Approved', color:T.g700,  bg:T.g100,    Icon:BadgeCheck   },
+  pending: { label: 'Pending', color: T.amber, bg: T.amberBg, Icon: Clock },
+  accepted: { label: 'Accepted', color: T.g700, bg: T.g100, Icon: CheckCircle2 },
+  rejected: { label: 'Rejected', color: T.red, bg: T.redBg, Icon: XCircle },
+  approved: { label: 'Approved', color: T.g700, bg: T.g100, Icon: BadgeCheck },
 };
 
-const FILTER_TABS = ['All','Unread','Agent Responses','Submissions','Inquiries'];
+const FILTER_TABS = ['All', 'Unread', 'Agent Responses', 'Submissions', 'Inquiries'];
 
 /* ══════════════════════════════════════════════════════════
    DATE HELPERS
 ══════════════════════════════════════════════════════════ */
 const fmtRel = (iso) => {
   const s = Math.floor((Date.now() - new Date(iso)) / 1000);
-  if (s < 60)     return 'Just now';
-  if (s < 3600)   return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400)  return `${Math.floor(s / 3600)}h ago`;
+  if (s < 60) return 'Just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   if (s < 172800) return 'Yesterday';
-  return new Date(iso).toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 };
 
 const fmtFull = (iso) => {
   const d = new Date(iso);
-  return d.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long', year:'numeric' })
-    + ' · ' + d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+  return d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    + ' · ' + d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 };
 
 /* ══════════════════════════════════════════════════════════
@@ -248,9 +254,9 @@ const TypeBadge = ({ type }) => {
 };
 
 const AgentStars = ({ rating }) => (
-  <View style={{ flexDirection:'row', alignItems:'center', gap:3 }}>
+  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
     <Star color={T.amber} fill={T.amber} size={12} strokeWidth={0} />
-    <Text style={{ fontSize:12, fontWeight:'700', color:T.n700 }}>{rating.toFixed(1)}</Text>
+    <Text style={{ fontSize: 12, fontWeight: '700', color: T.n700 }}>{rating.toFixed(1)}</Text>
   </View>
 );
 
@@ -259,11 +265,11 @@ const SectionLabel = ({ text, mt = 0 }) => (
 );
 
 const atoms = StyleSheet.create({
-  pill:    { flexDirection:'row', alignItems:'center', gap:4, paddingHorizontal:9, paddingVertical:4, borderRadius:20 },
-  pillTxt: { fontSize:11, fontWeight:'700' },
-  badge:   { flexDirection:'row', alignItems:'center', gap:4, paddingHorizontal:8, paddingVertical:3, borderRadius:8, borderWidth:1 },
-  badgeTxt:{ fontSize:10, fontWeight:'700', letterSpacing:0.2 },
-  secLbl:  { fontSize:10, fontWeight:'800', color:T.n400, letterSpacing:1.4, marginBottom:10 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
+  pillTxt: { fontSize: 11, fontWeight: '700' },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
+  badgeTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
+  secLbl: { fontSize: 10, fontWeight: '800', color: T.n400, letterSpacing: 1.4, marginBottom: 10 },
 });
 
 /* ══════════════════════════════════════════════════════════
@@ -271,9 +277,9 @@ const atoms = StyleSheet.create({
    onBlur-commit pattern  ←  no parent re-renders during typing
 ══════════════════════════════════════════════════════════ */
 const ReplyInput = React.memo(({ recipientName, onSend }) => {
-  const [val,     setVal]     = useState('');
+  const [val, setVal] = useState('');
   const [sending, setSending] = useState(false);
-  const wrapRef               = useRef(null);
+  const wrapRef = useRef(null);
 
   const onFocus = useCallback(() => {
     wrapRef.current?.setNativeProps({ style: { borderColor: T.g600 } });
@@ -325,10 +331,10 @@ const ReplyInput = React.memo(({ recipientName, onSend }) => {
 }, () => true);
 
 const replyS = StyleSheet.create({
-  wrap:   { backgroundColor:T.g50, borderWidth:1.5, borderColor:T.n300, borderRadius:14, padding:14, minHeight:90 },
-  input:  { fontSize:14, color:T.n900, minHeight:65 },
-  btn:    { flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, backgroundColor:T.g800, borderRadius:14, paddingVertical:14, elevation:3, shadowColor:T.shadow, shadowOffset:{width:0,height:3}, shadowOpacity:1, shadowRadius:6 },
-  btnTxt: { color:T.white, fontSize:15, fontWeight:'700' },
+  wrap: { backgroundColor: T.g50, borderWidth: 1.5, borderColor: T.n300, borderRadius: 14, padding: 14, minHeight: 90 },
+  input: { fontSize: 14, color: T.n900, minHeight: 65 },
+  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: T.g800, borderRadius: 14, paddingVertical: 14, elevation: 3, shadowColor: T.shadow, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 1, shadowRadius: 6 },
+  btnTxt: { color: T.white, fontSize: 15, fontWeight: '700' },
 });
 
 /* ══════════════════════════════════════════════════════════
@@ -355,36 +361,36 @@ function PageHeader({ title, subtitle, onBack, right, unread }) {
 }
 
 const header = StyleSheet.create({
-  bar:      { backgroundColor:T.g800, paddingTop:Platform.OS==='ios'?58:28, paddingBottom:22, paddingHorizontal:20, flexDirection:'row', alignItems:'center', gap:14 },
-  btn:      { width:40, height:40, borderRadius:12, backgroundColor:'rgba(255,255,255,0.15)', justifyContent:'center', alignItems:'center' },
-  title:    { fontSize:20, fontWeight:'800', color:T.white, letterSpacing:-0.4 },
-  sub:      { fontSize:12, color:'rgba(255,255,255,0.65)', marginTop:2 },
-  badge:    { position:'absolute', top:Platform.OS==='ios'?56:26, right:10, backgroundColor:T.red, width:18, height:18, borderRadius:9, justifyContent:'center', alignItems:'center', borderWidth:2, borderColor:T.g800 },
-  badgeTxt: { fontSize:9, fontWeight:'900', color:T.white },
+  bar: { backgroundColor: T.g800, paddingTop: Platform.OS === 'ios' ? 58 : 28, paddingBottom: 22, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  btn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+  title: { fontSize: 20, fontWeight: '800', color: T.white, letterSpacing: -0.4 },
+  sub: { fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+  badge: { position: 'absolute', top: Platform.OS === 'ios' ? 56 : 26, right: 10, backgroundColor: T.red, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: T.g800 },
+  badgeTxt: { fontSize: 9, fontWeight: '900', color: T.white },
 });
 
 /* ══════════════════════════════════════════════════════════
    NOTIFICATION  LIST  VIEW
 ══════════════════════════════════════════════════════════ */
 function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
-  const [filter,   setFilter]   = useState('All');
-  const [search,   setSearch]   = useState('');
+  const [filter, setFilter] = useState('All');
+  const [search, setSearch] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
 
   const unreadCount = useMemo(() => notifs.filter(n => !n.read).length, [notifs]);
 
   const filtered = useMemo(() => {
     let list = notifs;
-    if      (filter === 'Unread')          list = list.filter(n => !n.read);
+    if (filter === 'Unread') list = list.filter(n => !n.read);
     else if (filter === 'Agent Responses') list = list.filter(n => n.type === 'agent_hire_response' || n.type === 'agent_assignment_response');
-    else if (filter === 'Submissions')     list = list.filter(n => n.type === 'property_submission');
-    else if (filter === 'Inquiries')       list = list.filter(n => n.type === 'user_inquiry');
+    else if (filter === 'Submissions') list = list.filter(n => n.type === 'property_submission');
+    else if (filter === 'Inquiries') list = list.filter(n => n.type === 'user_inquiry');
 
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(n =>
         n.sender.name.toLowerCase().includes(q) ||
-        n.summary.toLowerCase().includes(q)     ||
+        n.summary.toLowerCase().includes(q) ||
         (n.property?.name.toLowerCase().includes(q))
       );
     }
@@ -399,7 +405,7 @@ function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
   };
 
   const renderItem = ({ item }) => {
-    const cfg    = TYPE_CFG[item.type];
+    const cfg = TYPE_CFG[item.type] || TYPE_CFG._default;
     const stripe = stripeFor(item);
 
     return (
@@ -550,19 +556,89 @@ function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   AGENT  DETAIL  VIEW
+══════════════════════════════════════════════════════════ */
+function AgentDetailView({ agent, onBack }) {
+  const avatarUrl = agent?.avatar;
+  const initial = (agent?.name || '?').charAt(0).toUpperCase();
+
+  return (
+    <View style={g.screen}>
+      <StatusBar barStyle="light-content" backgroundColor={T.g800} />
+      <PageHeader title="Agent Profile" subtitle={agent?.role || 'Agent'} onBack={onBack} />
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {/* Avatar */}
+        <View style={{ alignItems: 'center', marginBottom: 20 }}>
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={{ width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: T.g400 }} />
+          ) : (
+            <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: T.g600, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: T.g400 }}>
+              <Text style={{ color: T.white, fontSize: 42, fontWeight: '800' }}>{initial}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Name & Role */}
+        <View style={{ alignItems: 'center', marginBottom: 24 }}>
+          <Text style={{ fontSize: 22, fontWeight: '800', color: T.n900, letterSpacing: -0.3 }}>{agent?.name || 'Agent'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, backgroundColor: T.g100, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: T.g200 }}>
+            <UserCheck color={T.g700} size={13} strokeWidth={2.5} />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: T.g700 }}>{agent?.role || 'Agent'}</Text>
+          </View>
+        </View>
+
+        {/* Contact Card */}
+        <SectionLabel text="CONTACT INFORMATION" />
+        <View style={{ backgroundColor: T.white, borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: T.n200, gap: 16 }}>
+          {agent?.email ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: T.g100, justifyContent: 'center', alignItems: 'center' }}>
+                <Mail color={T.g700} size={18} strokeWidth={2} />
+              </View>
+              <View>
+                <Text style={{ fontSize: 11, color: T.n400, fontWeight: '600', marginBottom: 2 }}>Email</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: T.n900 }}>{agent.email}</Text>
+              </View>
+            </View>
+          ) : null}
+          {agent?.phone ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: T.g100, justifyContent: 'center', alignItems: 'center' }}>
+                <Phone color={T.g700} size={18} strokeWidth={2} />
+              </View>
+              <View>
+                <Text style={{ fontSize: 11, color: T.n400, fontWeight: '600', marginBottom: 2 }}>Phone</Text>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: T.n900 }}>{agent.phone}</Text>
+              </View>
+            </View>
+          ) : null}
+        </View>
+
+        {(!agent?.email && !agent?.phone) ? (
+          <View style={{ alignItems: 'center', paddingTop: 20 }}>
+            <Text style={{ fontSize: 14, color: T.n400 }}>No contact details available.</Text>
+          </View>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════
    NOTIFICATION  DETAIL  VIEW
 ══════════════════════════════════════════════════════════ */
-function NotificationDetail({ notif, onBack, onAction }) {
+function NotificationDetail({ notif, onBack, onAction, navigation }) {
   const [localStatus, setLocalStatus] = useState(notif.status);
-  const [actioning,   setActioning]   = useState(null); // 'approve' | 'reject'
+  const [actioning, setActioning] = useState(null); // 'approve' | 'reject'
+  const [showAgentDetail, setShowAgentDetail] = useState(false);
 
-  const cfg   = TYPE_CFG[notif.type];
-  const scfg  = STATUS_CFG[localStatus] ?? STATUS_CFG.pending;
+  const cfg = TYPE_CFG[notif.type] || TYPE_CFG._default;
+  const scfg = STATUS_CFG[localStatus] ?? STATUS_CFG.pending;
 
-  const isAgentResp   = notif.type === 'agent_hire_response' || notif.type === 'agent_assignment_response';
-  const isSubmission  = notif.type === 'property_submission';
-  const isInquiry     = notif.type === 'user_inquiry';
-  const canAct        = isSubmission && localStatus === 'pending';
+  const isAgentResp = notif.type === 'agent_hire_response' || notif.type === 'agent_assignment_response';
+  const isSubmission = notif.type === 'property_submission';
+  const isInquiry = notif.type === 'user_inquiry';
+  const canAct = isSubmission && localStatus === 'pending';
 
   /* Colour accent — green for accepted, red for rejected agent responses */
   const accentColor = isAgentResp
@@ -571,23 +647,47 @@ function NotificationDetail({ notif, onBack, onAction }) {
 
   const handleSubmission = async (action) => {
     setActioning(action);
-    await new Promise(r => setTimeout(r, 950));
-    const next = action === 'approve' ? 'approved' : 'rejected';
-    setLocalStatus(next);
-    setActioning(null);
-    onAction(notif.id, next);
-    Alert.alert(
-      action === 'approve' ? '✓ Listing Approved' : 'Submission Rejected',
-      action === 'approve'
-        ? `${notif.property?.name} is now live on the platform.`
-        : `The submission from ${notif.sender.name} has been rejected.`,
-      [{ text: 'OK' }]
-    );
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const requestId = notif.relatedEntityId;
+      if (requestId && token) {
+        const endpoint = action === 'approve'
+          ? `${API_BASE_URL}/property-requests/${requestId}/approve`
+          : `${API_BASE_URL}/property-requests/${requestId}/reject`;
+        const resp = await fetch(endpoint, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: action === 'reject' ? JSON.stringify({ rejection_reason: 'Disapproved by builder' }) : undefined,
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.message || 'Request failed');
+      }
+      const next = action === 'approve' ? 'approved' : 'rejected';
+      setLocalStatus(next);
+      onAction(notif.id, next);
+      Alert.alert(
+        action === 'approve' ? '✓ Listing Approved' : 'Submission Rejected',
+        action === 'approve'
+          ? `The property is now live on the platform.`
+          : `The submission has been rejected.`,
+        [{ text: 'OK' }]
+      );
+    } catch (err) {
+      console.error('handleSubmission error:', err);
+      Alert.alert('Error', err.message || 'Failed to process request');
+    } finally {
+      setActioning(null);
+    }
   };
 
   const handleReply = useCallback((text) => {
     Alert.alert('Reply Sent', `Your message has been delivered to ${notif.sender.name}.`);
   }, [notif.sender.name]);
+
+  // Early return AFTER all hooks
+  if (showAgentDetail) {
+    return <AgentDetailView agent={notif.sender} onBack={() => setShowAgentDetail(false)} />;
+  }
 
   return (
     <View style={g.screen}>
@@ -613,7 +713,15 @@ function NotificationDetail({ notif, onBack, onAction }) {
         {/* ── SENDER CARD ── */}
         <SectionLabel text={isInquiry ? 'FROM BUYER' : 'FROM AGENT'} />
         <View style={[detail.senderCard, accentColor && { borderLeftColor: accentColor, borderLeftWidth: 4 }]}>
-          <Image source={{ uri: notif.sender.avatar }} style={detail.sAvatar} />
+          {notif.sender.avatar && notif.sender.avatar.startsWith('http') ? (
+            <Image source={{ uri: notif.sender.avatar }} style={detail.sAvatar} />
+          ) : (
+            <View style={[detail.sAvatar, { backgroundColor: T.g600, justifyContent: 'center', alignItems: 'center' }]}>
+              <Text style={{ color: T.white, fontSize: 24, fontWeight: '800' }}>
+                {(notif.sender.name || '?').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
             <Text style={detail.sName}>{notif.sender.name}</Text>
 
@@ -653,7 +761,7 @@ function NotificationDetail({ notif, onBack, onAction }) {
 
         {/* ── TIMESTAMP + STATUS ── */}
         <View style={detail.metaBar}>
-          <View style={{ flexDirection:'row', alignItems:'center', gap:6, flex:1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
             <CalendarDays color={T.n500} size={14} strokeWidth={2} />
             <Text style={detail.metaTxt} numberOfLines={2}>{fmtFull(notif.createdAt)}</Text>
           </View>
@@ -697,9 +805,9 @@ function NotificationDetail({ notif, onBack, onAction }) {
             <SectionLabel text="SUBMISSION DETAILS" mt={20} />
             <View style={detail.infoCard}>
               {[
-                { label:'Listed Price',      val:notif.submission.listedPrice,  Icon:TrendingUp },
-                { label:'Area per Unit',      val:notif.submission.listedArea,   Icon:Layers },
-                { label:'Documents Attached', val:`${notif.submission.docsAttached} files`, Icon:FileText },
+                { label: 'Listed Price', val: notif.submission.listedPrice, Icon: TrendingUp },
+                { label: 'Area per Unit', val: notif.submission.listedArea, Icon: Layers },
+                { label: 'Documents Attached', val: `${notif.submission.docsAttached} files`, Icon: FileText },
               ].map(({ label, val, Icon: OI }) => (
                 <View key={label} style={detail.infoRow}>
                   <View style={detail.infoIconBox}><OI color={T.g700} size={16} strokeWidth={2} /></View>
@@ -719,8 +827,8 @@ function NotificationDetail({ notif, onBack, onAction }) {
             <SectionLabel text="HIRE TERMS" mt={20} />
             <View style={detail.infoCard}>
               {[
-                { label:'Commission', val:notif.offer.commission, Icon:TrendingUp },
-                { label:'Duration',   val:notif.offer.duration,   Icon:CalendarDays },
+                { label: 'Commission', val: notif.offer.commission, Icon: TrendingUp },
+                { label: 'Duration', val: notif.offer.duration, Icon: CalendarDays },
               ].map(({ label, val, Icon: OI }) => (
                 <View key={label} style={detail.infoRow}>
                   <View style={detail.infoIconBox}><OI color={T.g700} size={16} strokeWidth={2} /></View>
@@ -744,7 +852,7 @@ function NotificationDetail({ notif, onBack, onAction }) {
           ]}>
             {notif.status === 'accepted'
               ? <CheckCircle2 color={T.g700} size={20} strokeWidth={2.5} />
-              : <XCircle      color={T.red}  size={20} strokeWidth={2.5} />
+              : <XCircle color={T.red} size={20} strokeWidth={2.5} />
             }
             <View style={{ flex: 1 }}>
               <Text style={[detail.resTitle, { color: notif.status === 'accepted' ? T.g800 : T.red }]}>
@@ -781,7 +889,7 @@ function NotificationDetail({ notif, onBack, onAction }) {
                     {actioning === 'reject'
                       ? <ActivityIndicator color={T.red} size="small" />
                       : <><XCircle color={T.red} size={18} strokeWidth={2.5} />
-                          <Text style={detail.rejectTxt}>Reject</Text></>
+                        <Text style={detail.rejectTxt}>Reject</Text></>
                     }
                   </TouchableOpacity>
 
@@ -794,7 +902,7 @@ function NotificationDetail({ notif, onBack, onAction }) {
                     {actioning === 'approve'
                       ? <ActivityIndicator color={T.white} size="small" />
                       : <><CheckCircle2 color={T.white} size={18} strokeWidth={2.5} />
-                          <Text style={detail.approveTxt}>Approve Listing</Text></>
+                        <Text style={detail.approveTxt}>Approve Listing</Text></>
                     }
                   </TouchableOpacity>
                 </View>
@@ -808,7 +916,7 @@ function NotificationDetail({ notif, onBack, onAction }) {
               ]}>
                 {localStatus === 'approved'
                   ? <BadgeCheck color={T.g700} size={18} strokeWidth={2.5} />
-                  : <XCircle   color={T.red}  size={18} strokeWidth={2.5} />
+                  : <XCircle color={T.red} size={18} strokeWidth={2.5} />
                 }
                 <Text style={[detail.resolvedTxt, { color: localStatus === 'approved' ? T.g800 : T.red }]}>
                   {localStatus === 'approved'
@@ -833,7 +941,17 @@ function NotificationDetail({ notif, onBack, onAction }) {
           {notif.property && (
             <TouchableOpacity
               style={detail.ctaGreen}
-              onPress={() => Alert.alert('Navigate', `Opening ${notif.property.name}…`)}
+              onPress={() => {
+                if (navigation && notif._fullProperty) {
+                  navigation.navigate('propertyDetail', { property: notif._fullProperty });
+                } else {
+                  Alert.alert('Property Details', [
+                    notif.property.name,
+                    notif.property.location,
+                    notif.property.type,
+                  ].filter(Boolean).join('\n'));
+                }
+              }}
               activeOpacity={0.85}
             >
               <Building2 color={T.g800} size={17} strokeWidth={2.5} />
@@ -842,10 +960,10 @@ function NotificationDetail({ notif, onBack, onAction }) {
             </TouchableOpacity>
           )}
 
-          {!isInquiry && (
+          {!isInquiry && notif.sender && (
             <TouchableOpacity
               style={detail.ctaNeutral}
-              onPress={() => Alert.alert('Navigate', `Opening profile of ${notif.sender.name}…`)}
+              onPress={() => setShowAgentDetail(true)}
               activeOpacity={0.85}
             >
               <UserCheck color={T.g700} size={17} strokeWidth={2.5} />
@@ -865,151 +983,283 @@ function NotificationDetail({ notif, onBack, onAction }) {
    STYLES — List Cards
 ══════════════════════════════════════════════════════════ */
 const list = StyleSheet.create({
-  container:  { paddingHorizontal:16, paddingTop:6, paddingBottom:36 },
-  card:       { backgroundColor:T.white, borderRadius:18, overflow:'hidden', elevation:2, shadowColor:T.shadow, shadowOffset:{width:0,height:2}, shadowOpacity:1, shadowRadius:6 },
-  unread:     { backgroundColor:'#FAFFFD', elevation:4 },
-  stripe:     { position:'absolute', left:0, top:0, bottom:0, width:4 },
-  inner:      { flexDirection:'row', padding:16, gap:13 },
-  avatar:     { width:50, height:50, borderRadius:25, borderWidth:2, borderColor:T.n200 },
-  typeIcon:   { position:'absolute', bottom:-3, right:-4, width:22, height:22, borderRadius:11, justifyContent:'center', alignItems:'center', borderWidth:1.5, borderColor:T.white },
-  topRow:     { flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start', marginBottom:5 },
-  senderName: { fontSize:14, fontWeight:'800', color:T.n900, flex:1, letterSpacing:-0.2 },
-  time:       { fontSize:11, color:T.n400, marginLeft:6 },
-  metaRow:    { flexDirection:'row', alignItems:'center', gap:8, marginBottom:6 },
-  roleLabel:  { fontSize:11, color:T.n500, fontWeight:'500' },
-  summary:    { fontSize:13, color:T.n600, lineHeight:18, marginBottom:8 },
-  summaryBold:{ color:T.n800, fontWeight:'600' },
-  propHint:   { flexDirection:'row', alignItems:'center', gap:4, marginBottom:8 },
-  propHintTxt:{ fontSize:11, color:T.g700, fontWeight:'600' },
-  foot:       { flexDirection:'row', alignItems:'center', justifyContent:'space-between' },
-  dot:        { width:8, height:8, borderRadius:4, backgroundColor:T.g600 },
+  container: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 36 },
+  card: { backgroundColor: T.white, borderRadius: 18, overflow: 'hidden', elevation: 2, shadowColor: T.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6 },
+  unread: { backgroundColor: '#FAFFFD', elevation: 4 },
+  stripe: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+  inner: { flexDirection: 'row', padding: 16, gap: 13 },
+  avatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderColor: T.n200 },
+  typeIcon: { position: 'absolute', bottom: -3, right: -4, width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: T.white },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 5 },
+  senderName: { fontSize: 14, fontWeight: '800', color: T.n900, flex: 1, letterSpacing: -0.2 },
+  time: { fontSize: 11, color: T.n400, marginLeft: 6 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  roleLabel: { fontSize: 11, color: T.n500, fontWeight: '500' },
+  summary: { fontSize: 13, color: T.n600, lineHeight: 18, marginBottom: 8 },
+  summaryBold: { color: T.n800, fontWeight: '600' },
+  propHint: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
+  propHintTxt: { fontSize: 11, color: T.g700, fontWeight: '600' },
+  foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: T.g600 },
 });
 
 /* ══════════════════════════════════════════════════════════
    STYLES — Detail
 ══════════════════════════════════════════════════════════ */
 const detail = StyleSheet.create({
-  scroll:       { paddingHorizontal:16, paddingTop:18, paddingBottom:24 },
-  hPill:        { flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:11, paddingVertical:6, borderRadius:20 },
-  hPillTxt:     { fontSize:12, fontWeight:'700' },
+  scroll: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 24 },
+  hPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 20 },
+  hPillTxt: { fontSize: 12, fontWeight: '700' },
 
   // Sender card
-  senderCard:   { flexDirection:'row', gap:14, backgroundColor:T.white, borderRadius:16, padding:16, borderWidth:1.5, borderColor:T.n200, elevation:2, shadowColor:T.shadow, shadowOffset:{width:0,height:2}, shadowOpacity:1, shadowRadius:4, marginBottom:14, overflow:'hidden' },
-  sAvatar:      { width:60, height:60, borderRadius:30, borderWidth:2.5, borderColor:T.g400 },
-  sName:        { fontSize:16, fontWeight:'800', color:T.n900, letterSpacing:-0.3, marginBottom:6 },
-  roleChip:     { flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:9, paddingVertical:4, borderRadius:8, borderWidth:1, alignSelf:'flex-start', marginBottom:8 },
-  roleChipTxt:  { fontSize:11, fontWeight:'700' },
-  agentRow:     { flexDirection:'row', alignItems:'center', gap:5, marginBottom:8, flexWrap:'wrap' },
-  dot2:         { color:T.n400, fontSize:12 },
-  agentMeta:    { fontSize:12, color:T.n500 },
-  contactLine:  { flexDirection:'row', alignItems:'center', gap:7, marginBottom:4 },
-  contactTxt:   { fontSize:13, color:T.n600 },
+  senderCard: { flexDirection: 'row', gap: 14, backgroundColor: T.white, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: T.n200, elevation: 2, shadowColor: T.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 4, marginBottom: 14, overflow: 'hidden' },
+  sAvatar: { width: 60, height: 60, borderRadius: 30, borderWidth: 2.5, borderColor: T.g400 },
+  sName: { fontSize: 16, fontWeight: '800', color: T.n900, letterSpacing: -0.3, marginBottom: 6 },
+  roleChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, borderWidth: 1, alignSelf: 'flex-start', marginBottom: 8 },
+  roleChipTxt: { fontSize: 11, fontWeight: '700' },
+  agentRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8, flexWrap: 'wrap' },
+  dot2: { color: T.n400, fontSize: 12 },
+  agentMeta: { fontSize: 12, color: T.n500 },
+  contactLine: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 4 },
+  contactTxt: { fontSize: 13, color: T.n600 },
 
   // Meta bar
-  metaBar:      { flexDirection:'row', alignItems:'center', justifyContent:'space-between', backgroundColor:T.white, borderRadius:12, padding:12, borderWidth:1, borderColor:T.n200, marginBottom:20 },
-  metaTxt:      { fontSize:12, color:T.n600, flex:1 },
+  metaBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: T.white, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: T.n200, marginBottom: 20 },
+  metaTxt: { fontSize: 12, color: T.n600, flex: 1 },
 
   // Message
-  msgCard:      { backgroundColor:T.white, borderRadius:16, padding:18, borderWidth:1.5, borderColor:T.n200, borderLeftWidth:4, borderLeftColor:T.g600, marginBottom:4 },
-  msgTxt:       { fontSize:14, color:T.n700, lineHeight:22 },
+  msgCard: { backgroundColor: T.white, borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: T.n200, borderLeftWidth: 4, borderLeftColor: T.g600, marginBottom: 4 },
+  msgTxt: { fontSize: 14, color: T.n700, lineHeight: 22 },
 
   // Property card
-  propCard:     { borderRadius:18, overflow:'hidden', elevation:3, shadowColor:T.shadow, shadowOffset:{width:0,height:3}, shadowOpacity:1, shadowRadius:8 },
-  propImg:      { width:'100%', height:155 },
-  propScrim:    { position:'absolute', top:0, left:0, right:0, height:155, backgroundColor:'rgba(0,0,0,0.1)' },
-  propTag:      { position:'absolute', top:12, left:12, backgroundColor:'rgba(27,94,59,0.85)', paddingHorizontal:10, paddingVertical:4, borderRadius:8 },
-  propTagTxt:   { color:T.white, fontSize:11, fontWeight:'700' },
-  propBody:     { backgroundColor:T.white, padding:14 },
-  propName:     { fontSize:16, fontWeight:'800', color:T.n900, marginBottom:4 },
-  propRow:      { flexDirection:'row', alignItems:'center', gap:4, marginBottom:8 },
-  propLoc:      { fontSize:12, color:T.n500 },
-  propStat:     { flexDirection:'row', alignItems:'center', gap:5, backgroundColor:T.g100, paddingHorizontal:9, paddingVertical:4, borderRadius:8, alignSelf:'flex-start' },
-  propStatTxt:  { fontSize:12, fontWeight:'600', color:T.g700 },
+  propCard: { borderRadius: 18, overflow: 'hidden', elevation: 3, shadowColor: T.shadow, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 1, shadowRadius: 8 },
+  propImg: { width: '100%', height: 155 },
+  propScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 155, backgroundColor: 'rgba(0,0,0,0.1)' },
+  propTag: { position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(27,94,59,0.85)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  propTagTxt: { color: T.white, fontSize: 11, fontWeight: '700' },
+  propBody: { backgroundColor: T.white, padding: 14 },
+  propName: { fontSize: 16, fontWeight: '800', color: T.n900, marginBottom: 4 },
+  propRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
+  propLoc: { fontSize: 12, color: T.n500 },
+  propStat: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.g100, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' },
+  propStatTxt: { fontSize: 12, fontWeight: '600', color: T.g700 },
 
   // Info card (submission / hire terms)
-  infoCard:     { backgroundColor:T.white, borderRadius:16, padding:16, borderWidth:1.5, borderColor:T.g200, gap:14 },
-  infoRow:      { flexDirection:'row', alignItems:'center', gap:14 },
-  infoIconBox:  { width:38, height:38, borderRadius:10, backgroundColor:T.g100, justifyContent:'center', alignItems:'center' },
-  infoLabel:    { fontSize:11, color:T.n500, fontWeight:'500', marginBottom:2 },
-  infoVal:      { fontSize:15, fontWeight:'800', color:T.n900 },
+  infoCard: { backgroundColor: T.white, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: T.g200, gap: 14 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  infoIconBox: { width: 38, height: 38, borderRadius: 10, backgroundColor: T.g100, justifyContent: 'center', alignItems: 'center' },
+  infoLabel: { fontSize: 11, color: T.n500, fontWeight: '500', marginBottom: 2 },
+  infoVal: { fontSize: 15, fontWeight: '800', color: T.n900 },
 
   // Agent response banner
-  resBanner:    { flexDirection:'row', alignItems:'flex-start', gap:12, padding:16, borderRadius:16, borderWidth:1.5, marginTop:20 },
-  resTitle:     { fontSize:15, fontWeight:'800', marginBottom:3 },
-  resSub:       { fontSize:13, fontWeight:'500', lineHeight:18 },
+  resBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 16, borderWidth: 1.5, marginTop: 20 },
+  resTitle: { fontSize: 15, fontWeight: '800', marginBottom: 3 },
+  resSub: { fontSize: 13, fontWeight: '500', lineHeight: 18 },
 
   // Approve / Reject
-  warnBox:      { flexDirection:'row', alignItems:'flex-start', gap:8, backgroundColor:T.amberBg, borderRadius:12, padding:12, borderWidth:1, borderColor:T.amberBdr, marginBottom:14 },
-  warnTxt:      { flex:1, fontSize:13, color:'#92400E', lineHeight:18 },
-  actionRow:    { flexDirection:'row', gap:12 },
-  rejectBtn:    { flex:0.8, flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, backgroundColor:T.redBg, borderWidth:2, borderColor:T.redBdr, borderRadius:14, paddingVertical:14 },
-  rejectTxt:    { color:T.red, fontSize:15, fontWeight:'700' },
-  approveBtn:   { flex:1.4, flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, backgroundColor:T.g800, borderRadius:14, paddingVertical:14, elevation:4, shadowColor:T.shadow, shadowOffset:{width:0,height:3}, shadowOpacity:1, shadowRadius:6 },
-  approveTxt:   { color:T.white, fontSize:15, fontWeight:'700' },
-  resolvedRow:  { flexDirection:'row', alignItems:'flex-start', gap:10, padding:14, borderRadius:14, borderWidth:1.5 },
-  resolvedTxt:  { flex:1, fontSize:13, fontWeight:'600', lineHeight:18 },
+  warnBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: T.amberBg, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: T.amberBdr, marginBottom: 14 },
+  warnTxt: { flex: 1, fontSize: 13, color: '#92400E', lineHeight: 18 },
+  actionRow: { flexDirection: 'row', gap: 12 },
+  rejectBtn: { flex: 0.8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: T.redBg, borderWidth: 2, borderColor: T.redBdr, borderRadius: 14, paddingVertical: 14 },
+  rejectTxt: { color: T.red, fontSize: 15, fontWeight: '700' },
+  approveBtn: { flex: 1.4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: T.g800, borderRadius: 14, paddingVertical: 14, elevation: 4, shadowColor: T.shadow, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 1, shadowRadius: 6 },
+  approveTxt: { color: T.white, fontSize: 15, fontWeight: '700' },
+  resolvedRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1.5 },
+  resolvedTxt: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
 
   // CTA buttons
-  ctaGreen:     { flexDirection:'row', alignItems:'center', gap:10, backgroundColor:T.g100, borderWidth:2, borderColor:T.g200, borderRadius:14, padding:16 },
-  ctaGreenTxt:  { flex:1, fontSize:14, fontWeight:'700', color:T.g800 },
-  ctaNeutral:   { flexDirection:'row', alignItems:'center', gap:10, backgroundColor:T.white, borderWidth:2, borderColor:T.n200, borderRadius:14, padding:16 },
-  ctaNeutralTxt:{ flex:1, fontSize:14, fontWeight:'600', color:T.g700 },
+  ctaGreen: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: T.g100, borderWidth: 2, borderColor: T.g200, borderRadius: 14, padding: 16 },
+  ctaGreenTxt: { flex: 1, fontSize: 14, fontWeight: '700', color: T.g800 },
+  ctaNeutral: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: T.white, borderWidth: 2, borderColor: T.n200, borderRadius: 14, padding: 16 },
+  ctaNeutralTxt: { flex: 1, fontSize: 14, fontWeight: '600', color: T.g700 },
 });
 
 /* ══════════════════════════════════════════════════════════
    STYLES — Global / Shared
 ══════════════════════════════════════════════════════════ */
 const g = StyleSheet.create({
-  screen:       { flex:1, backgroundColor:T.g50 },
-  searchWrap:   { paddingHorizontal:16, paddingTop:14, paddingBottom:4 },
-  searchBox:    { flexDirection:'row', alignItems:'center', gap:8, backgroundColor:T.white, borderWidth:1.5, borderColor:T.n300, borderRadius:14, paddingHorizontal:13, height:46 },
-  searchInput:  { flex:1, fontSize:14, color:T.n900, height:'100%' },
-  chips:        { paddingHorizontal:16, paddingVertical:10, gap:8 },
-  chip:         { flexDirection:'row', alignItems:'center', gap:5, paddingHorizontal:13, paddingVertical:7, borderRadius:22, backgroundColor:T.white, borderWidth:1.5, borderColor:T.n300 },
-  chipOn:       { backgroundColor:T.g800, borderColor:T.g800 },
-  chipTxt:      { fontSize:12, fontWeight:'600', color:T.n500 },
-  chipTxtOn:    { color:T.white },
-  chipDot:      { width:6, height:6, borderRadius:3, backgroundColor:T.g600 },
-  chipDotOn:    { backgroundColor:T.white },
-  chipNum:      { backgroundColor:T.g200, borderRadius:10, paddingHorizontal:6, paddingVertical:1 },
-  chipNumOn:    { backgroundColor:'rgba(255,255,255,0.25)' },
-  chipNumTxt:   { fontSize:10, fontWeight:'800', color:T.g700 },
-  chipNumTxtOn: { color:T.white },
-  empty:        { alignItems:'center', paddingTop:80, gap:12 },
-  emptyH:       { fontSize:17, fontWeight:'800', color:T.n600 },
-  emptySub:     { fontSize:14, color:T.n400, textAlign:'center', paddingHorizontal:32 },
+  screen: { flex: 1, backgroundColor: T.g50 },
+  searchWrap: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.white, borderWidth: 1.5, borderColor: T.n300, borderRadius: 14, paddingHorizontal: 13, height: 46 },
+  searchInput: { flex: 1, fontSize: 14, color: T.n900, height: '100%' },
+  chips: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 22, backgroundColor: T.white, borderWidth: 1.5, borderColor: T.n300 },
+  chipOn: { backgroundColor: T.g800, borderColor: T.g800 },
+  chipTxt: { fontSize: 12, fontWeight: '600', color: T.n500 },
+  chipTxtOn: { color: T.white },
+  chipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: T.g600 },
+  chipDotOn: { backgroundColor: T.white },
+  chipNum: { backgroundColor: T.g200, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1 },
+  chipNumOn: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  chipNumTxt: { fontSize: 10, fontWeight: '800', color: T.g700 },
+  chipNumTxtOn: { color: T.white },
+  empty: { alignItems: 'center', paddingTop: 80, gap: 12 },
+  emptyH: { fontSize: 17, fontWeight: '800', color: T.n600 },
+  emptySub: { fontSize: 14, color: T.n400, textAlign: 'center', paddingHorizontal: 32 },
 });
 
 /* ══════════════════════════════════════════════════════════
    STYLES — Menu
 ══════════════════════════════════════════════════════════ */
 const menu = StyleSheet.create({
-  bg:    { flex:1, backgroundColor:'rgba(0,0,0,0.18)' },
-  box:   { position:'absolute', top:Platform.OS==='ios'?102:72, right:16, backgroundColor:T.white, borderRadius:16, elevation:10, shadowColor:'rgba(0,0,0,0.2)', shadowOffset:{width:0,height:4}, shadowOpacity:1, shadowRadius:12, minWidth:230 },
-  row:   { flexDirection:'row', alignItems:'center', gap:12, paddingHorizontal:18, paddingVertical:14 },
-  rowTxt:{ fontSize:14, fontWeight:'600', color:T.n700 },
-  div:   { height:1, backgroundColor:T.n200 },
+  bg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)' },
+  box: { position: 'absolute', top: Platform.OS === 'ios' ? 102 : 72, right: 16, backgroundColor: T.white, borderRadius: 16, elevation: 10, shadowColor: 'rgba(0,0,0,0.2)', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, minWidth: 230 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 14 },
+  rowTxt: { fontSize: 14, fontWeight: '600', color: T.n700 },
+  div: { height: 1, backgroundColor: T.n200 },
 });
 
 /* ══════════════════════════════════════════════════════════
    ROOT EXPORT  — wires list ↔ detail
 ══════════════════════════════════════════════════════════ */
 export default function BuilderNotificationsScreen({ navigation, onBack }) {
-  const [notifs,   setNotifs]   = useState(SEED);
+  const [notifs, setNotifs] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const openDetail = useCallback((notif) => {
+  // Fetch real notifications from backend
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) { setLoading(false); return; }
+      const resp = await fetch(`${API_BASE_URL}/notifications`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      const data = await resp.json();
+      if (data.success && data.notifications) {
+        const mapped = data.notifications.map((n) => ({
+          id: String(n.id),
+          type: n.type || 'property_submission',
+          read: n.isRead,
+          createdAt: n.createdAt,
+          status: 'pending',
+          relatedEntityId: n.relatedEntityId,
+          sender: {
+            name: n.title || 'Agent',
+            role: 'Agent',
+            avatar: 'https://i.pravatar.cc/150?img=12',
+            email: '',
+            phone: '',
+          },
+          summary: n.body || n.title || '',
+          message: n.body || '',
+          property: null,
+          offer: null,
+          submission: null,
+        }));
+        setNotifs(mapped);
+      }
+    } catch (err) {
+      console.error('fetchNotifications error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+
+  const openDetail = useCallback(async (notif) => {
+    // Mark as read on backend
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (token) {
+        fetch(`${API_BASE_URL}/notifications/${notif.id}/read`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${token}` },
+        }).catch(() => { });
+      }
+    } catch (_) { }
     setNotifs(p => p.map(n => n.id === notif.id ? { ...n, read: true } : n));
-    setSelected({ ...notif, read: true });
+
+    // For property_submission notifications, fetch the full request details
+    let enriched = { ...notif, read: true };
+    if (notif.type === 'property_submission' && notif.relatedEntityId) {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        if (token) {
+          const resp = await fetch(`${API_BASE_URL}/property-requests/${notif.relatedEntityId}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          const data = await resp.json();
+          if (data.success && data.request) {
+            const r = data.request;
+            const coverImage = r.property?.images?.[0];
+            const imageUrl = coverImage && coverImage.startsWith('http')
+              ? coverImage
+              : coverImage
+                ? `${API_BASE_URL.replace('/api', '')}${coverImage}`
+                : null;
+            enriched = {
+              ...enriched,
+              status: r.status || enriched.status,
+              sender: {
+                name: r.agent?.name || enriched.sender.name,
+                role: 'Agent',
+                avatar: r.agent?.profile_image ? getImageUrl(r.agent.profile_image) : null,
+                email: r.agent?.email || '',
+                phone: r.agent?.phone || '',
+              },
+              summary: `${r.agent?.name || 'Agent'} submitted "${r.property?.title || 'property'}" for your approval.`,
+              message: r.property?.description || enriched.message,
+              property: r.property ? {
+                name: r.property.title,
+                location: [r.property.address, r.property.city, r.property.state].filter(Boolean).join(', '),
+                type: r.property.listing_type || 'Residential',
+                units: r.property.bedrooms || 0,
+                image: imageUrl || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
+              } : null,
+              submission: {
+                listedPrice: r.property?.price ? `₹${Number(r.property.price).toLocaleString('en-IN')}` : 'N/A',
+                listedArea: r.property?.area_sqft ? `${r.property.area_sqft} sq ft` : 'N/A',
+                docsAttached: r.property?.images?.length || 0,
+              },
+              // Full property object for PropertyDetailScreen navigation
+              _fullProperty: r.property ? {
+                ...r.property,
+                images: (r.property.images || []).map(img =>
+                  img && img.startsWith('http') ? img : img ? `${API_BASE_URL.replace('/api', '')}${img}` : null
+                ).filter(Boolean),
+                agent: r.agent,
+              } : null,
+            };
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch property request details:', err);
+      }
+    }
+    setSelected(enriched);
   }, []);
 
-  const markAllRead = useCallback(() => {
+  const markAllRead = useCallback(async () => {
     setNotifs(p => p.map(n => ({ ...n, read: true })));
-  }, []);
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (token) {
+        for (const n of notifs) {
+          if (!n.read) {
+            fetch(`${API_BASE_URL}/notifications/${n.id}/read`, {
+              method: 'PATCH',
+              headers: { 'Authorization': `Bearer ${token}` },
+            }).catch(() => { });
+          }
+        }
+      }
+    } catch (_) { }
+  }, [notifs]);
 
   const handleAction = useCallback((id, newStatus) => {
     setNotifs(p => p.map(n => n.id === id ? { ...n, status: newStatus } : n));
   }, []);
+
+  if (loading) {
+    return (
+      <View style={[g.screen, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={T.g800} />
+        <Text style={{ marginTop: 12, color: T.n500 }}>Loading notifications…</Text>
+      </View>
+    );
+  }
 
   if (selected) {
     return (
@@ -1017,6 +1267,7 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
         notif={selected}
         onBack={() => setSelected(null)}
         onAction={handleAction}
+        navigation={navigation}
       />
     );
   }
