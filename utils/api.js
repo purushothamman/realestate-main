@@ -1,12 +1,16 @@
 ///: 192.168.137.194
 
+import { Platform } from 'react-native';
 
 export const getApiUrl = () => {
     // IPv4 Address . . . . . . . 192.168.137.194
-    return 'http://192.168.137.194:5000/api';
+    return 'http://192.168.0.104:5000/api';
 };
 
+
+
 export const API_BASE_URL = getApiUrl();
+
 
 /**
  * Resolves a profile/property image URL from the database value.
