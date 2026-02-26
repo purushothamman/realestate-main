@@ -84,12 +84,13 @@ const SpecCard = ({ icon, label, value }) => {
 
 
 
-export default function PropertyDetailScreen({ navigation, onBack, route }) {
+export default function PropertyDetailScreen({ navigation, onBack, route, user }) {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isSaved, setIsSaved] = useState(false);
     const [scrollY] = useState(new Animated.Value(0));
     const fadeAnim = useState(new Animated.Value(0))[0];
     const slideAnim = useState(new Animated.Value(30))[0];
+    const isBuyer = user?.role === 'buyer';
 
     useEffect(() => {
         Animated.parallel([
@@ -681,53 +682,54 @@ export default function PropertyDetailScreen({ navigation, onBack, route }) {
                 </Animated.View>
             </Animated.ScrollView>
 
-            {/* Enhanced Bottom CTA */}
-            <View style={styles.bottomCTA}>
-                <View style={styles.ctaRow}>
-                    <TouchableOpacity
-                        style={styles.ctaButtonGreen}
-                        onPress={handleScheduleViewing}
-                        activeOpacity={0.8}
-                    >
-                        <LinearGradient
-                            colors={['#2D6A4F', '#1e4d38']}
-                            style={styles.ctaButtonGradient}
+            {isBuyer && (
+                <View style={styles.bottomCTA}>
+                    <View style={styles.ctaRow}>
+                        <TouchableOpacity
+                            style={styles.ctaButtonGreen}
+                            onPress={handleScheduleViewing}
+                            activeOpacity={0.8}
                         >
-                            <Text style={styles.ctaButtonText}>Schedule Viewing</Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.ctaButtonDark}
-                        onPress={handleMakeOffer}
-                        activeOpacity={0.8}
-                    >
-                        <LinearGradient
-                            colors={['#111827', '#000000']}
-                            style={styles.ctaButtonGradient}
+                            <LinearGradient
+                                colors={['#2D6A4F', '#1e4d38']}
+                                style={styles.ctaButtonGradient}
+                            >
+                                <Text style={styles.ctaButtonText}>Schedule Viewing</Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.ctaButtonDark}
+                            onPress={handleMakeOffer}
+                            activeOpacity={0.8}
                         >
-                            <Text style={styles.ctaButtonText}>Make an Offer</Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
+                            <LinearGradient
+                                colors={['#111827', '#000000']}
+                                style={styles.ctaButtonGradient}
+                            >
+                                <Text style={styles.ctaButtonText}>Make an Offer</Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={styles.ctaRow}>
+                        <TouchableOpacity
+                            style={styles.ctaButtonOutline}
+                            onPress={handleVirtualTour}
+                            activeOpacity={0.7}
+                        >
+                            <Video size={20} color="#2D6A4F" strokeWidth={2.5} />
+                            <Text style={styles.ctaButtonOutlineText}>Virtual Tour</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.ctaButtonReport}
+                            onPress={handleReportProperty}
+                            activeOpacity={0.7}
+                        >
+                            <Flag size={20} color="#DC2626" strokeWidth={2.5} />
+                            <Text style={styles.ctaButtonReportText}>Report</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
-                <View style={styles.ctaRow}>
-                    <TouchableOpacity
-                        style={styles.ctaButtonOutline}
-                        onPress={handleVirtualTour}
-                        activeOpacity={0.7}
-                    >
-                        <Video size={20} color="#2D6A4F" strokeWidth={2.5} />
-                        <Text style={styles.ctaButtonOutlineText}>Virtual Tour</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={styles.ctaButtonReport}
-                        onPress={handleReportProperty}
-                        activeOpacity={0.7}
-                    >
-                        <Flag size={20} color="#DC2626" strokeWidth={2.5} />
-                        <Text style={styles.ctaButtonReportText}>Report</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
+            )}
         </View>
     );
 }

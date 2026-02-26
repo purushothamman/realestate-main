@@ -6,20 +6,20 @@ const inquiry = require('../controllers/inquiryController');
 // Create inquiry (any authenticated user)
 router.post('/create', protect, inquiry.createInquiry);
 
-// Get builder's inquiries (builder only)
-router.get('/builder', protect, allow('builder'), inquiry.getBuilderInquiries);
+// Get builder's inquiries (builder or agent)
+router.get('/builder', protect, allow('builder', 'agent'), inquiry.getBuilderInquiries);
 
 // Get user's inquiries (any authenticated user)
 router.get('/user', protect, inquiry.getUserInquiries);
 
-// Accept inquiry (builder only)
-router.put('/:id/accept', protect, allow('builder'), inquiry.acceptInquiry);
+// Accept inquiry (builder or agent)
+router.put('/:id/accept', protect, allow('builder', 'agent'), inquiry.acceptInquiry);
 
-// Reject inquiry (builder only)
-router.put('/:id/reject', protect, allow('builder'), inquiry.rejectInquiry);
+// Reject inquiry (builder or agent)
+router.put('/:id/reject', protect, allow('builder', 'agent'), inquiry.rejectInquiry);
 
-// Close deal (builder only)
-router.put('/:id/close-deal', protect, allow('builder'), inquiry.closeDeal);
+// Close deal (builder or agent)
+router.put('/:id/close-deal', protect, allow('builder', 'agent'), inquiry.closeDeal);
 
 console.log('✅ All inquiry routes registered');
 

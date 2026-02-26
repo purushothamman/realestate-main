@@ -219,12 +219,10 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
   };
 
   // Determine other party info
-  const isBuilder = user?.role === 'builder' || user?.role === 'developer';
-  const otherPartyName = chatContext ? (user?.id === chatContext.user1_id ? 'Builder' : chatContext.sender_name || 'User') : 'Chat'; // Simplified
-  // Better logic: API returns sender_name for each message. Context has property info.
-  // Actually, chatContext from my controller has property info.
+  const isResponsibleParty = user?.role === 'builder' || user?.role === 'developer' || user?.role === 'agent';
+  const otherPartyName = chatContext ? (user?.id === chatContext.user1_id ? 'Recipient' : chatContext.sender_name || 'User') : 'Chat';
 
-  const showCloseDeal = isBuilder && chatContext?.inquiry_status === 'accepted';
+  const showCloseDeal = isResponsibleParty && chatContext?.inquiry_status === 'accepted';
 
   return (
     <KeyboardAvoidingView

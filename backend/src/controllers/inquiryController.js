@@ -11,17 +11,24 @@ exports.createInquiry = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Property ID is required' });
         }
 
-        // Get property and builder info
-        const [property] = await pool.query(
-            'SELECT id, title, uploaded_by FROM properties WHERE id = ?',
+        // Get property and check if it was uploaded by an agent on behalf of a builder
+        const [propertyData] = await pool.query(
+            `SELECT p.id, p.title, p.uploaded_by as builder_owned_id, pr.agent_id 
+             FROM properties p 
+             LEFT JOIN property_requests pr ON p.id = pr.property_id 
+             WHERE p.id = ?`,
             [property_id]
         );
 
-        if (!property || property.length === 0) {
+        if (!propertyData || propertyData.length === 0) {
             return res.status(404).json({ success: false, message: 'Property not found' });
         }
 
-        const builderId = property[0].uploaded_by;
+        const prop = propertyData[0];
+        const propertyName = prop.title;
+        // If agent_id exists in property_requests, the inquiry goes to the Agent.
+        // Otherwise, it goes to the Builder (uploaded_by).
+        const recipientId = prop.agent_id || prop.builder_owned_id;
 
         // Check if user already has a pending inquiry for this property
         const [existingInquiry] = await pool.query(
@@ -58,7 +65,7 @@ exports.createInquiry = async (req, res) => {
         // Create inquiry
         const [result] = await pool.query(
             'INSERT INTO inquiries (property_id, user_id, builder_id, initial_message, status) VALUES (?, ?, ?, ?, "pending")',
-            [property_id, userId, builderId, initial_message || 'I am interested in this property']
+            [property_id, userId, recipientId, initial_message || 'I am interested in this property']
         );
 
         const inquiryId = result.insertId;
@@ -66,7 +73,7 @@ exports.createInquiry = async (req, res) => {
         // Create chat room for this inquiry
         const [chatResult] = await pool.query(
             'INSERT INTO chats (user1_id, user2_id, inquiry_id, property_id, created_at) VALUES (?, ?, ?, ?, NOW())',
-            [userId, builderId, inquiryId, property_id]
+            [userId, recipientId, inquiryId, property_id]
         );
 
         const chatId = chatResult.insertId;
@@ -355,9 +362,30 @@ exports.closeDeal = async (req, res) => {
             [inquiry[0].property_id]
         );
 
+        // Find the chat_id for this inquiry
+        const [chatRows] = await pool.query(
+            'SELECT id FROM chats WHERE inquiry_id = ?',
+            [inquiryId]
+        );
+
+        let messageSent = false;
+        if (chatRows && chatRows.length > 0) {
+            const chatId = chatRows[0].id;
+            const automatedMessage = "Congratulations! The deal has been closed. We appreciate your interest and look forward to completing the process with you. Thank you!";
+
+            // Insert automated message from the person who closed the deal (Builder/Agent)
+            await pool.query(
+                'INSERT INTO messages (chat_id, sender_id, message, sent_at) VALUES (?, ?, ?, NOW())',
+                [chatId, builderId, automatedMessage]
+            );
+            messageSent = true;
+        }
+
         res.json({
             success: true,
-            message: 'Deal closed successfully! Property marked as sold.'
+            message: 'Deal closed successfully! Property marked as sold.',
+            messageSent,
+            debug: { chatFound: chatRows.length, inquiryId }
         });
 
     } catch (error) {

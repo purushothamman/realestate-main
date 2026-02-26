@@ -346,6 +346,7 @@ export default function App() {
           <PropertyDetailScreen
             navigation={navigation}
             onBack={goBack}
+            user={userData}
             route={{
               params: {
                 property: selectedProperty,
