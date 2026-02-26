@@ -114,12 +114,17 @@ const TYPE_META = {
   hire_request: { label: 'Hire Request', icon: Briefcase, color: T.purple, bg: T.purpleBg, border: T.purpleBdr },
   property_assignment: { label: 'Assignment', icon: Building2, color: T.g700, bg: T.g100, border: T.g200 },
   user_inquiry: { label: 'Inquiry', icon: MessageSquare, color: T.blue, bg: T.blueBg, border: T.blueBdr },
+  hire_response: { label: 'Hire Response', icon: Briefcase, color: T.purple, bg: T.purpleBg, border: T.purpleBdr },
+  property_submission: { label: 'Submission', icon: Building2, color: T.g700, bg: T.g100, border: T.g200 },
+  property_approved: { label: 'Approved', icon: CheckCircle2, color: T.g700, bg: T.g100, border: T.g200 },
+  _default: { label: 'Notification', icon: MessageSquare, color: T.n500, bg: T.n100, border: T.n200 },
 };
 
 const STATUS_META = {
   pending: { label: 'Pending', color: T.amber, bg: T.amberBg, icon: Clock },
   accepted: { label: 'Accepted', color: T.g700, bg: T.g100, icon: CheckCircle2 },
   rejected: { label: 'Rejected', color: T.red, bg: T.redBg, icon: XCircle },
+  approved: { label: 'Approved', color: T.g700, bg: T.g100, icon: CheckCircle2 },
 };
 
 const FILTERS = ['All', 'Unread', 'Hire Requests', 'Assignments', 'Inquiries'];
@@ -146,7 +151,7 @@ const fmtFull = (iso) => {
    SHARED MINI-COMPONENTS
 ═══════════════════════════════════════════════════════════ */
 const StatusPill = ({ status }) => {
-  const m = STATUS_META[status];
+  const m = STATUS_META[status] || STATUS_META.pending;
   const I = m.icon;
   return (
     <View style={[chip.statusWrap, { backgroundColor: m.bg }]}>
@@ -157,7 +162,7 @@ const StatusPill = ({ status }) => {
 };
 
 const TypeBadge = ({ type }) => {
-  const m = TYPE_META[type];
+  const m = TYPE_META[type] || TYPE_META._default;
   const I = m.icon;
   return (
     <View style={[chip.typeWrap, { backgroundColor: m.bg, borderColor: m.border }]}>
@@ -267,7 +272,7 @@ function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
   }, [notifs, filter, search]);
 
   const renderItem = ({ item }) => {
-    const meta = TYPE_META[item.type];
+    const meta = TYPE_META[item.type] || TYPE_META._default;
     const TIcon = meta.icon;
     return (
       <TouchableOpacity
@@ -446,9 +451,9 @@ function NotificationDetail({ notif, onBack, onAction }) {
   const [localStatus, setLocalStatus] = useState(notif.status);
   const [actioning, setActioning] = useState(null);  // 'accept' | 'reject'
 
-  const meta = TYPE_META[notif.type];
+  const meta = TYPE_META[notif.type] || TYPE_META._default;
   const TIcon = meta.icon;
-  const smeta = STATUS_META[localStatus];
+  const smeta = STATUS_META[localStatus] || STATUS_META.pending;
   const SIcon = smeta.icon;
 
   const handleRespond = async (action) => {
