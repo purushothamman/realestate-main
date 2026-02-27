@@ -24,11 +24,18 @@ import ChatListScreen from './modules/chat/screens/ChatListScreen';
 import AddPropertiesAgent from './modules/property/screens/AddPropertiesAgent';
 import AgentDashboard from './modules/agent/AgentDashboardScreen';
 import MyListingsScreen from './modules/property/screens/MyListingsScreen';
+import AgentProfile from './modules/agent/AgentProfile';
+import EditAgentProfile from './modules/agent/EditAgentProfile';
+import EditBuilderProfile from './modules/builder/screens/EditBuilderProfile';
+
 import UserNavigator from './navigation/UserNavigator';
 import FavoritesScreen from './modules/user/screens/FavoritesScreen';
 import AssignAgentScreen from './modules/builder/screens/AssignAgentScreen';
 import AgentNotificationsScreen from './modules/agent/AgentNotificationsScreen';
 import BuilderNotificationsScreen from './modules/builder/screens/BuilderNotificationsScreen';
+import BuyerNotificationsScreen from './modules/user/screens/BuyerNotificationsScreen';
+import BuilderProfile from './modules/builder/screens/BuilderProfile';
+
 
 
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -95,6 +102,25 @@ export default function App() {
 
     loadUser();
   }, []);
+
+  const refreshUserData = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const fullProfile = await response.json();
+        setUserData(fullProfile);
+        await AsyncStorage.setItem('user', JSON.stringify(fullProfile));
+      }
+    } catch (err) {
+      console.error('Error refreshing user data:', err);
+    }
+  };
 
 
   // 🔹 Splash Screen Timeout (fallback)
@@ -330,6 +356,30 @@ export default function App() {
         );
 
       case 'profile':
+        if (userData?.role === 'builder') {
+          return (
+            <BuilderProfile
+              navigation={navigation}
+              onBack={goBack}
+              onEditProfile={() => navigateTo('editBuilderProfile')}
+              onDashboard={() => navigateTo('builderDashboard')}
+              userData={userData}
+              onLogout={resetApp}
+            />
+          );
+        }
+        if (userData?.role === 'agent') {
+          return (
+            <AgentProfile
+              navigation={navigation}
+              onBack={goBack}
+              onEditProfile={() => navigateTo('editAgentProfile')}
+              onDashboard={() => navigateTo('agentDashboard')}
+              userData={userData}
+              onLogout={resetApp}
+            />
+          );
+        }
         return (
           <ProfileScreen
             navigation={navigation}
@@ -346,6 +396,7 @@ export default function App() {
           <PropertyDetailScreen
             navigation={navigation}
             onBack={goBack}
+            user={userData}
             route={{
               params: {
                 property: selectedProperty,
@@ -437,6 +488,35 @@ export default function App() {
           />
         );
 
+      case 'agentProfile':
+        return (
+          <AgentProfile
+            navigation={navigation}
+            onBack={goBack}
+            userData={userData}
+          />
+        );
+
+      case 'editAgentProfile':
+        return (
+          <EditAgentProfile
+            navigation={navigation}
+            onBack={goBack}
+            userData={userData}
+            onUpdate={refreshUserData}
+          />
+        );
+
+      case 'editBuilderProfile':
+        return (
+          <EditBuilderProfile
+            navigation={navigation}
+            onBack={goBack}
+            userData={userData}
+            onUpdate={refreshUserData}
+          />
+        );
+
       case 'agentNotifications':
         return (
           <AgentNotificationsScreen
@@ -448,6 +528,14 @@ export default function App() {
       case 'builderNotifications':
         return (
           <BuilderNotificationsScreen
+            navigation={navigation}
+            onBack={goBack}
+          />
+        );
+
+      case 'buyerNotifications':
+        return (
+          <BuyerNotificationsScreen
             navigation={navigation}
             onBack={goBack}
           />

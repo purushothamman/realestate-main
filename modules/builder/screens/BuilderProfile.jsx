@@ -27,6 +27,7 @@ import {
   Edit3,
   Camera,
   CheckCircle,
+  LayoutDashboard,
   Home,
   Heart,
   Trash2,
@@ -44,30 +45,27 @@ const isLargeDevice = width >= 768;
 
 const ProfileScreen = ({
   onEditProfile = () => { },
+  onDashboard = () => { },
   onMyProperties = () => { },
   onNotifications = () => { },
   onHelpSupport = () => { },
   onLogout = () => { },
   onChangePassword = () => { },
   onBack = () => { },
+  userData: builderData = {},
 }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // Mock user data
+  // Normalize userData stats for builders
+  const stats = builderData.stats || {
+    totalProperties: 0,
+    activeListings: 0,
+    soldProperties: 0,
+  };
+
   const userData = {
-    name: 'Sarah Johnson',
-    email: 'sarah.johnson@builderco.com',
-    phone: '+1 (555) 123-4567',
-    profileImage: 'https://images.unsplash.com/photo-1548637724-cbc39e0c8d3b?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-    companyName: 'Johnson Real Estate Group',
-    businessAddress: '123 Main Street, Beverly Hills, CA 90210',
-    reraId: 'RERA-CA-2024-12345',
-    verified: true,
-    stats: {
-      totalProperties: 24,
-      activeListings: 18,
-      soldProperties: 6,
-    },
+    ...builderData,
+    stats
   };
 
   const handleLogout = () => {
@@ -117,6 +115,13 @@ const ProfileScreen = ({
   ];
 
   const quickActions = [
+    {
+      icon: LayoutDashboard,
+      label: 'Dashboard',
+      value: null,
+      color: '#3B82F6',
+      action: onDashboard,
+    },
     {
       icon: Home,
       label: 'My Properties',

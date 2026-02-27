@@ -897,7 +897,7 @@ module.exports.register = async (req, res) => {
                 const filename = profileImage.split('/').pop();
                 const safeEmail = email.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
                 const uploadsDir = path.join(__dirname, '..', '..', '..', 'uploads');
-                const profileDir = path.join(__dirname, '..', 'images_rs', 'profiles', `${userId}_${safeEmail}`);
+                const profileDir = path.join(__dirname, '..', '..', '..', 'images_rs', 'profiles', `${userId}_${safeEmail}`);
 
                 fs.mkdirSync(profileDir, { recursive: true });
 
@@ -1612,6 +1612,95 @@ module.exports.resetPassword = async (req, res) => {
         console.error("Reset password error:", err);
         res.status(500).json({
             message: "Server error during password reset. Please try again.",
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
+
+// UPDATE PROFILE
+module.exports.updateProfile = async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+        const userId = req.user.id;
+        const {
+            name, phone, profileImage,
+            // Builder specific
+            companyName, gstNo, panNo, website, description, totalProjects, experienceYears,
+            address, city, state, pincode
+        } = req.body;
+
+        const { ipAddress, userAgent } = getRequestMetadata(req);
+
+        // Fetch current user role
+        const [users] = await connection.query("SELECT role FROM users WHERE id = ?", [userId]);
+        if (users.length === 0) {
+            await connection.rollback();
+            connection.release();
+            return res.status(404).json({ message: "User not found" });
+        }
+        const userRole = users[0].role;
+
+        // Update basic user info
+        const userUpdates = [];
+        const userParams = [];
+        if (name) { userUpdates.push("name = ?"); userParams.push(name.trim()); }
+        if (phone) { userUpdates.push("phone = ?"); userParams.push(phone.trim()); }
+        if (profileImage) { userUpdates.push("profile_image = ?"); userParams.push(profileImage.trim()); }
+
+        if (userUpdates.length > 0) {
+            userParams.push(userId);
+            await connection.query(
+                `UPDATE users SET ${userUpdates.join(", ")}, updated_at = NOW() WHERE id = ?`,
+                userParams
+            );
+        }
+
+        // Update role-specific details
+        if (userRole === 'builder') {
+            const builderUpdates = [];
+            const builderParams = [];
+
+            if (companyName !== undefined) { builderUpdates.push("company_name = ?"); builderParams.push(companyName?.trim() || null); }
+            if (gstNo !== undefined) { builderUpdates.push("gst_no = ?"); builderParams.push(gstNo?.trim() || null); }
+            if (panNo !== undefined) { builderUpdates.push("pan_no = ?"); builderParams.push(panNo?.trim() || null); }
+            if (website !== undefined) { builderUpdates.push("website = ?"); builderParams.push(website?.trim() || null); }
+            if (description !== undefined) { builderUpdates.push("description = ?"); builderParams.push(description?.trim() || null); }
+            if (totalProjects !== undefined) { builderUpdates.push("total_projects = ?"); builderParams.push(totalProjects || 0); }
+            if (experienceYears !== undefined) { builderUpdates.push("experience_years = ?"); builderParams.push(experienceYears || 0); }
+            if (address !== undefined) { builderUpdates.push("address = ?"); builderParams.push(address?.trim() || null); }
+            if (city !== undefined) { builderUpdates.push("city = ?"); builderParams.push(city?.trim() || null); }
+            if (state !== undefined) { builderUpdates.push("state = ?"); builderParams.push(state?.trim() || null); }
+            if (pincode !== undefined) { builderUpdates.push("pincode = ?"); builderParams.push(pincode?.trim() || null); }
+            if (profileImage !== undefined) { builderUpdates.push("profile_image = ?"); builderParams.push(profileImage?.trim() || null); }
+
+            if (builderUpdates.length > 0) {
+                builderParams.push(userId);
+                await connection.query(
+                    `UPDATE builders SET ${builderUpdates.join(", ")}, updated_at = NOW() WHERE user_id = ?`,
+                    builderParams
+                );
+            }
+        }
+
+        await connection.commit();
+        connection.release();
+
+        // Log activity (optional, if logUserActivity is available)
+        if (typeof logUserActivity === 'function') {
+            await logUserActivity(userId, 'profile_update', ipAddress, userAgent, 'Profile updated successfully', 'email');
+        }
+
+        res.json({ message: "Profile updated successfully" });
+
+    } catch (err) {
+        if (connection) {
+            await connection.rollback();
+            connection.release();
+        }
+        console.error("Update Profile error:", err);
+        res.status(500).json({
+            message: "Server error updating profile",
             error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
     }

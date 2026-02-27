@@ -86,67 +86,19 @@ router.post('/logout',
 // Get current user profile
 router.get('/me',
     authenticate,
-    async (req, res) => {
-        try {
-            const [users] = await require('../config/db').query(
-                "SELECT id, name, email, phone, role, is_verified, profile_image, created_at, last_login FROM users WHERE id = ?",
-                [req.user.id]
-            );
-
-            if (users.length === 0) {
-                return res.status(404).json({ message: "User not found" });
-            }
-
-            const user = users[0];
-            res.json({
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                phone: user.phone,
-                role: user.role,
-                isVerified: user.is_verified,
-                profileImage: user.profile_image,
-                createdAt: user.created_at,
-                lastLogin: user.last_login
-            });
-        } catch (err) {
-            console.error("Get profile error:", err);
-            res.status(500).json({ message: "Server error" });
-        }
-    }
+    auth.getProfile
 );
 
 // Alias for /me (used by ProfileScreen)
 router.get('/profile',
     authenticate,
-    async (req, res) => {
-        try {
-            const [users] = await require('../config/db').query(
-                "SELECT id, name, email, phone, role, is_verified, profile_image, created_at, last_login FROM users WHERE id = ?",
-                [req.user.id]
-            );
+    auth.getProfile
+);
 
-            if (users.length === 0) {
-                return res.status(404).json({ message: "User not found" });
-            }
-
-            const user = users[0];
-            res.json({
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                phone: user.phone,
-                role: user.role,
-                isVerified: user.is_verified,
-                profileImage: user.profile_image,
-                createdAt: user.created_at,
-                lastLogin: user.last_login
-            });
-        } catch (err) {
-            console.error("Get profile error:", err);
-            res.status(500).json({ message: "Server error" });
-        }
-    }
+// Update profile
+router.put('/profile',
+    authenticate,
+    createSafeHandler('updateProfile', 'Profile update failed')
 );
 
 // Get user login history

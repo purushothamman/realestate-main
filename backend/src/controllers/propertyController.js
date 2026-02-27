@@ -217,6 +217,20 @@ exports.addProperty = async (req, res) => {
                     [property_id, agentIdForRequest, builderIdForRequest, initialStatus]
                 );
                 request_id = requestResult.insertId;
+
+                // Notify the builder about the pending submission
+                if (initialStatus === 'pending' && builderIdForRequest) {
+                    const [agentRows] = await connection.query(
+                        'SELECT name FROM users WHERE id = ?',
+                        [agentIdForRequest]
+                    );
+                    const agentName = agentRows?.[0]?.name || 'An agent';
+                    await connection.query(
+                        `INSERT INTO notifications (user_id, type, title, body, related_entity_type, related_entity_id)
+                         VALUES (?, 'property_submission', 'New property submission', ?, 'property_request', ?)`,
+                        [builderIdForRequest, `${agentName} submitted "${title}" for your approval.`, request_id]
+                    );
+                }
             }
         }
 
@@ -237,7 +251,7 @@ exports.addProperty = async (req, res) => {
             const propertyFolderName = `${property_id}_${safeTitle}`;
             
             const uploadsDir = path.join(__dirname, '..', '..', '..', 'uploads');
-            const imagesRsDir = path.join(__dirname, '..', 'images_rs', builderFolderName, propertyFolderName);
+            const imagesRsDir = path.join(__dirname, '..', '..', '..', 'images_rs', builderFolderName, propertyFolderName);
             
             // Create target directory
             try {

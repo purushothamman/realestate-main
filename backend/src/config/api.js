@@ -7,12 +7,12 @@ export const API_BASE_URL = __DEV__
   : 'https://your-production-api.com/api'; // Production
 
 // For physical device testing, use your computer's IP:
-// export const API_BASE_URL = 'http://192.168.1.100:5000/api';
+// export const API_BASE_URL = 'http://10.56.70.244:5000/api';
 
 export const apiRequest = async (endpoint, options = {}) => {
   try {
     const token = await AsyncStorage.getItem('authToken');
-    
+
     const headers = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
@@ -46,12 +46,12 @@ export const authAPI = {
     method: 'POST',
     body: JSON.stringify(userData),
   }),
-  
+
   login: (credentials) => apiRequest('/auth/login', {
     method: 'POST',
     body: JSON.stringify(credentials),
   }),
-  
+
   logout: () => apiRequest('/auth/logout', {
     method: 'POST',
   }),

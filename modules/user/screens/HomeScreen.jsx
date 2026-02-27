@@ -426,7 +426,12 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.headerRight}>
           <TouchableOpacity
             style={styles.notificationButton}
-            onPress={() => navigation?.navigate('notifications')}
+            onPress={() => {
+              const role = user?.role;
+              if (role === 'agent') navigation?.navigate('agentNotifications');
+              else if (role === 'builder') navigation?.navigate('builderNotifications');
+              else navigation?.navigate('buyerNotifications');
+            }}
           >
             <Bell color="#374151" size={24} strokeWidth={2} />
 
