@@ -29,6 +29,7 @@ import FavoritesScreen from './modules/user/screens/FavoritesScreen';
 import AssignAgentScreen from './modules/builder/screens/AssignAgentScreen';
 import AgentNotificationsScreen from './modules/agent/AgentNotificationsScreen';
 import BuilderNotificationsScreen from './modules/builder/screens/BuilderNotificationsScreen';
+import BuyerNotificationsScreen from './modules/user/screens/BuyerNotificationsScreen';
 
 
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -449,6 +450,14 @@ export default function App() {
       case 'builderNotifications':
         return (
           <BuilderNotificationsScreen
+            navigation={navigation}
+            onBack={goBack}
+          />
+        );
+
+      case 'buyerNotifications':
+        return (
+          <BuyerNotificationsScreen
             navigation={navigation}
             onBack={goBack}
           />
