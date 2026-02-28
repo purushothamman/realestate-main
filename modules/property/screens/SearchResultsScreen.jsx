@@ -324,8 +324,10 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
   const [selectedCity, setSelectedCity] = useState(null);
 
   // Search results states
+  const [allProperties, setAllProperties] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingAll, setIsLoadingAll] = useState(true);
   const [searchError, setSearchError] = useState(null);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -338,6 +340,8 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
   const logoRotate = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    fetchAllProperties();
+
     // FAB entrance with bounce
     Animated.spring(fabScale, {
       toValue: 1,
@@ -412,6 +416,21 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
     setActiveTab(tab);
     if (tab === 'home' && onBack) {
       onBack();
+    }
+  };
+
+  const fetchAllProperties = async () => {
+    try {
+      setIsLoadingAll(true);
+      const res = await fetch(`${API_BASE_URL}/properties`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.properties)) {
+        setAllProperties(data.properties);
+      }
+    } catch (e) {
+      console.warn('Fetch all properties error:', e.message);
+    } finally {
+      setIsLoadingAll(false);
     }
   };
 
@@ -490,36 +509,8 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
     }
   };
 
-  // Dummy properties for initial display (before search)
-  const dummyProperties = [
-    {
-      image: 'https://images.unsplash.com/photo-1706808849780-7a04fbac83ef?w=800',
-      price: '$789,000',
-      title: 'Modern Architectural Masterpiece',
-      location: '1245 Sunset Blvd, Los Angeles, CA',
-      beds: 4,
-      baths: 3,
-      sqft: '3,400 sqft',
-      highlights: 'Modern kitchen, open floor plan, rooftop terrace with panoramic views',
-      imageCount: 24,
-      featured: true,
-    },
-    {
-      image: 'https://images.unsplash.com/photo-1515263487990-61b07816b324?w=800',
-      price: '$525,000',
-      title: 'Luxury High-Rise Apartment',
-      location: '890 Park Avenue, New York, NY',
-      beds: 3,
-      baths: 2,
-      sqft: '2,100 sqft',
-      highlights: 'City views, doorman, modern finishes, gym access',
-      imageCount: 18,
-      featured: false,
-    },
-  ];
-
   // Determine what to display
-  const displayProperties = hasSearched ? searchResults : dummyProperties;
+  const displayProperties = hasSearched ? searchResults : allProperties;
 
   const logoRotation = logoRotate.interpolate({
     inputRange: [0, 1],
@@ -639,11 +630,11 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
             <View style={styles.resultsCountRow}>
               <View style={styles.pulse} />
               <Text style={styles.resultsCount}>
-                {isSearching
+                {isSearching || isLoadingAll
                   ? 'Searching...'
                   : hasSearched
                     ? `${searchResults.length} Propert${searchResults.length === 1 ? 'y' : 'ies'} Found`
-                    : 'Search a city to get started'
+                    : `${allProperties.length} Properties Available`
                 }
               </Text>
             </View>
@@ -691,11 +682,11 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.gridContainer}>
-          {isSearching ? (
+          {isSearching || isLoadingAll ? (
             <View style={{ flex: 1, alignItems: 'center', paddingVertical: 60 }}>
               <ActivityIndicator size="large" color="#2D6A4F" />
               <Text style={{ marginTop: 12, color: '#6B7280', fontSize: 15, fontWeight: '600' }}>
-                Finding properties in {searchQuery}...
+                {isLoadingAll ? 'Loading lifestyle homes...' : `Finding properties in ${searchQuery}...`}
               </Text>
             </View>
           ) : searchError && hasSearched ? (
