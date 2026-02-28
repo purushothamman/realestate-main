@@ -11,7 +11,9 @@ import {
   StatusBar,
   Animated,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
+import { API_BASE_URL, getImageUrl } from '../../../utils/api';
 import {
   Search,
   Home,
@@ -309,12 +311,25 @@ const FilterChip = ({ label, onRemove, index }) => {
 };
 
 export default function SearchResultsScreen({ navigation, onPropertyClick, onBack }) {
-  const [savedProperties, setSavedProperties] = useState([0, 3]);
+  const [savedProperties, setSavedProperties] = useState([]);
   const [activeFilters, setActiveFilters] = useState(['$400k - $800k', '3+ Beds', 'Modern']);
   const [sortOption, setSortOption] = useState('Relevance');
   const [scrollY, setScrollY] = useState(0);
-  const [messages, setMessages] = useState([]);
   const [activeTab, setActiveTab] = useState('search');
+
+  // City autocomplete states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [citySuggestions, setCitySuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedCity, setSelectedCity] = useState(null);
+
+  // Search results states
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState(null);
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const debounceRef = useRef(null);
 
   const headerOpacity = useRef(new Animated.Value(1)).current;
   const headerHeight = useRef(new Animated.Value(0)).current;
@@ -395,11 +410,70 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
 
   const handleTabPress = (tab) => {
     setActiveTab(tab);
-    // Add navigation logic here based on the tab
     if (tab === 'home' && onBack) {
       onBack();
     }
   };
+
+  const fetchCitySuggestions = async (text) => {
+    if (!text || text.trim().length === 0) {
+      setCitySuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/properties/cities?search=${encodeURIComponent(text)}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.cities)) {
+        setCitySuggestions(data.cities);
+        setShowSuggestions(data.cities.length > 0);
+      } else {
+        setCitySuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch (e) {
+      console.warn('City suggestion fetch error:', e.message);
+    }
+  };
+
+  const handleSearchQueryChange = (text) => {
+    setSearchQuery(text);
+    setSelectedCity(null);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchCitySuggestions(text), 350);
+  };
+
+  const handleCitySelect = (city) => {
+    setSearchQuery(city);
+    setSelectedCity(city);
+    setCitySuggestions([]);
+    setShowSuggestions(false);
+    searchByCity(city);
+  };
+
+  const searchByCity = async (city) => {
+    const target = city || selectedCity || searchQuery;
+    if (!target || target.trim().length === 0) return;
+    try {
+      setIsSearching(true);
+      setSearchError(null);
+      setHasSearched(true);
+      const res = await fetch(`${API_BASE_URL}/properties/search?city=${encodeURIComponent(target.trim())}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.properties)) {
+        setSearchResults(data.properties);
+      } else {
+        setSearchResults([]);
+        setSearchError(data.message || 'No results found');
+      }
+    } catch (e) {
+      console.warn('Search error:', e.message);
+      setSearchError('Failed to fetch properties. Check your connection.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
 
   const handleBackPress = () => {
     // First try onBack callback (for non-navigation scenarios)
@@ -416,7 +490,8 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
     }
   };
 
-  const properties = [
+  // Dummy properties for initial display (before search)
+  const dummyProperties = [
     {
       image: 'https://images.unsplash.com/photo-1706808849780-7a04fbac83ef?w=800',
       price: '$789,000',
@@ -441,55 +516,10 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
       imageCount: 18,
       featured: false,
     },
-    {
-      image: 'https://images.unsplash.com/photo-1630404515111-2fc17457daa6?w=800',
-      price: '$645,000',
-      title: 'Contemporary Townhouse',
-      location: '567 Maple Street, Seattle, WA',
-      beds: 3,
-      baths: 2,
-      sqft: '2,500 sqft',
-      highlights: 'Private garage, backyard, newly renovated interior',
-      imageCount: 15,
-      featured: false,
-    },
-    {
-      image: 'https://images.unsplash.com/photo-1677553512940-f79af72efd1b?w=800',
-      price: '$1,150,000',
-      title: 'Stunning Penthouse Suite',
-      location: '234 Ocean Drive, Miami, FL',
-      beds: 4,
-      baths: 4,
-      sqft: '3,800 sqft',
-      highlights: 'Ocean views, marble finishes, wine cellar, infinity pool',
-      imageCount: 32,
-      featured: true,
-    },
-    {
-      image: 'https://images.unsplash.com/photo-1765765234094-bc009a3bba62?w=800',
-      price: '$575,000',
-      title: 'Spacious Family Home',
-      location: '789 Oak Lane, Austin, TX',
-      beds: 5,
-      baths: 3,
-      sqft: '3,200 sqft',
-      highlights: 'Large yard, updated kitchen, home office, sparkling pool',
-      imageCount: 20,
-      featured: false,
-    },
-    {
-      image: 'https://images.unsplash.com/photo-1614115863913-b04024ec4ed1?w=800',
-      price: '$485,000',
-      title: 'Modern Downtown Loft',
-      location: '456 Broadway, Chicago, IL',
-      beds: 2,
-      baths: 2,
-      sqft: '1,900 sqft',
-      highlights: 'High ceilings, exposed brick, hardwood floors',
-      imageCount: 16,
-      featured: false,
-    },
   ];
+
+  // Determine what to display
+  const displayProperties = hasSearched ? searchResults : dummyProperties;
 
   const logoRotation = logoRotate.interpolate({
     inputRange: [0, 1],
@@ -536,22 +566,86 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
           </TouchableOpacity>
         </View>
 
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
+        <View style={[styles.searchContainer, { zIndex: showSuggestions ? 1000 : 1 }]}>
+          <View style={[styles.searchBar, { position: 'relative', zIndex: showSuggestions ? 999 : 1 }]}>
             <Search size={20} color="#6B7280" />
-            <Text style={styles.searchText}>Los Angeles, CA</Text>
-            <TouchableOpacity style={styles.filterButton} activeOpacity={0.8}>
-              <SlidersHorizontal size={18} color="#FFF" />
+            <TextInput
+              style={styles.searchText}
+              placeholder="Search by city..."
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={handleSearchQueryChange}
+              onSubmitEditing={() => searchByCity()}
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => {
+                  setSearchQuery('');
+                  setSelectedCity(null);
+                  setCitySuggestions([]);
+                  setShowSuggestions(false);
+                }}
+                style={{ marginRight: 4 }}
+              >
+                <X size={16} color="#9CA3AF" />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={styles.filterButton}
+              activeOpacity={0.8}
+              onPress={() => searchByCity()}
+            >
+              {isSearching
+                ? <ActivityIndicator size="small" color="#FFF" />
+                : <Search size={18} color="#FFF" />
+              }
             </TouchableOpacity>
           </View>
+
+          {/* City suggestions dropdown */}
+          {showSuggestions && (
+            <View style={styles.suggestionDropdown}>
+              <ScrollView
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                style={{ maxHeight: 220 }}
+                showsVerticalScrollIndicator={false}
+              >
+                {citySuggestions.map((city, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[
+                      styles.suggestionItem,
+                      idx < citySuggestions.length - 1 && styles.suggestionBorder,
+                    ]}
+                    onPress={() => handleCitySelect(city)}
+                    activeOpacity={0.7}
+                  >
+                    <MapPin size={14} color="#3B82F6" style={{ marginRight: 8 }} />
+                    <Text style={styles.suggestionText}>{city}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
 
         <View style={styles.resultsHeader}>
           <View style={styles.resultsInfo}>
-            <Text style={styles.resultsTitle}>Search Results</Text>
+            <Text style={styles.resultsTitle}>
+              {hasSearched ? `Results in ${selectedCity || searchQuery}` : 'Search Results'}
+            </Text>
             <View style={styles.resultsCountRow}>
               <View style={styles.pulse} />
-              <Text style={styles.resultsCount}>248 Properties Found</Text>
+              <Text style={styles.resultsCount}>
+                {isSearching
+                  ? 'Searching...'
+                  : hasSearched
+                    ? `${searchResults.length} Propert${searchResults.length === 1 ? 'y' : 'ies'} Found`
+                    : 'Search a city to get started'
+                }
+              </Text>
             </View>
           </View>
 
@@ -585,7 +679,6 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
         </View>
       </Animated.View>
 
-      {/* Scrollable Results - Responsive Grid */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[
@@ -595,18 +688,55 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
         showsVerticalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.gridContainer}>
-          {properties.map((property, index) => (
-            <PropertyResultCard
-              key={index}
-              index={index}
-              {...property}
-              saved={savedProperties.includes(index)}
-              onToggleSave={() => toggleSave(index)}
-              onQuickView={() => onPropertyClick && onPropertyClick(property)}
-            />
-          ))}
+          {isSearching ? (
+            <View style={{ flex: 1, alignItems: 'center', paddingVertical: 60 }}>
+              <ActivityIndicator size="large" color="#2D6A4F" />
+              <Text style={{ marginTop: 12, color: '#6B7280', fontSize: 15, fontWeight: '600' }}>
+                Finding properties in {searchQuery}...
+              </Text>
+            </View>
+          ) : searchError && hasSearched ? (
+            <View style={{ flex: 1, alignItems: 'center', paddingVertical: 60 }}>
+              <MapPin size={48} color="#D1D5DB" />
+              <Text style={{ marginTop: 12, color: '#374151', fontSize: 17, fontWeight: '700' }}>No results</Text>
+              <Text style={{ marginTop: 6, color: '#9CA3AF', fontSize: 14, textAlign: 'center', paddingHorizontal: 32 }}>
+                {searchError}
+              </Text>
+            </View>
+          ) : displayProperties.length === 0 && hasSearched ? (
+            <View style={{ flex: 1, alignItems: 'center', paddingVertical: 60 }}>
+              <MapPin size={48} color="#D1D5DB" />
+              <Text style={{ marginTop: 12, color: '#374151', fontSize: 17, fontWeight: '700' }}>
+                No properties in {selectedCity || searchQuery}
+              </Text>
+              <Text style={{ marginTop: 6, color: '#9CA3AF', fontSize: 14, textAlign: 'center', paddingHorizontal: 32 }}>
+                Try searching a different city.
+              </Text>
+            </View>
+          ) : (
+            displayProperties.map((property, index) => (
+              <PropertyResultCard
+                key={property.id ?? index}
+                index={index}
+                image={getImageUrl(property.image) || getImageUrl(property.imageUrl) || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800'}
+                price={property.price ? `₹${Number(property.price).toLocaleString('en-IN')}` : property.price || 'N/A'}
+                title={property.title || 'Property'}
+                location={[property.address, property.city, property.state].filter(Boolean).join(', ') || property.location || ''}
+                beds={property.bedrooms ?? property.beds ?? '—'}
+                baths={property.bathrooms ?? property.baths ?? '—'}
+                sqft={property.area || property.sqft || '—'}
+                highlights={property.description || property.highlights || ''}
+                imageCount={property.imageCount ?? 1}
+                featured={property.featured ?? false}
+                saved={savedProperties.includes(property.id ?? index)}
+                onToggleSave={() => toggleSave(property.id ?? index)}
+                onQuickView={() => onPropertyClick && onPropertyClick(property)}
+              />
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -641,6 +771,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
     zIndex: 1000,
+    overflow: 'visible',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -715,6 +846,8 @@ const styles = StyleSheet.create({
   searchContainer: {
     paddingHorizontal: getResponsiveValue(16, 24, 32),
     paddingBottom: 12,
+    position: 'relative',
+    overflow: 'visible',
   },
   searchBar: {
     backgroundColor: '#F9FAFB',
@@ -1096,5 +1229,41 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  // City autocomplete suggestion dropdown
+  suggestionDropdown: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    marginTop: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 14,
+    zIndex: 9999,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 8,
+  },
+  suggestionBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  suggestionText: {
+    fontSize: 14,
+    color: '#111827',
+    fontWeight: '600',
+    flex: 1,
   },
 });

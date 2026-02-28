@@ -6,11 +6,18 @@ const property = require("../controllers/propertyController")
 console.log("✅ Property routes file loaded");
 console.log("✅ property.addProperty:", typeof property.addProperty);
 
-// Debug route to test if routes are loading
+// Debug route to test if routes are working
 router.get("/test", (req, res) => {
     console.log("📍 Test route hit");
     res.json({ message: "Property routes are working!" });
 });
+
+// ── City Autocomplete & City-based Search (public, no auth needed) ──────────
+// GET /properties/cities?search=TEXT  → returns distinct city names matching the text
+router.get("/cities", property.getCities);
+
+// GET /properties/search?city=CITY_NAME  → returns properties in given city
+router.get("/search", property.searchByCity);
 
 // New route for adding properties with images, features, and documents
 console.log("📍 Registering POST /add route");

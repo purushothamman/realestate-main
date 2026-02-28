@@ -838,6 +838,118 @@ exports.addPropertyView = async (req, res) => {
   }
 };
 
+// GET /properties/cities?search=TEXT
+// Returns distinct city names from properties where cities match the search text
+exports.getCities = async (req, res) => {
+    try {
+        const { search = '' } = req.query;
+
+        if (!search || search.trim().length === 0) {
+            return res.json({ success: true, cities: [] });
+        }
+
+        const searchTerm = `%${search.trim()}%`;
+
+        const [rows] = await pool.query(
+            `SELECT DISTINCT city 
+             FROM properties 
+             WHERE city IS NOT NULL 
+               AND city != '' 
+               AND city LIKE ? 
+               AND status = 'active'
+             ORDER BY city ASC
+             LIMIT 10`,
+            [searchTerm]
+        );
+
+        const cities = rows.map(r => r.city);
+
+        res.json({ success: true, cities });
+
+    } catch (err) {
+        console.error("getCities error:", err);
+        res.status(500).json({ success: false, message: "Failed to fetch cities", error: err.message });
+    }
+};
+
+// GET /properties/search?city=CITY_NAME
+// Returns all active properties in a given city with images
+exports.searchByCity = async (req, res) => {
+    try {
+        const { city } = req.query;
+
+        if (!city || city.trim().length === 0) {
+            return res.status(400).json({ success: false, message: 'city parameter is required' });
+        }
+
+        const [properties] = await pool.query(
+            `SELECT 
+                p.id,
+                p.title,
+                p.description,
+                p.price,
+                p.listing_type,
+                p.address,
+                p.city,
+                p.state,
+                p.pincode,
+                p.area_sqft,
+                p.bedrooms,
+                p.bathrooms,
+                p.status,
+                p.is_verified,
+                p.created_at,
+                (
+                    SELECT pi.image_url 
+                    FROM property_images pi 
+                    WHERE pi.property_id = p.id 
+                    ORDER BY pi.is_primary DESC, pi.sort_order ASC 
+                    LIMIT 1
+                ) as primary_image,
+                (
+                    SELECT COUNT(*) FROM property_images pi2 WHERE pi2.property_id = p.id
+                ) as image_count
+             FROM properties p
+             WHERE p.city = ? AND p.status = 'active'
+             ORDER BY p.created_at DESC
+             LIMIT 50`,
+            [city.trim()]
+        );
+
+        const transformed = properties.map(p => ({
+            id: p.id,
+            title: p.title,
+            description: p.description,
+            price: p.price,
+            listing_type: p.listing_type,
+            address: p.address,
+            city: p.city,
+            state: p.state,
+            pincode: p.pincode,
+            bedrooms: p.bedrooms,
+            bathrooms: p.bathrooms,
+            area: p.area_sqft ? `${p.area_sqft} sq ft` : null,
+            area_sqft: p.area_sqft,
+            isVerified: Boolean(p.is_verified),
+            image: p.primary_image || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
+            imageUrl: p.primary_image || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
+            imageCount: p.image_count || 0,
+        }));
+
+        res.json({
+            success: true,
+            properties: transformed,
+            total: transformed.length,
+            city: city.trim(),
+        });
+
+    } catch (err) {
+        console.error("searchByCity error:", err);
+        res.status(500).json({ success: false, message: "Search failed", error: err.message });
+    }
+};
+
+
 
 
 

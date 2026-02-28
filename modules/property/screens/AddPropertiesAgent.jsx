@@ -14,6 +14,7 @@ import {
     Platform,
     Alert,
     ActivityIndicator,
+    Platform as RNPlatform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -48,6 +49,8 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
         propertyType: '',
         status: 'sale',
         city: '',
+        state: '',
+        pincode: '',
         address: '',
         price: '',
         area: '',
@@ -73,6 +76,12 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
     // - 'approval': current flow (blocked until builder approves)
     // - 'hiringBuilder': auto-approve if this builder has formally hired the agent
     const [uploadMode, setUploadMode] = useState('approval');
+
+    // City Autocomplete States
+    const [cityQuery, setCityQuery] = useState('');
+    const [citySuggestions, setCitySuggestions] = useState([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const cityDebounceRef = useRef(null);
 
     // Animation values
     const headerAnim = useRef(new Animated.Value(0)).current;
@@ -137,6 +146,13 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                 }),
             ])
         ).start();
+    }, []);
+
+    // Cleanup city debounce on unmount
+    useEffect(() => {
+        return () => {
+            if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
+        };
     }, []);
 
     useEffect(() => {
@@ -376,6 +392,52 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
         setPropertyData((prev) => ({ ...prev, [field]: value }));
     };
 
+    const fetchCitySuggestions = async (text) => {
+        if (text.length < 2) {
+            setCitySuggestions([]);
+            setShowSuggestions(false);
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(text)}&format=json&addressdetails=1&limit=5`,
+                {
+                    headers: {
+                        'User-Agent': 'EstateHub/1.0',
+                    },
+                }
+            );
+            const data = await response.json();
+            setCitySuggestions(data);
+            setShowSuggestions(data.length > 0);
+        } catch (error) {
+            console.error('Error fetching cities:', error);
+        }
+    };
+
+    const handleCityQueryChange = (text) => {
+        setCityQuery(text);
+        if (cityDebounceRef.current) clearTimeout(cityDebounceRef.current);
+        cityDebounceRef.current = setTimeout(() => {
+            fetchCitySuggestions(text);
+        }, 400);
+    };
+
+    const handleCitySuggestionSelect = (item) => {
+        const addr = item.address || {};
+        const city = addr.city || addr.town || addr.village || addr.county || '';
+        const state = addr.state || '';
+
+        setPropertyData(prev => ({
+            ...prev,
+            city: city,
+            state: state
+        }));
+        setCityQuery(`${city}${city && state ? ', ' : ''}${state}`);
+        setShowSuggestions(false);
+    };
+
     const handlePublish = async () => {
         try {
             // Validate inputs
@@ -423,8 +485,8 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                 property_type_id: propertyTypeMap[propertyData.propertyType] || 1,
                 address: propertyData.address,
                 city: propertyData.city,
-                state: "CA", // Default or add state input
-                pincode: "90001", // Default or add pincode input
+                state: propertyData.state || "Maharashtra",
+                pincode: propertyData.pincode || "400001",
                 area_sqft: parseFloat(propertyData.area.replace(/,/g, '')),
                 bedrooms: 3, // Default or add input
                 bathrooms: 2, // Default or add input
@@ -595,6 +657,7 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                 style={styles.scrollView}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             >
                 <Animated.View
                     style={[
@@ -921,37 +984,93 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                             <Text style={styles.sectionTitle}>Location Details</Text>
                         </View>
 
-                        <View style={styles.inputGroup}>
+                        <View style={[styles.inputGroup, { zIndex: showSuggestions ? 1000 : 1 }]}>
                             <Text style={styles.label}>City / Area *</Text>
-                            <View
-                                style={[
-                                    styles.inputWrapper,
-                                ]}
-                            >
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="e.g., Beverly Hills, CA"
-                                    placeholderTextColor="#9CA3AF"
-                                    value={propertyData.city}
-                                    onChangeText={(value) => handleInputChange('city', value)}
-                                />
-                                <MapPin color="#9CA3AF" size={18} />
+                            <View style={styles.autocompleteWrapper}>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Type to search city..."
+                                        placeholderTextColor="#9CA3AF"
+                                        value={cityQuery}
+                                        onChangeText={handleCityQueryChange}
+                                        onFocus={() => citySuggestions.length > 0 && setShowSuggestions(true)}
+                                    />
+                                    {cityQuery.length > 0 ? (
+                                        <TouchableOpacity
+                                            onPress={() => {
+                                                setCityQuery('');
+                                                setCitySuggestions([]);
+                                                setShowSuggestions(false);
+                                                setPropertyData(prev => ({ ...prev, city: '', state: '' }));
+                                            }}
+                                            style={{ marginRight: 8 }}
+                                        >
+                                            <X color="#9CA3AF" size={16} />
+                                        </TouchableOpacity>
+                                    ) : null}
+                                    <MapPin color="#9CA3AF" size={18} />
+                                </View>
+                                {showSuggestions && (
+                                    <View style={styles.suggestionDropdown}>
+                                        <ScrollView
+                                            nestedScrollEnabled={true}
+                                            style={styles.suggestionScroll}
+                                            showsVerticalScrollIndicator={true}
+                                        >
+                                            {citySuggestions.map((item, index) => {
+                                                const addr = item.address || {};
+                                                const city = addr.city || addr.town || addr.village || addr.county || '';
+                                                const state = addr.state || '';
+                                                const label = [city, state].filter(Boolean).join(', ');
+                                                const country = addr.country || '';
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={index}
+                                                        style={[
+                                                            styles.suggestionItem,
+                                                            index < citySuggestions.length - 1 && styles.suggestionBorder
+                                                        ]}
+                                                        onPress={() => handleCitySuggestionSelect(item)}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        <MapPin color="#3B82F6" size={14} style={{ marginRight: 8 }} />
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={styles.suggestionLabel}>{label}</Text>
+                                                            {country ? <Text style={styles.suggestionCountry}>{country}</Text> : null}
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </ScrollView>
+                                    </View>
+                                )}
                             </View>
                         </View>
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Address *</Text>
-                            <View
-                                style={[
-                                    styles.inputWrapper,
-                                ]}
-                            >
+                            <View style={styles.inputWrapper}>
                                 <TextInput
                                     style={styles.input}
                                     placeholder="e.g., 123 Main Street"
                                     placeholderTextColor="#9CA3AF"
                                     value={propertyData.address}
                                     onChangeText={(value) => handleInputChange('address', value)}
+                                />
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Pincode *</Text>
+                            <View style={styles.inputWrapper}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="e.g., 400001"
+                                    placeholderTextColor="#9CA3AF"
+                                    keyboardType="numeric"
+                                    value={propertyData.pincode}
+                                    onChangeText={(value) => handleInputChange('pincode', value)}
                                 />
                             </View>
                         </View>
@@ -1419,6 +1538,8 @@ const styles = StyleSheet.create({
     },
     section: {
         marginBottom: 28,
+        position: 'relative',
+        overflow: 'visible',
     },
     sectionBorder: {
         paddingTop: 28,
@@ -1446,6 +1567,7 @@ const styles = StyleSheet.create({
     },
     inputGroup: {
         marginBottom: 18,
+        position: 'relative',
     },
     label: {
         fontSize: 14,
@@ -1462,6 +1584,8 @@ const styles = StyleSheet.create({
         borderRadius: 14,
         paddingHorizontal: 16,
         backgroundColor: '#FAFAFA',
+        position: 'relative',
+        zIndex: 1,
     },
     inputWrapperFocused: {
         borderColor: '#2D6A4F',
@@ -1985,6 +2109,51 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 4,
         lineHeight: 18,
+    },
+    // City autocomplete styles
+    autocompleteWrapper: {
+        position: 'relative',
+        zIndex: 100,
+    },
+    suggestionDropdown: {
+        position: 'absolute',
+        top: '100%',
+        left: 0,
+        right: 0,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        marginTop: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 15,
+        elevation: 12,
+        overflow: 'hidden',
+    },
+    suggestionItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+    },
+    suggestionBorder: {
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    suggestionLabel: {
+        fontSize: 14,
+        color: '#111827',
+        fontWeight: '500',
+    },
+    suggestionCountry: {
+        fontSize: 12,
+        color: '#9CA3AF',
+        marginTop: 1,
+    },
+    suggestionScroll: {
+        maxHeight: 220,
     },
 });
 
