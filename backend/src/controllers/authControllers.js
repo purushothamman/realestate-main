@@ -638,7 +638,12 @@ module.exports.register = async (req, res) => {
             address,
             city,
             state,
-            pincode
+            pincode,
+            // Agent specific
+            title,
+            agency,
+            reraId,
+            about
         } = req.body;
 
         const { ipAddress, userAgent } = getRequestMetadata(req);
@@ -827,7 +832,12 @@ module.exports.register = async (req, res) => {
             description: role === 'builder' ? description : null,
             gstNo: role === 'builder' ? gstNo : 'N/A',
             panNo: role === 'builder' ? panNo : 'N/A',
-            totalProjects: role === 'builder' ? totalProjects : null
+            totalProjects: role === 'builder' ? totalProjects : null,
+            // Agent details
+            title: role === 'agent' ? title : null,
+            agency: role === 'agent' ? agency : null,
+            reraId: role === 'agent' ? reraId : null,
+            about: role === 'agent' ? about : null
         });
 
         // Hash password
@@ -837,7 +847,7 @@ module.exports.register = async (req, res) => {
 
         // Insert into users table first (include profile_image)
         const [result] = await connection.query(
-            "INSERT INTO users (name, email, phone, password, role, profile_image, is_verified, created_at) VALUES (?,?,?,?,?,?, false, NOW())",
+            "INSERT INTO users (name, email, phone, password, role, profile_image, is_verified, created_at) VALUES (?,?,?,?,?,?, true, NOW())",
             [name.trim(), email.toLowerCase().trim(), phone, hashed, role, profileImage?.trim() || null]
         );
         userId = result.insertId;
@@ -889,6 +899,29 @@ module.exports.register = async (req, res) => {
                     profileImage?.trim() || null
                 ]
             );
+        } else if (role === "agent") {
+            const parsedExperienceYears = experienceYears ? parseInt(experienceYears, 10) : null;
+
+            await connection.query(
+                `INSERT INTO agents (
+                    user_id,
+                    professional_title,
+                    about_me,
+                    agency_name,
+                    license_id,
+                    experience_years,
+                    city
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    userId,
+                    title?.trim() || null,
+                    about?.trim() || null,
+                    agency?.trim() || null,
+                    reraId?.trim() || null,
+                    parsedExperienceYears,
+                    city?.trim() || null
+                ]
+            );
         }
 
         // Move profile image to structured storage (images_rs/profiles/{userId}_{email}/)
@@ -913,6 +946,8 @@ module.exports.register = async (req, res) => {
                     if (role === 'builder') {
                         await connection.query("UPDATE builders SET profile_image = ? WHERE user_id = ?", [relativePath, userId]);
                     }
+                    // Profiles in agents table don't have profile_image column in the user's provided schema
+                    // so we only update the users table (already done above)
                     console.log(`[profile_image] ✅ Moved to ${relativePath}`);
                 } else {
                     console.warn(`[profile_image] ⚠️ Source not found: ${sourcePath}`);
@@ -967,6 +1002,13 @@ module.exports.register = async (req, res) => {
             userResponse.verificationStatus = 'pending';
             userResponse.city = city?.trim() || null;
             userResponse.state = state?.trim() || null;
+        } else if (role === "agent") {
+            userResponse.title = title?.trim() || null;
+            userResponse.agency = agency?.trim() || null;
+            userResponse.reraId = reraId?.trim() || null;
+            userResponse.about = about?.trim() || null;
+            userResponse.experienceYears = experienceYears ? parseInt(experienceYears) : null;
+            userResponse.city = city?.trim() || null;
         }
 
         // Return success response
@@ -1095,15 +1137,23 @@ module.exports.login = async (req, res) => {
             );
         }
 
-        // Fetch builder details if applicable
-        let builderDetails = {};
+        // Fetch role details if applicable
+        let roleDetails = {};
         if (user.role === 'builder') {
             const [builder] = await pool.query(
                 "SELECT * FROM builders WHERE user_id = ?",
                 [user.id]
             );
             if (builder.length > 0) {
-                builderDetails = builder[0];
+                roleDetails = builder[0];
+            }
+        } else if (user.role === 'agent') {
+            const [agent] = await pool.query(
+                "SELECT * FROM agents WHERE user_id = ?",
+                [user.id]
+            );
+            if (agent.length > 0) {
+                roleDetails = agent[0];
             }
         }
 
@@ -1147,17 +1197,24 @@ module.exports.login = async (req, res) => {
         };
 
         // Add builder specific fields
-        if (user.role === 'builder' && builderDetails.id) {
-            userResponse.companyName = builderDetails.company_name;
-            userResponse.gstNo = builderDetails.gst_no; // Or separates if you prefer
-            userResponse.panNo = builderDetails.pan_no;
-            userResponse.website = builderDetails.website;
-            userResponse.verificationStatus = builderDetails.verification_status;
-            userResponse.businessAddress = builderDetails.address;
-            userResponse.city = builderDetails.city;
-            userResponse.state = builderDetails.state;
-            userResponse.pincode = builderDetails.pincode;
-            userResponse.experienceYears = builderDetails.experience_years;
+        if (user.role === 'builder' && roleDetails.id) {
+            userResponse.companyName = roleDetails.company_name;
+            userResponse.gstNo = roleDetails.gst_no;
+            userResponse.panNo = roleDetails.pan_no;
+            userResponse.website = roleDetails.website;
+            userResponse.verificationStatus = roleDetails.verification_status;
+            userResponse.businessAddress = roleDetails.address;
+            userResponse.city = roleDetails.city;
+            userResponse.state = roleDetails.state;
+            userResponse.pincode = roleDetails.pincode;
+            userResponse.experienceYears = roleDetails.experience_years;
+        } else if (user.role === 'agent' && (roleDetails.user_id || roleDetails.id)) {
+            userResponse.title = roleDetails.professional_title;
+            userResponse.about = roleDetails.about_me;
+            userResponse.agency = roleDetails.agency_name;
+            userResponse.reraId = roleDetails.license_id;
+            userResponse.experienceYears = roleDetails.experience_years;
+            userResponse.city = roleDetails.city;
         }
 
         // Return success response
@@ -1216,16 +1273,20 @@ module.exports.getProfile = async (req, res) => {
 
         const user = users[0];
 
-        // Fetch builder details if applicable
-        let builderDetails = {};
+        // Fetch roleDetails if applicable
+        let roleDetails = {};
         if (user.role === 'builder') {
             const [builder] = await pool.query(
                 "SELECT * FROM builders WHERE user_id = ?",
                 [userId]
             );
-            if (builder.length > 0) {
-                builderDetails = builder[0];
-            }
+            if (builder.length > 0) roleDetails = builder[0];
+        } else if (user.role === 'agent') {
+            const [agent] = await pool.query(
+                "SELECT * FROM agents WHERE user_id = ?",
+                [userId]
+            );
+            if (agent.length > 0) roleDetails = agent[0];
         }
 
         // Prepare user response object
@@ -1239,20 +1300,27 @@ module.exports.getProfile = async (req, res) => {
             profileImage: user.profile_image || null
         };
 
-        // Add builder specific fields
-        if (user.role === 'builder' && builderDetails.id) {
-            userResponse.companyName = builderDetails.company_name;
-            userResponse.gstNo = builderDetails.gst_no;
-            userResponse.panNo = builderDetails.pan_no;
-            userResponse.website = builderDetails.website;
-            userResponse.description = builderDetails.description;
-            userResponse.verificationStatus = builderDetails.verification_status;
-            userResponse.address = builderDetails.address;
-            userResponse.totalProjects = builderDetails.total_projects;
-            userResponse.city = builderDetails.city;
-            userResponse.state = builderDetails.state;
-            userResponse.pincode = builderDetails.pincode;
-            userResponse.experienceYears = builderDetails.experience_years;
+        // Add role-specific fields
+        if (user.role === 'builder' && roleDetails.id) {
+            userResponse.companyName = roleDetails.company_name;
+            userResponse.gstNo = roleDetails.gst_no;
+            userResponse.panNo = roleDetails.pan_no;
+            userResponse.website = roleDetails.website;
+            userResponse.description = roleDetails.description;
+            userResponse.verificationStatus = roleDetails.verification_status;
+            userResponse.address = roleDetails.address;
+            userResponse.totalProjects = roleDetails.total_projects;
+            userResponse.city = roleDetails.city;
+            userResponse.state = roleDetails.state;
+            userResponse.pincode = roleDetails.pincode;
+            userResponse.experienceYears = roleDetails.experience_years;
+        } else if (user.role === 'agent' && (roleDetails.user_id || roleDetails.id)) {
+            userResponse.title = roleDetails.professional_title;
+            userResponse.about = roleDetails.about_me;
+            userResponse.agency = roleDetails.agency_name;
+            userResponse.reraId = roleDetails.license_id;
+            userResponse.experienceYears = roleDetails.experience_years;
+            userResponse.city = roleDetails.city;
         }
 
         res.json(userResponse);
@@ -1627,7 +1695,9 @@ module.exports.updateProfile = async (req, res) => {
             name, phone, profileImage,
             // Builder specific
             companyName, gstNo, panNo, website, description, totalProjects, experienceYears,
-            address, city, state, pincode
+            address, city, state, pincode,
+            // Agent specific
+            title, agency, reraId, about
         } = req.body;
 
         const { ipAddress, userAgent } = getRequestMetadata(req);
@@ -1681,6 +1751,20 @@ module.exports.updateProfile = async (req, res) => {
                     builderParams
                 );
             }
+        } else if (userRole === 'agent') {
+            await connection.query(
+                `INSERT INTO agents (user_id, professional_title, about_me, agency_name, license_id, experience_years, city, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+                 ON DUPLICATE KEY UPDATE
+                 professional_title = VALUES(professional_title),
+                 about_me = VALUES(about_me),
+                 agency_name = VALUES(agency_name),
+                 license_id = VALUES(license_id),
+                 experience_years = VALUES(experience_years),
+                 city = VALUES(city),
+                 updated_at = NOW()`,
+                [userId, title?.trim() || null, about?.trim() || null, agency?.trim() || null, reraId?.trim() || null, experienceYears || 0, city?.trim() || null]
+            );
         }
 
         await connection.commit();

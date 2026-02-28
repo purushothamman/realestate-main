@@ -92,7 +92,7 @@ const StarRow = ({ count = 5, size = 12 }) => (
 // ════════════════════════════════════════════════════════════
 //  HERO SECTION
 // ════════════════════════════════════════════════════════════
-const HeroSection = ({ userData, onBack, onEditProfile }) => (
+const HeroSection = ({ userData, onBack }) => (
     <View style={styles.hero}>
         <Image
             source={{ uri: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?fm=jpg&q=60&w=1200&auto=format&fit=crop' }}
@@ -120,9 +120,6 @@ const HeroSection = ({ userData, onBack, onEditProfile }) => (
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                         <TouchableOpacity style={styles.iconBtn}>
                             <Text style={styles.iconBtnText}>⤴</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.iconBtn} onPress={onEditProfile}>
-                            <Text style={styles.iconBtnText}>✎</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -202,7 +199,7 @@ const HeroSection = ({ userData, onBack, onEditProfile }) => (
 // ════════════════════════════════════════════════════════════
 //  OVERVIEW TAB
 // ════════════════════════════════════════════════════════════
-const OverviewTab = ({ userData, onEditPress, onDashboard }) => {
+const OverviewTab = ({ userData, onDashboard }) => {
     const statPills = [
         { val: '18', lbl: 'Active Listings', color: C.green, icon: '🏠' },
         { val: '$284M', lbl: 'Total Volume', color: C.blue, icon: '📈' },
@@ -558,7 +555,6 @@ export default function AgentProfileScreen({
     navigation,
     userData = {},
     onBack = () => { },
-    onEditProfile = () => { },
     onDashboard = () => { },
     onLogout = () => { },
 }) {
@@ -585,7 +581,7 @@ export default function AgentProfileScreen({
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
             {/* Hero — rendered outside ScrollView so it stays at top */}
-            <HeroSection userData={userData} onBack={onBack} onEditProfile={onEditProfile} />
+            <HeroSection userData={userData} onBack={onBack} />
 
             {/* Sticky Tab Bar */}
             <View style={styles.tabbar}>
@@ -608,7 +604,7 @@ export default function AgentProfileScreen({
                 contentContainerStyle={styles.bodyInner}
                 showsVerticalScrollIndicator={false}
             >
-                {activeTab === 'overview' && <OverviewTab userData={userData} onEditPress={onEditProfile} onDashboard={onDashboard} />}
+                {activeTab === 'overview' && <OverviewTab userData={userData} onDashboard={onDashboard} />}
                 {activeTab === 'listings' && <ListingsTab userData={userData} />}
                 {/* {activeTab === 'reviews'   && <ReviewsTab  />} */}
             </ScrollView>

@@ -84,11 +84,19 @@ const ProfileScreen = ({
   onChangePassword = () => { },
   onBack = () => { },
   navigation,
+  userData: initialUserData = null,
 }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [userData, setUserData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [userData, setUserData] = useState(initialUserData);
+  const [isLoading, setIsLoading] = useState(!initialUserData);
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (initialUserData) {
+      setUserData(initialUserData);
+      setIsLoading(false);
+    }
+  }, [initialUserData]);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;

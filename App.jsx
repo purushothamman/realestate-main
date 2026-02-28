@@ -9,6 +9,7 @@ import OTPVerificationScreen from './modules/auth/screens/OTPVerificationScreen'
 import ForgotPassword from './modules/auth/screens/ForgotPassword';
 import HomeScreen from './modules/user/screens/HomeScreen';
 import ProfileScreen from './modules/user/screens/ProfileScreen';
+import EditScreen from './modules/user/screens/EditScreen';
 import PropertyDetailScreen from './modules/property/screens/PropertyDetailScreen';
 import SearchResultsScreen from './modules/property/screens/SearchResultsScreen';
 import ExploreProperties from './modules/property/screens/ExploreProperties';
@@ -24,9 +25,6 @@ import ChatListScreen from './modules/chat/screens/ChatListScreen';
 import AddPropertiesAgent from './modules/property/screens/AddPropertiesAgent';
 import AgentDashboard from './modules/agent/AgentDashboardScreen';
 import MyListingsScreen from './modules/property/screens/MyListingsScreen';
-import AgentProfile from './modules/agent/AgentProfile';
-import EditAgentProfile from './modules/agent/EditAgentProfile';
-import EditBuilderProfile from './modules/builder/screens/EditBuilderProfile';
 
 import UserNavigator from './navigation/UserNavigator';
 import FavoritesScreen from './modules/user/screens/FavoritesScreen';
@@ -34,7 +32,6 @@ import AssignAgentScreen from './modules/builder/screens/AssignAgentScreen';
 import AgentNotificationsScreen from './modules/agent/AgentNotificationsScreen';
 import BuilderNotificationsScreen from './modules/builder/screens/BuilderNotificationsScreen';
 import BuyerNotificationsScreen from './modules/user/screens/BuyerNotificationsScreen';
-import BuilderProfile from './modules/builder/screens/BuilderProfile';
 
 
 
@@ -267,7 +264,7 @@ export default function App() {
 
   const handleRegisterSuccess = useCallback((user) => {
     if (user) setUserData(user);
-    navigateTo('otp');
+    navigateTo('home');
   }, [navigateTo]);
 
   const handleNavigateToLogin = useCallback(() => navigateTo('login'), [navigateTo]);
@@ -356,38 +353,17 @@ export default function App() {
         );
 
       case 'profile':
-        if (userData?.role === 'builder') {
-          return (
-            <BuilderProfile
-              navigation={navigation}
-              onBack={goBack}
-              onEditProfile={() => navigateTo('editBuilderProfile')}
-              onDashboard={() => navigateTo('builderDashboard')}
-              userData={userData}
-              onLogout={resetApp}
-            />
-          );
-        }
-        if (userData?.role === 'agent') {
-          return (
-            <AgentProfile
-              navigation={navigation}
-              onBack={goBack}
-              onEditProfile={() => navigateTo('editAgentProfile')}
-              onDashboard={() => navigateTo('agentDashboard')}
-              userData={userData}
-              onLogout={resetApp}
-            />
-          );
-        }
         return (
           <ProfileScreen
             navigation={navigation}
-            userName={userData?.name}
-            userEmail={userData?.email}
-            userPhone={userData?.phone}
+            userData={userData}
             onBack={goBack}
             onLogout={resetApp}
+            onEditProfile={() => navigateTo('editProfile')}
+            onDashboard={() => {
+              if (userData?.role === 'builder') navigateTo('builderDashboard');
+              else if (userData?.role === 'agent') navigateTo('agentDashboard');
+            }}
           />
         );
 
@@ -497,19 +473,9 @@ export default function App() {
           />
         );
 
-      case 'editAgentProfile':
+      case 'editProfile':
         return (
-          <EditAgentProfile
-            navigation={navigation}
-            onBack={goBack}
-            userData={userData}
-            onUpdate={refreshUserData}
-          />
-        );
-
-      case 'editBuilderProfile':
-        return (
-          <EditBuilderProfile
+          <EditScreen
             navigation={navigation}
             onBack={goBack}
             userData={userData}
