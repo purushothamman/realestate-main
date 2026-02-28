@@ -924,30 +924,31 @@ module.exports.register = async (req, res) => {
             );
         }
 
-        // Move profile image to structured storage (images_rs/profiles/{userId}_{email}/)
+        // Move profile image to structured storage (images_rs/profiles/{role}/{userId}_{email}/)
         if (profileImage && profileImage.includes('/uploads/')) {
             try {
                 const filename = profileImage.split('/').pop();
                 const safeEmail = email.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
                 const uploadsDir = path.join(__dirname, '..', '..', '..', 'uploads');
-                const profileDir = path.join(__dirname, '..', '..', '..', 'images_rs', 'profiles', `${userId}_${safeEmail}`);
+
+                // Determine role subfolder
+                const roleFolder = role === 'builder' ? 'builders' : role === 'agent' ? 'agents' : 'users';
+                const profileDir = path.join(__dirname, '..', '..', 'images_rs', 'profiles', roleFolder, `${userId}_${safeEmail}`);
 
                 fs.mkdirSync(profileDir, { recursive: true });
 
                 const sourcePath = path.join(uploadsDir, filename);
-                const destPath = path.join(profileDir, filename);
+                const destPath = path.join(profileDir, 'profile.jpg');
 
                 if (fs.existsSync(sourcePath)) {
                     fs.copyFileSync(sourcePath, destPath);
                     fs.unlinkSync(sourcePath);
 
-                    const relativePath = `/images_rs/profiles/${userId}_${safeEmail}/${filename}`;
+                    const relativePath = `/images_rs/profiles/${roleFolder}/${userId}_${safeEmail}/profile.jpg`;
                     await connection.query("UPDATE users SET profile_image = ? WHERE id = ?", [relativePath, userId]);
                     if (role === 'builder') {
                         await connection.query("UPDATE builders SET profile_image = ? WHERE user_id = ?", [relativePath, userId]);
                     }
-                    // Profiles in agents table don't have profile_image column in the user's provided schema
-                    // so we only update the users table (already done above)
                     console.log(`[profile_image] ✅ Moved to ${relativePath}`);
                 } else {
                     console.warn(`[profile_image] ⚠️ Source not found: ${sourcePath}`);
@@ -1702,8 +1703,8 @@ module.exports.updateProfile = async (req, res) => {
 
         const { ipAddress, userAgent } = getRequestMetadata(req);
 
-        // Fetch current user role
-        const [users] = await connection.query("SELECT role FROM users WHERE id = ?", [userId]);
+        // Fetch current user role and email
+        const [users] = await connection.query("SELECT role, email FROM users WHERE id = ?", [userId]);
         if (users.length === 0) {
             await connection.rollback();
             connection.release();
@@ -1765,6 +1766,46 @@ module.exports.updateProfile = async (req, res) => {
                  updated_at = NOW()`,
                 [userId, title?.trim() || null, about?.trim() || null, agency?.trim() || null, reraId?.trim() || null, experienceYears || 0, city?.trim() || null]
             );
+        }
+
+        // Move profile image to structured storage if it's a new upload
+        if (profileImage && profileImage.includes('/uploads/')) {
+            try {
+                const email = users[0].email || '';
+                const filename = profileImage.split('/').pop();
+                const safeEmail = email.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+                const uploadsDir = path.join(__dirname, '..', '..', '..', 'uploads');
+
+                // Determine role subfolder
+                const roleFolder = userRole === 'builder' ? 'builders' : userRole === 'agent' ? 'agents' : 'users';
+                const profileDir = path.join(__dirname, '..', '..', 'images_rs', 'profiles', roleFolder, `${userId}_${safeEmail}`);
+
+                fs.mkdirSync(profileDir, { recursive: true });
+
+                const sourcePath = path.join(uploadsDir, filename);
+                const destPath = path.join(profileDir, 'profile.jpg');
+
+                if (fs.existsSync(sourcePath)) {
+                    // Remove old profile.jpg if it exists (replace in-place)
+                    if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+                    fs.copyFileSync(sourcePath, destPath);
+                    fs.unlinkSync(sourcePath);
+
+                    const relativePath = `/images_rs/profiles/${roleFolder}/${userId}_${safeEmail}/profile.jpg`;
+
+                    // Update profile_image in database (within transaction)
+                    await connection.query("UPDATE users SET profile_image = ? WHERE id = ?", [relativePath, userId]);
+                    if (userRole === 'builder') {
+                        await connection.query("UPDATE builders SET profile_image = ? WHERE user_id = ?", [relativePath, userId]);
+                    }
+                    console.log(`[profile_image] ✅ Updated to ${relativePath}`);
+                } else {
+                    console.warn(`[profile_image] ⚠️ Source not found: ${sourcePath}`);
+                }
+            } catch (moveErr) {
+                console.error('[profile_image] Failed to move profile image on update:', moveErr.message);
+                // Non-fatal
+            }
         }
 
         await connection.commit();

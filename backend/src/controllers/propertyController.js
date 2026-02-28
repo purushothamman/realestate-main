@@ -251,7 +251,7 @@ exports.addProperty = async (req, res) => {
             const propertyFolderName = `${property_id}_${safeTitle}`;
             
             const uploadsDir = path.join(__dirname, '..', '..', '..', 'uploads');
-            const imagesRsDir = path.join(__dirname, '..', '..', '..', 'images_rs', builderFolderName, propertyFolderName);
+            const imagesRsDir = path.join(__dirname, '..', '..', 'images_rs', builderFolderName, propertyFolderName);
             
             // Create target directory
             try {

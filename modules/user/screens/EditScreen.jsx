@@ -235,10 +235,49 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
         });
 
         if (!result.canceled) {
-            // In a real app, you'd upload this to a server/S3
-            // For now, we simulate by setting the local URI
-            setLogoImage(result.assets[0].uri);
-            Alert.alert('Success', 'Profile photo updated locally. (Server upload not implemented in this demo)');
+            const localUri = result.assets[0].uri;
+
+            // Show preview immediately
+            setLogoImage(localUri);
+
+            try {
+                const token = await AsyncStorage.getItem('authToken');
+                const formDataUpload = new FormData();
+                const filename = localUri.split('/').pop();
+                const match = /\.(\w+)$/.exec(filename);
+                const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+                formDataUpload.append('profileImage', {
+                    uri: localUri,
+                    name: filename || 'profile.jpg',
+                    type,
+                });
+
+                const uploadRes = await fetch(`${API_BASE_URL}/upload/profile-image`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'multipart/form-data',
+                    },
+                    body: formDataUpload,
+                });
+
+                const uploadData = await uploadRes.json();
+
+                if (uploadRes.ok && (uploadData.url || uploadData.imageUrl)) {
+                    const uploadedUrl = uploadData.url || uploadData.imageUrl;
+                    setFormData(prev => ({ ...prev, profileImage: uploadedUrl }));
+                    Alert.alert('✅ Photo Uploaded', 'Profile photo is ready. Tap Save to apply changes.');
+                } else {
+                    Alert.alert('Upload Failed', uploadData.message || 'Could not upload photo.');
+                    // Revert preview
+                    setLogoImage(getImageUrl(formData.profileImage) || DEFAULT_PROFILE_IMAGE);
+                }
+            } catch (uploadErr) {
+                console.error('Image upload error:', uploadErr);
+                Alert.alert('Error', 'Failed to upload photo. Please try again.');
+                setLogoImage(getImageUrl(formData.profileImage) || DEFAULT_PROFILE_IMAGE);
+            }
         }
     };
 

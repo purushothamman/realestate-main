@@ -262,7 +262,7 @@ const PropertyResultCard = ({
   );
 };
 
-const FilterChip = ({ label, onRemove, index }) => {
+const FilterChip = ({ label, onToggle, isActive, index }) => {
   const slideAnim = useRef(new Animated.Value(-50)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
@@ -273,46 +273,60 @@ const FilterChip = ({ label, onRemove, index }) => {
         toValue: 0,
         tension: 50,
         friction: 7,
-        delay: index * 80,
+        delay: index * 40,
         useNativeDriver: true,
       }),
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 400,
-        delay: index * 80,
+        duration: 300,
+        delay: index * 40,
         useNativeDriver: true,
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
         tension: 100,
         friction: 7,
-        delay: index * 80,
+        delay: index * 40,
         useNativeDriver: true,
       }),
     ]).start();
   }, []);
 
   return (
-    <Animated.View
-      style={[
-        styles.filterChip,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateX: slideAnim }, { scale: scaleAnim }],
-        },
-      ]}
+    <TouchableOpacity
+      activeOpacity={0.8}
+      onPress={onToggle}
     >
-      <Text style={styles.filterChipText}>{label}</Text>
-      <TouchableOpacity onPress={onRemove} style={styles.filterChipRemove}>
-        <X size={14} color="#2D6A4F" />
-      </TouchableOpacity>
-    </Animated.View>
+      <Animated.View
+        style={[
+          styles.filterChip,
+          isActive ? styles.activeFilterChip : styles.inactiveFilterChip,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateX: slideAnim }, { scale: scaleAnim }],
+          },
+        ]}
+      >
+        <Text style={[
+          styles.filterChipText,
+          isActive ? styles.activeFilterChipText : styles.inactiveFilterChipText
+        ]}>
+          {label}
+        </Text>
+        {isActive && (
+          <View style={styles.filterChipRemove}>
+            <X size={12} color="#FFF" strokeWidth={3} />
+          </View>
+        )}
+      </Animated.View>
+    </TouchableOpacity>
   );
 };
 
 export default function SearchResultsScreen({ navigation, onPropertyClick, onBack }) {
   const [savedProperties, setSavedProperties] = useState([]);
-  const [activeFilters, setActiveFilters] = useState(['$400k - $800k', '3+ Beds', 'Modern']);
+  const [activeFilters, setActiveFilters] = useState([]);
+  const availableFilters = ['$400k - $800k', '3+ Beds', 'Modern'];
   const [sortOption, setSortOption] = useState('Relevance');
   const [scrollY, setScrollY] = useState(0);
   const [activeTab, setActiveTab] = useState('search');
@@ -404,8 +418,10 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
     );
   };
 
-  const removeFilter = (filter) => {
-    setActiveFilters((prev) => prev.filter((f) => f !== filter));
+  const toggleFilter = (filter) => {
+    setActiveFilters((prev) =>
+      prev.includes(filter) ? prev.filter((f) => f !== filter) : [...prev, filter]
+    );
   };
 
   const clearAllFilters = () => {
@@ -509,8 +525,33 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
     }
   };
 
-  // Determine what to display
-  const displayProperties = hasSearched ? searchResults : allProperties;
+  // Determine what to display and apply filters
+  const getFilteredProperties = (properties) => {
+    if (activeFilters.length === 0) return properties;
+
+    return properties.filter((p) => {
+      return activeFilters.every((filter) => {
+        if (filter === '$400k - $800k') {
+          const price = typeof p.price === 'string'
+            ? parseFloat(p.price.replace(/[^0-9.]/g, ''))
+            : p.price;
+          return price >= 400000 && price <= 800000;
+        }
+        if (filter === '3+ Beds') {
+          const beds = parseInt(p.bedrooms || 0);
+          return beds >= 3;
+        }
+        if (filter === 'Modern') {
+          const text = ((p.title || '') + (p.description || '')).toLowerCase();
+          return text.includes('modern') || text.includes('contemporary');
+        }
+        return true;
+      });
+    });
+  };
+
+  const baseProperties = hasSearched ? searchResults : allProperties;
+  const displayProperties = getFilteredProperties(baseProperties);
 
   const logoRotation = logoRotate.interpolate({
     inputRange: [0, 1],
@@ -633,8 +674,8 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
                 {isSearching || isLoadingAll
                   ? 'Searching...'
                   : hasSearched
-                    ? `${searchResults.length} Propert${searchResults.length === 1 ? 'y' : 'ies'} Found`
-                    : `${allProperties.length} Properties Available`
+                    ? `${displayProperties.length} Propert${displayProperties.length === 1 ? 'y' : 'ies'} Found`
+                    : `${displayProperties.length} Propert${displayProperties.length === 1 ? 'y' : 'ies'} Available`
                 }
               </Text>
             </View>
@@ -650,23 +691,22 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
             </TouchableOpacity>
           </View>
 
-          {activeFilters.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.filtersScroll}
-              contentContainerStyle={styles.filtersContainer}
-            >
-              {activeFilters.map((filter, index) => (
-                <FilterChip
-                  key={index}
-                  index={index}
-                  label={filter}
-                  onRemove={() => removeFilter(filter)}
-                />
-              ))}
-            </ScrollView>
-          )}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filtersScroll}
+            contentContainerStyle={styles.filtersContainer}
+          >
+            {availableFilters.map((filter, index) => (
+              <FilterChip
+                key={filter}
+                index={index}
+                label={filter}
+                isActive={activeFilters.includes(filter)}
+                onToggle={() => toggleFilter(filter)}
+              />
+            ))}
+          </ScrollView>
         </View>
       </Animated.View>
 
@@ -697,15 +737,34 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
                 {searchError}
               </Text>
             </View>
-          ) : displayProperties.length === 0 && hasSearched ? (
-            <View style={{ flex: 1, alignItems: 'center', paddingVertical: 60 }}>
-              <MapPin size={48} color="#D1D5DB" />
-              <Text style={{ marginTop: 12, color: '#374151', fontSize: 17, fontWeight: '700' }}>
-                No properties in {selectedCity || searchQuery}
+          ) : displayProperties.length === 0 ? (
+            <View style={{ flex: 1, alignItems: 'center', paddingVertical: 100 }}>
+              <Search size={48} color="#D1D5DB" style={{ marginBottom: 16 }} />
+              <Text style={{ fontSize: 18, color: '#374151', fontWeight: '700' }}>
+                {activeFilters.length > 0 ? "No results match your filters" : "No properties found"}
               </Text>
-              <Text style={{ marginTop: 6, color: '#9CA3AF', fontSize: 14, textAlign: 'center', paddingHorizontal: 32 }}>
-                Try searching a different city.
+              <Text style={{ color: '#6B7280', marginTop: 8, fontSize: 15 }}>
+                {activeFilters.length > 0 ? "Try adjusting or clearing your filters" : "Try searching for a different city"}
               </Text>
+              {activeFilters.length > 0 && (
+                <TouchableOpacity
+                  onPress={clearAllFilters}
+                  style={{
+                    marginTop: 24,
+                    backgroundColor: '#2D6A4F',
+                    paddingHorizontal: 24,
+                    paddingVertical: 12,
+                    borderRadius: 12,
+                    shadowColor: '#2D6A4F',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 8,
+                    elevation: 4
+                  }}
+                >
+                  <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 16 }}>Clear All Filters</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             displayProperties.map((property, index) => (
@@ -942,21 +1001,44 @@ const styles = StyleSheet.create({
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 24,
+    marginRight: 12,
     borderWidth: 1.5,
-    borderColor: '#BFDBFE',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  activeFilterChip: {
+    backgroundColor: '#2D6A4F',
+    borderColor: '#2D6A4F',
+  },
+  inactiveFilterChip: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
   },
   filterChipText: {
     fontSize: 13,
-    color: '#2D6A4F',
     fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  activeFilterChipText: {
+    color: '#FFFFFF',
+  },
+  inactiveFilterChipText: {
+    color: '#4B5563',
   },
   filterChipRemove: {
-    padding: 2,
+    marginLeft: 8,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   scrollView: {
     flex: 1,
