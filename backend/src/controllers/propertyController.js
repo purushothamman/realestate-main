@@ -907,7 +907,13 @@ exports.searchByCity = async (req, res) => {
                     LIMIT 1
                 ) as primary_image,
                 (
-                    SELECT COUNT(*) FROM property_images pi2 WHERE pi2.property_id = p.id
+                    SELECT JSON_ARRAYAGG(pi2.image_url)
+                    FROM property_images pi2
+                    WHERE pi2.property_id = p.id
+                    ORDER BY pi2.is_primary DESC, pi2.sort_order ASC
+                ) as images_json,
+                (
+                    SELECT COUNT(*) FROM property_images pi3 WHERE pi3.property_id = p.id
                 ) as image_count
              FROM properties p
              WHERE p.city = ? AND p.status = 'active'
@@ -916,25 +922,39 @@ exports.searchByCity = async (req, res) => {
             [city.trim()]
         );
 
-        const transformed = properties.map(p => ({
-            id: p.id,
-            title: p.title,
-            description: p.description,
-            price: p.price,
-            listing_type: p.listing_type,
-            address: p.address,
-            city: p.city,
-            state: p.state,
-            pincode: p.pincode,
-            bedrooms: p.bedrooms,
-            bathrooms: p.bathrooms,
-            area: p.area_sqft ? `${p.area_sqft} sq ft` : null,
-            area_sqft: p.area_sqft,
-            isVerified: Boolean(p.is_verified),
-            image: p.primary_image || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
-            imageUrl: p.primary_image || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
-            imageCount: p.image_count || 0,
-        }));
+        const transformed = properties.map(p => {
+            let imagesArray = [];
+            try {
+                const raw = p.images_json;
+                if (raw) {
+                    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                    if (Array.isArray(parsed)) {
+                        imagesArray = parsed.filter(u => u !== null);
+                    }
+                }
+            } catch (e) { /* ignore parse errors */ }
+
+            return {
+                id: p.id,
+                title: p.title,
+                description: p.description,
+                price: p.price,
+                listing_type: p.listing_type,
+                address: p.address,
+                city: p.city,
+                state: p.state,
+                pincode: p.pincode,
+                bedrooms: p.bedrooms,
+                bathrooms: p.bathrooms,
+                area: p.area_sqft ? `${p.area_sqft} sq ft` : null,
+                area_sqft: p.area_sqft,
+                isVerified: Boolean(p.is_verified),
+                image: p.primary_image || imagesArray[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
+                imageUrl: p.primary_image || imagesArray[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
+                images: imagesArray,
+                imageCount: p.image_count || imagesArray.length || 0,
+            };
+        });
 
         res.json({
             success: true,
