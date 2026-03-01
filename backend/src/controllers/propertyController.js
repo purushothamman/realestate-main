@@ -231,6 +231,15 @@ exports.addProperty = async (req, res) => {
                         [builderIdForRequest, `${agentName} submitted "${title}" for your approval.`, request_id]
                     );
                 }
+
+                // Notify the builder about the auto-approved submission (Direct for My Builder)
+                if (initialStatus === 'approved' && builderIdForRequest) {
+                    await connection.query(
+                        `INSERT INTO notifications (user_id, type, title, body, related_entity_type, related_entity_id)
+                         VALUES (?, 'property_upload', 'Property uploaded by agent', 'Your agent has uploaded a new property on your behalf.', 'property_request', ?)`,
+                        [builderIdForRequest, request_id]
+                    );
+                }
             }
         }
 

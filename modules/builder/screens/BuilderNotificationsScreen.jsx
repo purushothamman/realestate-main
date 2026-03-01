@@ -200,6 +200,7 @@ const TYPE_CFG = {
   hire_response: { label: 'Hire Response', Icon: UserCheck, color: T.teal, bg: T.tealBg, border: T.tealBdr },
   hire_request: { label: 'Hire Request', Icon: Briefcase, color: T.blue, bg: T.blueBg, border: T.blueBdr },
   property_approved: { label: 'Approved', Icon: BadgeCheck, color: T.g700, bg: T.g100, border: T.g200 },
+  property_upload: { label: 'Property Upload', Icon: Home, color: T.g700, bg: T.g100, border: T.g200 },
   _default: { label: 'Notification', Icon: MessageSquare, color: T.n500, bg: T.n100, border: T.n200 },
 };
 
@@ -244,7 +245,7 @@ const StatusPill = ({ status }) => {
 };
 
 const TypeBadge = ({ type }) => {
-  const c = TYPE_CFG[type];
+  const c = TYPE_CFG[type] || TYPE_CFG._default;
   return (
     <View style={[atoms.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
       <c.Icon color={c.color} size={10} strokeWidth={2.5} />
@@ -1171,9 +1172,12 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
     } catch (_) { }
     setNotifs(p => p.map(n => n.id === notif.id ? { ...n, read: true } : n));
 
-    // For property_submission notifications, fetch the full request details
+    // For property_submission or property_upload notifications, fetch the full request details
     let enriched = { ...notif, read: true };
-    if (notif.type === 'property_submission' && notif.relatedEntityId) {
+    const isSubmission = notif.type === 'property_submission';
+    const isUpload = notif.type === 'property_upload';
+
+    if ((isSubmission || isUpload) && notif.relatedEntityId) {
       try {
         const token = await AsyncStorage.getItem('authToken');
         if (token) {
@@ -1189,23 +1193,38 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
               : coverImage
                 ? `${API_BASE_URL.replace('/api', '')}${coverImage}`
                 : null;
+
+            let summaryText = enriched.summary;
+            let messageText = r.property?.description || enriched.message;
+
+            if (isSubmission) {
+              summaryText = `${r.agent?.name || 'Agent'} submitted "${r.property?.title || 'property'}" for your approval.`;
+            } else if (isUpload) {
+              summaryText = `Your agent has uploaded this property on your behalf.`;
+              messageText = `Your agent has uploaded this property on your behalf.`;
+            }
+
             enriched = {
               ...enriched,
               status: r.status || enriched.status,
               sender: {
-                name: r.agent?.name || enriched.sender.name,
+                id: r.agent?.id || enriched.sender?.id,
+                name: r.agent?.name || enriched.sender?.name,
                 role: 'Agent',
                 avatar: r.agent?.profile_image ? getImageUrl(r.agent.profile_image) : null,
                 email: r.agent?.email || '',
                 phone: r.agent?.phone || '',
               },
-              summary: `${r.agent?.name || 'Agent'} submitted "${r.property?.title || 'property'}" for your approval.`,
-              message: r.property?.description || enriched.message,
+              summary: summaryText,
+              message: messageText,
               property: r.property ? {
+                id: r.property.id,
                 name: r.property.title,
                 location: [r.property.address, r.property.city, r.property.state].filter(Boolean).join(', '),
                 type: r.property.listing_type || 'Residential',
                 units: r.property.bedrooms || 0,
+                price: r.property.price,
+                city: r.property.city,
                 image: imageUrl || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
               } : null,
               submission: {
