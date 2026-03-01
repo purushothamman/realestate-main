@@ -946,9 +946,7 @@ module.exports.register = async (req, res) => {
 
                     const relativePath = `/images_rs/profiles/${roleFolder}/${userId}_${safeEmail}/profile.jpg`;
                     await connection.query("UPDATE users SET profile_image = ? WHERE id = ?", [relativePath, userId]);
-                    if (role === 'builder') {
-                        await connection.query("UPDATE builders SET profile_image = ? WHERE user_id = ?", [relativePath, userId]);
-                    }
+
                     console.log(`[profile_image] ✅ Moved to ${relativePath}`);
                 } else {
                     console.warn(`[profile_image] ⚠️ Source not found: ${sourcePath}`);
@@ -1688,7 +1686,17 @@ module.exports.resetPassword = async (req, res) => {
 
 // UPDATE PROFILE
 module.exports.updateProfile = async (req, res) => {
-    const connection = await pool.getConnection();
+    console.log("\n" + "=".repeat(33) + " route handler" + "=".repeat(13));
+    console.log("👤 updateProfile called for user:", req.user?.id);
+
+    let connection;
+    try {
+        connection = await pool.getConnection();
+    } catch (connErr) {
+        console.error("❌ Database connection error:", connErr);
+        return res.status(500).json({ message: "Database connection failed" });
+    }
+
     try {
         await connection.beginTransaction();
         const userId = req.user.id;
@@ -1743,7 +1751,8 @@ module.exports.updateProfile = async (req, res) => {
             if (city !== undefined) { builderUpdates.push("city = ?"); builderParams.push(city?.trim() || null); }
             if (state !== undefined) { builderUpdates.push("state = ?"); builderParams.push(state?.trim() || null); }
             if (pincode !== undefined) { builderUpdates.push("pincode = ?"); builderParams.push(pincode?.trim() || null); }
-            if (profileImage !== undefined) { builderUpdates.push("profile_image = ?"); builderParams.push(profileImage?.trim() || null); }
+            // Note: profile_image is handled in users table, builders table doesn't have this column
+
 
             if (builderUpdates.length > 0) {
                 builderParams.push(userId);
@@ -1795,9 +1804,7 @@ module.exports.updateProfile = async (req, res) => {
 
                     // Update profile_image in database (within transaction)
                     await connection.query("UPDATE users SET profile_image = ? WHERE id = ?", [relativePath, userId]);
-                    if (userRole === 'builder') {
-                        await connection.query("UPDATE builders SET profile_image = ? WHERE user_id = ?", [relativePath, userId]);
-                    }
+
                     console.log(`[profile_image] ✅ Updated to ${relativePath}`);
                 } else {
                     console.warn(`[profile_image] ⚠️ Source not found: ${sourcePath}`);

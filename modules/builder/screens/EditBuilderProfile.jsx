@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -41,6 +41,7 @@ import {
     AlertCircle,
     ArrowLeft,
 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width } = Dimensions.get('window');
 
@@ -75,8 +76,12 @@ export default function EditProfile({ navigation, onBack, userData, onUpdate }) 
         profileImage: userData?.profileImage || '',
     });
 
+    const isInitialized = useRef(false);
+
     useEffect(() => {
-        if (userData) {
+        if (userData && !isInitialized.current) {
+            console.log('🔄 userData change detected in EditBuilderProfile. Initializing formData...');
+            isInitialized.current = true;
             setFormData({
                 name: userData.name || '',
                 companyName: userData.companyName || '',
@@ -99,6 +104,58 @@ export default function EditProfile({ navigation, onBack, userData, onUpdate }) 
             }
         }
     }, [userData]);
+
+    const handlePickImage = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets && result.assets[0].uri) {
+                const selectedImage = result.assets[0];
+                console.log('📸 Builder logo picked:', selectedImage.uri);
+
+                const formDataUpload = new FormData();
+                if (Platform.OS === 'web') {
+                    const response = await fetch(selectedImage.uri);
+                    const blob = await response.blob();
+                    formDataUpload.append('profileImage', blob, 'profile.jpg');
+                } else {
+                    const uriParts = selectedImage.uri.split('.');
+                    const fileType = uriParts[uriParts.length - 1];
+                    formDataUpload.append('profileImage', {
+                        uri: selectedImage.uri,
+                        name: `profile.${fileType}`,
+                        type: `image/${fileType.toLowerCase()}`,
+                    });
+                }
+
+                const token = await AsyncStorage.getItem('authToken');
+                const uploadResponse = await fetch(`${API_BASE_URL}/upload/profile-image`, {
+                    method: 'POST',
+                    body: formDataUpload,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    }
+                });
+
+                const uploadData = await uploadResponse.json();
+                if (uploadResponse.ok) {
+                    setFormData(prev => ({ ...prev, profileImage: uploadData.url }));
+                    setLogoImage(getImageUrl(uploadData.url));
+                    Alert.alert('Success', 'Logo uploaded successfully');
+                } else {
+                    Alert.alert('Upload Failed', uploadData.message || 'Error uploading image');
+                }
+            }
+        } catch (error) {
+            console.error('Error picking image:', error);
+            Alert.alert('Error', 'Failed to pick or upload image');
+        }
+    };
 
     const [notifications, setNotifications] = useState({
         newApplications: true,
@@ -134,8 +191,8 @@ export default function EditProfile({ navigation, onBack, userData, onUpdate }) 
             const response = await fetch(`${API_BASE_URL}/auth/profile`, {
                 method: 'PUT',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(formData)
             });
@@ -728,7 +785,7 @@ export default function EditProfile({ navigation, onBack, userData, onUpdate }) 
                             <Text style={styles.logoDescription}>
                                 Square format recommended{'\n'}Min 200 x 200 pixels
                             </Text>
-                            <TouchableOpacity style={styles.smallOutlineButton}>
+                            <TouchableOpacity style={styles.smallOutlineButton} onPress={handlePickImage}>
                                 <Upload color="#2D6A4F" size={12} />
                                 <Text style={styles.smallOutlineButtonText}>Upload New</Text>
                             </TouchableOpacity>
