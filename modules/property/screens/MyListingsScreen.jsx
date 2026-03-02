@@ -155,7 +155,13 @@ const AnimatedCard = ({ item, navigation, statusStyle, formatPrice, index }) => 
 
                     {/* Action Buttons */}
                     <View style={styles.actionButtons}>
-                        <TouchableOpacity style={styles.actionButtonPrimary}>
+                        <TouchableOpacity
+                            style={styles.actionButtonPrimary}
+                            onPress={() => navigation.navigate('PropertyEditScreen', {
+                                property: item,
+                                userRole: 'Agent' // Defaulting to Agent here as it's the agent's listings screen
+                            })}
+                        >
                             <Edit width={16} height={16} color="#fff" />
                             <Text style={styles.actionButtonPrimaryText}>Edit</Text>
                         </TouchableOpacity>

@@ -19,7 +19,7 @@ exports.createProperty = async (req, res) => {
             state,
             pincode
         } = req.body;
-        
+
         const ownerType = req.user.role;  // buyer | builder | agent | admin 
         const ownerId = req.user.id;
 
@@ -29,14 +29,14 @@ exports.createProperty = async (req, res) => {
              address, city, state, pincode, uploaded_by_role, uploaded_by, is_verified, status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, 'active')`,
             [title, description, price, purpose || listing_type, property_type, area_sqft, bedrooms, bathrooms,
-             address, city, state, pincode, ownerType, ownerId]
+                address, city, state, pincode, ownerType, ownerId]
         );
 
         res.status(201).json({
             message: "Property created. Pending verification",
             property_id: result.insertId
         });
-        
+
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -242,17 +242,17 @@ exports.addProperty = async (req, res) => {
                 [propertyOwnerId]
             );
             const ownerEmail = ownerRows[0]?.email || 'unknown';
-            
+
             // Format safe folder names
             const safeEmail = ownerEmail.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
             const safeTitle = title.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-            
+
             const builderFolderName = `${propertyOwnerId}_${safeEmail}`;
             const propertyFolderName = `${property_id}_${safeTitle}`;
-            
+
             const uploadsDir = path.join(__dirname, '..', '..', '..', 'uploads');
             const imagesRsDir = path.join(__dirname, '..', '..', 'images_rs', builderFolderName, propertyFolderName);
-            
+
             // Create target directory
             try {
                 fs.mkdirSync(imagesRsDir, { recursive: true });
@@ -263,26 +263,26 @@ exports.addProperty = async (req, res) => {
             for (let i = 0; i < images.length; i++) {
                 const image = images[i];
                 let finalUrl = image.image_url || image.url;
-                
+
                 console.log(`[images_rs] Processing image ${i}: finalUrl = ${finalUrl}`);
-                
+
                 // If the URL points to our temp uploads directory, move it
                 if (finalUrl && finalUrl.includes('/uploads/')) {
                     const filename = finalUrl.split('/').pop();
                     const sourcePath = path.join(uploadsDir, filename);
                     const destPath = path.join(imagesRsDir, filename);
-                    
+
                     console.log(`[images_rs] filename=${filename}`);
                     console.log(`[images_rs] sourcePath=${sourcePath}`);
                     console.log(`[images_rs] destPath=${destPath}`);
                     console.log(`[images_rs] source exists? ${fs.existsSync(sourcePath)}`);
-                    
+
                     try {
                         if (fs.existsSync(sourcePath)) {
                             // Copy then unlink to ensure we don't lose the file if something crashes mid-move
                             fs.copyFileSync(sourcePath, destPath);
                             fs.unlinkSync(sourcePath);
-                            
+
                             // Update the URL to point to the new structured path
                             finalUrl = finalUrl.replace('/uploads/', `/images_rs/${builderFolderName}/${propertyFolderName}/`);
                             console.log(`[images_rs] ✅ Moved successfully. New URL: ${finalUrl}`);
@@ -292,7 +292,7 @@ exports.addProperty = async (req, res) => {
                             try {
                                 const filesInUploads = fs.readdirSync(uploadsDir).filter(f => f.startsWith('property-')).slice(0, 5);
                                 console.log(`[images_rs] Sample files in uploads/: ${filesInUploads.join(', ')}`);
-                            } catch (e) {}
+                            } catch (e) { }
                         }
                     } catch (err) {
                         console.error(`[images_rs] Failed to move image ${filename}:`, err.message);
@@ -398,9 +398,11 @@ exports.getMyProperties = async (req, res) => {
                 p.description,
                 p.price,
                 p.listing_type,
+                p.property_type_id,
                 p.address,
                 p.city,
                 p.state,
+                p.pincode,
                 p.area_sqft,
                 p.bedrooms,
                 p.bathrooms,
@@ -416,7 +418,7 @@ exports.getMyProperties = async (req, res) => {
             WHERE (
                 (p.uploaded_by = ? AND p.uploaded_by_role = ?)
                 OR 
-                (pr.agent_id = ? AND pr.status = 'approved' AND p.status = 'active')
+                (pr.agent_id = ? AND pr.status = 'approved' AND p.status IN ('active', 'sold', 'rented'))
             )
             ORDER BY p.created_at DESC, pi.sort_order ASC`;
             params = [userId, userId, userRole, userId];
@@ -428,9 +430,11 @@ exports.getMyProperties = async (req, res) => {
                 p.description,
                 p.price,
                 p.listing_type,
+                p.property_type_id,
                 p.address,
                 p.city,
                 p.state,
+                p.pincode,
                 p.area_sqft,
                 p.bedrooms,
                 p.bathrooms,
@@ -459,10 +463,14 @@ exports.getMyProperties = async (req, res) => {
                     title: row.title,
                     description: row.description,
                     price: row.price,
+                    listing_type: row.listing_type,
                     listingType: row.listing_type,
+                    property_type_id: row.property_type_id,
                     address: row.address,
                     city: row.city,
                     state: row.state,
+                    pincode: row.pincode,
+                    area_sqft: row.area_sqft,
                     areaSqft: row.area_sqft,
                     bedrooms: row.bedrooms,
                     bathrooms: row.bathrooms,
@@ -478,6 +486,7 @@ exports.getMyProperties = async (req, res) => {
                 const property = propertiesMap.get(row.id);
                 property.images.push({
                     url: row.image_url,
+                    image_url: row.image_url,
                     isPrimary: row.is_primary === 1
                 });
             }
@@ -486,9 +495,9 @@ exports.getMyProperties = async (req, res) => {
         // Transform to array and set primary image
         const transformedProperties = Array.from(propertiesMap.values()).map(prop => ({
             ...prop,
-            primaryImage: prop.images.find(img => img.isPrimary)?.url || 
-                         prop.images[0]?.url || 
-                         'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
+            primaryImage: prop.images.find(img => img.isPrimary)?.url ||
+                prop.images[0]?.url ||
+                'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
             imageCount: prop.images.length
         }));
 
@@ -512,7 +521,7 @@ exports.getMyProperties = async (req, res) => {
 exports.getAllProperties = async (req, res) => {
     try {
         const { limit = 50, offset = 0, purpose, property_type, minPrice, maxPrice, city, state } = req.query;
-        
+
         let query = `
             SELECT 
                 p.*,
@@ -588,7 +597,7 @@ exports.getAllProperties = async (req, res) => {
         params.push(parseInt(limit), parseInt(offset));
 
         const [properties] = await pool.query(query, params);
-        
+
         const transformedProperties = properties.map(prop => {
             // Parse images JSON array from subquery
             let imagesArray = [];
@@ -660,10 +669,10 @@ exports.getAllProperties = async (req, res) => {
 
     } catch (err) {
         console.error("Error fetching properties:", err);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             message: "Failed to fetch properties",
-            error: err.message 
+            error: err.message
         });
     }
 };
@@ -697,9 +706,9 @@ exports.getPropertyById = async (req, res) => {
         );
 
         if (properties.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 success: false,
-                message: "Property not found" 
+                message: "Property not found"
             });
         }
 
@@ -732,7 +741,7 @@ exports.getPropertyById = async (req, res) => {
                 createdAt: property.created_at,
                 updatedAt: property.updated_at,
                 images: parsedImages,
-                image: parsedImages[0] || null, 
+                image: parsedImages[0] || null,
                 features: parsedFeatures,
                 owner: {
                     name: property.owner_name,
@@ -746,10 +755,10 @@ exports.getPropertyById = async (req, res) => {
 
     } catch (err) {
         console.error("Error fetching property:", err);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             message: "Failed to fetch property",
-            error: err.message 
+            error: err.message
         });
     }
 };
@@ -760,9 +769,9 @@ exports.searchProperties = async (req, res) => {
         const { q } = req.query;
 
         if (!q || q.trim().length === 0) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 success: false,
-                message: "Search query is required" 
+                message: "Search query is required"
             });
         }
 
@@ -812,30 +821,30 @@ exports.searchProperties = async (req, res) => {
 
     } catch (err) {
         console.error("Error searching properties:", err);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             message: "Search failed",
-            error: err.message 
+            error: err.message
         });
     }
 };
 
 exports.addPropertyView = async (req, res) => {
-  try {
-    const propertyId = req.params.id;
-    const userId = req.user?.id || null;
+    try {
+        const propertyId = req.params.id;
+        const userId = req.user?.id || null;
 
-    await pool.query(
-      "INSERT INTO property_views (user_id, property_id) VALUES (?, ?)",
-      [userId, propertyId]
-    );
+        await pool.query(
+            "INSERT INTO property_views (user_id, property_id) VALUES (?, ?)",
+            [userId, propertyId]
+        );
 
-    res.json({ success: true });
+        res.json({ success: true });
 
-  } catch (error) {
-    console.error("View error:", error);
-    res.status(500).json({ success: false });
-  }
+    } catch (error) {
+        console.error("View error:", error);
+        res.status(500).json({ success: false });
+    }
 };
 
 // GET /properties/cities?search=TEXT
@@ -979,7 +988,7 @@ exports.searchByCity = async (req, res) => {
 // exports.createProperty = async (req,res) => {
 //     try {
 //         const {title, description, price, location }  = req.body
-        
+
 //         const ownerType = req.user.role  // buyer | builder | agent | admin 
 //         const ownerId = req.user.id
 
@@ -997,12 +1006,12 @@ exports.searchByCity = async (req, res) => {
 //             message: "Property created. Pending verification",
 //             property_id: result.insertId
 //         })
-        
+
 //     } catch (err) {
 //         res.status(500).json({error:err.message})
-        
+
 //     }
-    
+
 // }
 
 // // temporary  for admin document verfication 
@@ -1026,7 +1035,7 @@ exports.searchByCity = async (req, res) => {
 // exports.getAllProperties = async (req,res) => {
 //   try {
 //     const { limit = 50, offset = 0, type, minPrice, maxPrice } = req.query;
-    
+
 //     let query = `
 //             SELECT 
 //                 p.*,
@@ -1246,11 +1255,124 @@ exports.searchByCity = async (req, res) => {
 // //         )
 
 // //         res.json(rows)
-        
+
 // //     } catch (err) {
 // //         res.status(500).json({error:err.message})
-        
+
 // //     }
-    
+
 // // }
 
+
+// //             WHERE is_verified = true AND status = 'active'`
+// //         )
+
+// //         res.json(rows)
+
+// Update Property (builder or agent who owns it)
+exports.updateProperty = async (req, res) => {
+    const connection = await pool.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        const propertyId = req.params.id;
+        const userId = req.user?.id;
+        const userRole = req.user?.role;
+
+        // Verify ownership
+        const [propRows] = await connection.query(
+            `SELECT id, uploaded_by, uploaded_by_role FROM properties WHERE id = ?`,
+            [propertyId]
+        );
+        if (!propRows || propRows.length === 0) {
+            await connection.rollback();
+            return res.status(404).json({ success: false, message: 'Property not found' });
+        }
+        const prop = propRows[0];
+
+        // Allow: admin, the direct uploader, or an agent whose role is 'agent' on the property
+        let authorized = userRole === 'admin'
+            || prop.uploaded_by === userId
+            || (userRole === 'agent' && prop.uploaded_by_role === 'agent');
+
+        if (!authorized && userRole === 'agent') {
+            // Also check if agent submitted via property_requests
+            const [reqRows] = await connection.query(
+                `SELECT id FROM property_requests WHERE property_id = ? AND agent_id = ? LIMIT 1`,
+                [propertyId, userId]
+            );
+            if (reqRows && reqRows.length > 0) authorized = true;
+        }
+
+        if (!authorized) {
+            await connection.rollback();
+            return res.status(403).json({ success: false, message: 'Not authorized to edit this property' });
+        }
+
+        const {
+            title,
+            description,
+            price,
+            listing_type,
+            property_type_id,
+            address,
+            city,
+            state,
+            pincode,
+            area_sqft,
+            features = [],
+            images = [],
+        } = req.body;
+
+        // Update main property row
+        await connection.query(
+            `UPDATE properties SET
+                title            = COALESCE(?, title),
+                description      = COALESCE(?, description),
+                price            = COALESCE(?, price),
+                listing_type     = COALESCE(?, listing_type),
+                property_type_id = COALESCE(?, property_type_id),
+                address          = COALESCE(?, address),
+                city             = COALESCE(?, city),
+                state            = COALESCE(?, state),
+                pincode          = COALESCE(?, pincode),
+                area_sqft        = COALESCE(?, area_sqft)
+             WHERE id = ?`,
+            [title, description, price, listing_type, property_type_id,
+                address, city, state, pincode, area_sqft, propertyId]
+        );
+
+        // Replace features if provided
+        if (features.length > 0) {
+            await connection.query(`DELETE FROM property_features WHERE property_id = ?`, [propertyId]);
+            const featureRows = features.map(f => [propertyId, f.name, f.value]);
+            await connection.query(
+                `INSERT INTO property_features (property_id, feature_name, feature_value) VALUES ?`,
+                [featureRows]
+            );
+        }
+
+        // Replace images if provided
+        if (images.length > 0) {
+            await connection.query(`DELETE FROM property_images WHERE property_id = ?`, [propertyId]);
+            const imageRows = images.map(img => [propertyId, img.image_url, img.is_primary ? 1 : 0, img.sort_order]);
+            await connection.query(
+                `INSERT INTO property_images (property_id, image_url, is_primary, sort_order) VALUES ?`,
+                [imageRows]
+            );
+        }
+
+        await connection.commit();
+
+        // Return updated property
+        const [updated] = await connection.query(`SELECT * FROM properties WHERE id = ?`, [propertyId]);
+        return res.json({ success: true, message: 'Property updated successfully', property: updated[0] });
+
+    } catch (err) {
+        await connection.rollback();
+        console.error('updateProperty error:', err);
+        return res.status(500).json({ success: false, message: err.message });
+    } finally {
+        connection.release();
+    }
+};

@@ -25,6 +25,7 @@ import ChatListScreen from './modules/chat/screens/ChatListScreen';
 import AddPropertiesAgent from './modules/property/screens/AddPropertiesAgent';
 import AgentDashboard from './modules/agent/AgentDashboardScreen';
 import MyListingsScreen from './modules/property/screens/MyListingsScreen';
+import PropertyEditScreen from './modules/property/screens/PropertyEditScreen';
 
 import UserNavigator from './navigation/UserNavigator';
 import FavoritesScreen from './modules/user/screens/FavoritesScreen';
@@ -52,6 +53,7 @@ export default function App() {
   const [paymentData, setPaymentData] = useState(null);
   const [chatData, setChatData] = useState(null);
   const [userData, setUserData] = useState(null);
+  const [editPropertyData, setEditPropertyData] = useState(null);
 
   // 🔹 Fetch Unread Messages Count
   const fetchUnreadCount = async () => {
@@ -225,6 +227,13 @@ export default function App() {
       setChatData({
         chatId: params.chatId,
         inquiryId: params.inquiryId,
+      });
+    }
+
+    if (normalizedScreen === 'PropertyEditScreen') {
+      setEditPropertyData({
+        property: params.property,
+        userRole: params.userRole
       });
     }
   };
@@ -543,6 +552,20 @@ export default function App() {
             navigation={{
               navigate: navigateTo,
               goBack: goBack
+            }}
+          />
+        );
+
+      case 'PropertyEditScreen':
+        return (
+          <PropertyEditScreen
+            navigation={navigation}
+            onBack={goBack}
+            property={editPropertyData?.property}
+            userRole={editPropertyData?.userRole}
+            onSaved={() => {
+              // Signal parent screens to refresh their listing data
+              setEditPropertyData(prev => ({ ...prev, savedAt: Date.now() }));
             }}
           />
         );

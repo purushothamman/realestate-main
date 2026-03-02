@@ -146,7 +146,10 @@ const AgentDashboard = ({ navigation, route }) => {
             const statsResponse = await apiRequest('/agent/dashboard-stats');
 
             if (propertiesResponse.success) {
-                setActiveListings(propertiesResponse.properties || []);
+                const filtered = (propertiesResponse.properties || []).filter(
+                    p => p.status === 'sold' || p.status === 'rented'
+                );
+                setActiveListings(filtered);
             }
 
             if (statsResponse.success) {
@@ -777,6 +780,10 @@ const AgentDashboard = ({ navigation, route }) => {
                                                             style={styles.listingActionButton}
                                                             onPress={(e) => {
                                                                 e.stopPropagation();
+                                                                navigation.navigate('PropertyEditScreen', {
+                                                                    property: listing,
+                                                                    userRole: agentData?.role === 'builder' ? 'Builder' : 'Agent'
+                                                                });
                                                             }}
                                                         >
                                                             <Edit width={16} height={16} color="#6b7280" strokeWidth={2.5} />
@@ -795,8 +802,8 @@ const AgentDashboard = ({ navigation, route }) => {
                                     <View style={styles.emptyIconContainer}>
                                         <Building2 width={32} height={32} color="#d1d5db" />
                                     </View>
-                                    <Text style={styles.emptyText}>No active listings</Text>
-                                    <Text style={styles.emptySubtext}>Add your first property to get started</Text>
+                                    <Text style={styles.emptyText}>No sold or rented listings</Text>
+                                    <Text style={styles.emptySubtext}>Properties marked as sold or rented will appear here</Text>
                                 </View>
                             )}
                         </View>

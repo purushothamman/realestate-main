@@ -40,6 +40,11 @@ router.get("/", property.getAllProperties)
 
 router.post("/:id/view", protect, property.addPropertyView)
 
+router.put("/:id", protect,
+    allow("builder", "agent", "admin"),
+    property.updateProperty
+)
+
 console.log("✅ All property routes registered");
 
 module.exports = router

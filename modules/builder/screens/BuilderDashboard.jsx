@@ -595,7 +595,16 @@ export default function BuilderDashboard({
                     {listing.inquiries} inquiries
                   </Text>
                 </View>
-                <TouchableOpacity style={styles.editButton}>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    navigation.navigate('PropertyEditScreen', {
+                      property: listing,
+                      userRole: 'Builder'
+                    });
+                  }}
+                >
                   <Edit size={16} color="#2D6A4F" strokeWidth={2} />
                 </TouchableOpacity>
               </View>

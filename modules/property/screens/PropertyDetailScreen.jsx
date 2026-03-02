@@ -43,6 +43,7 @@ import {
     Award,
     CheckCircle,
     AlertCircle,
+    Edit,
 } from 'lucide-react-native';
 import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../utils/api';
 
@@ -92,6 +93,7 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
     const fadeAnim = useState(new Animated.Value(0))[0];
     const slideAnim = useState(new Animated.Value(30))[0];
     const isBuyer = user?.role === 'buyer';
+    const canEdit = user?.role === 'agent' || user?.role === 'builder';
 
     useEffect(() => {
         Animated.parallel([
@@ -338,6 +340,13 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
                 }
             ]
         );
+    };
+
+    const handleEditProperty = () => {
+        navigation.navigate('PropertyEditScreen', {
+            property: property,
+            userRole: user?.role === 'builder' ? 'Builder' : 'Agent'
+        });
     };
 
     const headerOpacity = scrollY.interpolate({
@@ -740,6 +749,24 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
                             </View>
                         </>
                     )}
+                </View>
+            )}
+
+            {canEdit && (
+                <View style={styles.bottomCTA}>
+                    <TouchableOpacity
+                        style={styles.ctaButtonGreen}
+                        onPress={handleEditProperty}
+                        activeOpacity={0.8}
+                    >
+                        <LinearGradient
+                            colors={['#2D6A4F', '#1e4d38']}
+                            style={styles.ctaButtonGradient}
+                        >
+                            <Edit size={20} color="#fff" strokeWidth={2.5} style={{ marginRight: 8 }} />
+                            <Text style={styles.ctaButtonText}>Edit Property Listing</Text>
+                        </LinearGradient>
+                    </TouchableOpacity>
                 </View>
             )}
         </View>
