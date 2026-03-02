@@ -40,13 +40,16 @@ router.post(
   "/profile-image",
   upload.single("profileImage"),
   (req, res) => {
+    console.log("📸 Profile image upload request received");
     try {
       if (!req.file) {
+        console.error("❌ No image file provided - upload.single('profileImage') failed to catch it");
         return res.status(400).json({
           success: false,
           message: "No image file provided",
         });
       }
+      console.log("✅ File received:", req.file.filename);
 
       const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
 

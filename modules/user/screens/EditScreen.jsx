@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -62,6 +63,7 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
     const [showSuccess, setShowSuccess] = useState(false);
     const [activeTab, setActiveTab] = useState('personal');
     const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+    const isInitialized = useRef(false);
 
     // Consolidated Form State
     const [formData, setFormData] = useState({
@@ -127,6 +129,7 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
                     if (data.profileImage) {
                         setLogoImage(getImageUrl(data.profileImage));
                     }
+                    isInitialized.current = true;
                 }
             } catch (err) {
                 console.error('Error fetching profile in EditScreen:', err);
@@ -140,7 +143,9 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
 
     // Also update if userData changes from outside (props)
     useEffect(() => {
-        if (userData && !isLoadingProfile) {
+        if (userData && !isLoadingProfile && !isInitialized.current) {
+            console.log('🔄 userData change detected in EditScreen. Initializing formData...');
+            isInitialized.current = true;
             setFormData(prev => ({
                 ...prev,
                 name: userData.name || '',
@@ -167,7 +172,7 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
                 setLogoImage(getImageUrl(userData.profileImage));
             }
         }
-    }, [userData]);
+    }, [userData, isLoadingProfile]);
 
     const handleSave = async () => {
         // Validation
@@ -181,6 +186,7 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
             return;
         }
 
+        console.log('💾 handleSave triggered. Current formData:', formData);
         setIsSaving(true);
         try {
             const token = await AsyncStorage.getItem('authToken');
@@ -228,7 +234,7 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
         }
 
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ['images'],
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.7,
@@ -247,25 +253,34 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
                 const match = /\.(\w+)$/.exec(filename);
                 const type = match ? `image/${match[1]}` : 'image/jpeg';
 
-                formDataUpload.append('profileImage', {
-                    uri: localUri,
-                    name: filename || 'profile.jpg',
-                    type,
-                });
+                console.log('📤 Uploading image:', { localUri, filename, type, platform: Platform.OS });
+
+                if (Platform.OS === 'web') {
+                    const blobRes = await fetch(localUri);
+                    const blob = await blobRes.blob();
+                    formDataUpload.append('profileImage', blob, filename || 'profile.jpg');
+                } else {
+                    formDataUpload.append('profileImage', {
+                        uri: localUri,
+                        name: filename || 'profile.jpg',
+                        type: type.toLowerCase(),
+                    });
+                }
 
                 const uploadRes = await fetch(`${API_BASE_URL}/upload/profile-image`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'multipart/form-data',
                     },
                     body: formDataUpload,
                 });
 
                 const uploadData = await uploadRes.json();
+                console.log('📥 Upload response:', uploadData);
 
                 if (uploadRes.ok && (uploadData.url || uploadData.imageUrl)) {
                     const uploadedUrl = uploadData.url || uploadData.imageUrl;
+                    console.log('✅ Setting formData.profileImage to:', uploadedUrl);
                     setFormData(prev => ({ ...prev, profileImage: uploadedUrl }));
                     Alert.alert('✅ Photo Uploaded', 'Profile photo is ready. Tap Save to apply changes.');
                 } else {
@@ -295,7 +310,7 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
                     <TextInput
                         style={[styles.input, icon && styles.inputWithPadding, isTextArea && styles.textArea]}
                         value={value}
-                        onChangeText={(text) => setFormData({ ...formData, [key]: text })}
+                        onChangeText={(text) => setFormData(prev => ({ ...prev, [key]: text }))}
                         placeholder={`Enter ${label.toLowerCase()}`}
                         placeholderTextColor="#9CA3AF"
                         textAlignVertical={isTextArea ? "top" : "center"}

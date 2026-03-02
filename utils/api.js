@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 
 export const getApiUrl = () => {
     // IPv4 Address . . . . . . . 192.168.137.194
-    return 'http://10.184.249.244:5000/api';
+    return 'http://192.168.0.106:5000/api';
 
 };
 

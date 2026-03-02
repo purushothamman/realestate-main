@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -13,7 +13,11 @@ import {
     Platform,
     TextInput,
     KeyboardAvoidingView,
+    ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+import { API_BASE_URL, getImageUrl, DEFAULT_PROFILE_IMAGE } from '../../utils/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -49,34 +53,157 @@ const StarRow = ({ count = 5, size = 12 }) => (
 // ════════════════════════════════════════════════════════════
 //  EDIT PROFILE SCREEN
 // ════════════════════════════════════════════════════════════
-const EditProfileScreen = ({ onBack }) => {
+const EditProfileScreen = ({ onBack, userData, onUpdate }) => {
     const [form, setForm] = useState({
-        firstName: 'Sarah',
-        lastName: 'Johnson',
-        title: 'Senior Real Estate Advisor',
-        phone: '+1 (555) 123-4567',
-        email: 'sarah.johnson@estatehub.com',
-        website: 'sarahjohnson.com',
-        location: 'Beverly Hills, CA 90210',
-        about: 'With over 12 years of experience in luxury real estate, I specialize in connecting discerning clients with exceptional properties across Beverly Hills, Bel Air, and the greater Los Angeles area.',
-        agency: 'Johnson Real Estate Group',
-        reraId: 'RERA-CA-2024-12345',
-        instagram: '@sarahjohnsonre',
-        twitter: '@sarahjohnsonre',
-        linkedin: 'in/sarahjohnson',
-        language1: 'English',
-        language2: 'Spanish',
-        language3: 'French',
+        firstName: userData?.name?.split(' ')[0] || '',
+        lastName: userData?.name?.split(' ').slice(1).join(' ') || '',
+        title: userData?.title || '',
+        phone: userData?.phone || '',
+        email: userData?.email || '',
+        website: userData?.website || '',
+        location: userData?.address || '',
+        about: userData?.about || '',
+        agency: userData?.agency || '',
+        reraId: userData?.reraId || '',
+        instagram: userData?.instagram || '',
+        twitter: userData?.twitter || '',
+        linkedin: userData?.linkedin || '',
+        language1: userData?.language1 || 'English',
+        language2: userData?.language2 || '',
+        language3: userData?.language3 || '',
     });
 
-    const [activeSection, setActiveSection] = useState(null);
+    const [logoImage, setLogoImage] = useState(
+        getImageUrl(userData?.profileImage) || DEFAULT_PROFILE_IMAGE
+    );
+    const [isSaving, setIsSaving] = useState(false);
+    const isInitialized = useRef(false);
+
+    useEffect(() => {
+        if (userData && !isInitialized.current) {
+            console.log('🔄 userData change detected in EditAgentProfile. Initializing form...');
+            isInitialized.current = true;
+            setForm({
+                firstName: userData.name?.split(' ')[0] || '',
+                lastName: userData.name?.split(' ').slice(1).join(' ') || '',
+                title: userData.title || '',
+                phone: userData.phone || '',
+                email: userData.email || '',
+                website: userData.website || '',
+                location: userData.address || '',
+                about: userData.about || '',
+                agency: userData.agency || '',
+                reraId: userData.reraId || '',
+                instagram: userData.instagram || '',
+                twitter: userData.twitter || '',
+                linkedin: userData.linkedin || '',
+                language1: userData.language1 || 'English',
+                language2: userData.language2 || '',
+                language3: userData.language3 || '',
+                profileImage: userData.profileImage || '',
+            });
+            if (userData.profileImage) {
+                setLogoImage(getImageUrl(userData.profileImage));
+            }
+        }
+    }, [userData]);
 
     const handleChange = (key, val) => setForm(prev => ({ ...prev, [key]: val }));
 
-    const handleSave = () => {
-        Alert.alert('Profile Updated', 'Your profile has been saved successfully!', [
-            { text: 'OK', onPress: onBack },
-        ]);
+    const handlePickImage = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets && result.assets[0].uri) {
+                const selectedImage = result.assets[0];
+                console.log('📸 Agent photo picked:', selectedImage.uri);
+
+                const formDataUpload = new FormData();
+                if (Platform.OS === 'web') {
+                    const response = await fetch(selectedImage.uri);
+                    const blob = await response.blob();
+                    formDataUpload.append('profileImage', blob, 'profile.jpg');
+                } else {
+                    const uriParts = selectedImage.uri.split('.');
+                    const fileType = uriParts[uriParts.length - 1];
+                    formDataUpload.append('profileImage', {
+                        uri: selectedImage.uri,
+                        name: `profile.${fileType}`,
+                        type: `image/${fileType.toLowerCase()}`,
+                    });
+                }
+
+                const token = await AsyncStorage.getItem('authToken');
+                const uploadResponse = await fetch(`${API_BASE_URL}/upload/profile-image`, {
+                    method: 'POST',
+                    body: formDataUpload,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    }
+                });
+
+                const uploadData = await uploadResponse.json();
+                if (uploadResponse.ok) {
+                    handleChange('profileImage', uploadData.url);
+                    setLogoImage(getImageUrl(uploadData.url));
+                    Alert.alert('Success', 'Profile photo uploaded successfully');
+                } else {
+                    Alert.alert('Upload Failed', uploadData.message || 'Error uploading image');
+                }
+            }
+        } catch (error) {
+            console.error('Error picking image:', error);
+            Alert.alert('Error', 'Failed to pick or upload image');
+        }
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            const token = await AsyncStorage.getItem('authToken');
+            if (!token) {
+                Alert.alert('Error', 'Authentication token not found');
+                setIsSaving(false);
+                return;
+            }
+
+            // Map form back to backend expected fields
+            const payload = {
+                ...form,
+                name: `${form.firstName} ${form.lastName}`.trim(),
+                city: form.location, // Agents table uses 'city'
+                experienceYears: userData?.experienceYears || 0, // Preserve experience years
+            };
+
+            const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                Alert.alert('Profile Updated', 'Your profile has been saved successfully!');
+                if (onUpdate) await onUpdate(); // Refresh global user data
+                if (onBack) onBack();
+            } else {
+                Alert.alert('Error', result.message || 'Failed to update profile');
+            }
+        } catch (error) {
+            console.error('Save agent profile error:', error);
+            Alert.alert('Error', 'An error occurred while saving profile');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const SectionHeader = ({ title, icon }) => (
@@ -138,18 +265,18 @@ const EditProfileScreen = ({ onBack }) => {
                     <View style={editStyles.photoCard}>
                         <View style={editStyles.photoWrap}>
                             <Image
-                                source={{ uri: 'https://images.unsplash.com/photo-1548637724-cbc39e0c8d3b?fm=jpg&q=80&w=400&auto=format&fit=crop' }}
+                                source={{ uri: logoImage }}
                                 style={editStyles.photo}
                             />
                             <TouchableOpacity
                                 style={editStyles.photoCamBtn}
-                                onPress={() => Alert.alert('Upload Photo', 'Choose profile photo source', [
-                                    { text: 'Camera', onPress: () => { } },
-                                    { text: 'Gallery', onPress: () => { } },
-                                    { text: 'Cancel', style: 'cancel' },
-                                ])}
+                                onPress={handlePickImage}
                             >
-                                <Text style={editStyles.photoCamIcon}>📷</Text>
+                                {isSaving ? (
+                                    <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                    <Text style={editStyles.photoCamIcon}>📷</Text>
+                                )}
                             </TouchableOpacity>
                         </View>
                         <Text style={editStyles.photoHint}>Tap to change profile photo</Text>
@@ -303,7 +430,7 @@ const EditProfileScreen = ({ onBack }) => {
 // ════════════════════════════════════════════════════════════
 //  HERO SECTION
 // ════════════════════════════════════════════════════════════
-const HeroSection = ({ onEditPress }) => (
+const HeroSection = ({ onEditPress, userData }) => (
     <View style={styles.hero}>
         <Image
             source={{ uri: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?fm=jpg&q=60&w=1200&auto=format&fit=crop' }}
@@ -342,25 +469,25 @@ const HeroSection = ({ onEditPress }) => (
                 <View style={styles.identity}>
                     <View style={styles.avatarWrap}>
                         <Image
-                            source={{ uri: 'https://images.unsplash.com/photo-1548637724-cbc39e0c8d3b?fm=jpg&q=80&w=400&auto=format&fit=crop' }}
+                            source={{ uri: getImageUrl(userData?.profileImage) || DEFAULT_PROFILE_IMAGE }}
                             style={styles.avatar}
                         />
-                        <TouchableOpacity style={styles.avatarCam}>
+                        <TouchableOpacity style={styles.avatarCam} onPress={onEditPress}>
                             <Text style={{ fontSize: 10, color: C.green }}>📷</Text>
                         </TouchableOpacity>
                     </View>
 
                     <View style={styles.identityInfo}>
                         <View style={styles.identityNameRow}>
-                            <Text style={styles.identityName}>Sarah Johnson</Text>
+                            <Text style={styles.identityName}>{userData?.name || 'Sarah Johnson'}</Text>
                             <View style={styles.verifiedBadge}>
                                 <Text style={{ fontSize: 9, color: '#60A5FA' }}>✓ Verified</Text>
                             </View>
                         </View>
-                        <Text style={styles.identityTitle}>Senior Real Estate Advisor</Text>
+                        <Text style={styles.identityTitle}>{userData?.title || 'Senior Real Estate Advisor'}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                             <Text style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)' }}>📍</Text>
-                            <Text style={styles.identityLoc}>Beverly Hills, CA</Text>
+                            <Text style={styles.identityLoc}>{userData?.address || 'Beverly Hills, CA'}</Text>
                         </View>
                     </View>
                 </View>
@@ -411,31 +538,31 @@ const HeroSection = ({ onEditPress }) => (
 // ════════════════════════════════════════════════════════════
 //  OVERVIEW TAB
 // ════════════════════════════════════════════════════════════
-const OverviewTab = ({ onEditPress }) => {
+const OverviewTab = ({ onEditPress, userData }) => {
     const statPills = [
-        { val: '18', lbl: 'Active Listings', color: C.green, icon: '🏠' },
-        { val: '$284M', lbl: 'Total Volume', color: C.blue, icon: '📈' },
-        { val: '4.9', lbl: '98 Reviews', color: C.amber, icon: '★' },
-        { val: '147', lbl: 'Homes Sold', color: C.purple, icon: '🏅' },
+        { val: userData?.totalActiveListings || '18', lbl: 'Active Listings', color: C.green, icon: '🏠' },
+        { val: userData?.totalVolume || '$284M', lbl: 'Total Volume', color: C.blue, icon: '📈' },
+        { val: userData?.rating || '4.9', lbl: (userData?.totalReviews || '98') + ' Reviews', color: C.amber, icon: '★' },
+        { val: userData?.totalSoldListings || '147', lbl: 'Homes Sold', color: C.purple, icon: '🏅' },
     ];
 
     const contactInfo = [
-        { icon: '📞', label: 'Phone', value: '+1 (555) 123-4567' },
-        { icon: '✉', label: 'Email', value: 'sarah.johnson@estatehub.com' },
-        { icon: '🌐', label: 'Website', value: 'sarahjohnson.com' },
-        { icon: '📍', label: 'Location', value: 'Beverly Hills, CA 90210' },
+        { icon: '📞', label: 'Phone', value: userData?.phone || '+1 (555) 123-4567' },
+        { icon: '✉', label: 'Email', value: userData?.email || 'sarah.johnson@estatehub.com' },
+        { icon: '🌐', label: 'Website', value: userData?.website || 'sarahjohnson.com' },
+        { icon: '📍', label: 'Location', value: userData?.address || 'Beverly Hills, CA 90210' },
     ];
 
     const credentials = [
-        { icon: '🏠', label: 'Agency', value: 'Johnson Real Estate Group' },
-        { icon: '🛡', label: 'RERA ID', value: 'RERA-CA-2024-12345' },
+        { icon: '🏠', label: 'Agency', value: userData?.agency || 'Johnson Real Estate Group' },
+        { icon: '🛡', label: 'RERA ID', value: userData?.reraId || 'RERA-CA-2024-12345' },
         { icon: '💲', label: 'Avg. Days on Market', value: '21 days' },
     ];
 
     const socials = [
-        { icon: '📸', handle: '@sarahjohnsonre', color: '#E1306C' },
-        { icon: '🐦', handle: '@sarahjohnsonre', color: '#1DA1F2' },
-        { icon: '💼', handle: 'in/sarahjohnson', color: '#0A66C2' },
+        { icon: '📸', handle: userData?.instagram || '@sarahjohnsonre', color: '#E1306C' },
+        { icon: '🐦', handle: userData?.twitter || '@sarahjohnsonre', color: '#1DA1F2' },
+        { icon: '💼', handle: userData?.linkedin || 'in/sarahjohnson', color: '#0A66C2' },
     ];
 
     const settings = [
@@ -686,10 +813,7 @@ const ListingsTab = () => {
     );
 };
 
-// ════════════════════════════════════════════════════════════
-//  MAIN SCREEN
-// ════════════════════════════════════════════════════════════
-export default function EditAgentProfileScreen({ navigation, onBack: propOnBack, initialShowEdit = true }) {
+export default function EditAgentProfileScreen({ navigation, onBack: propOnBack, initialShowEdit = true, userData, onUpdate }) {
     const [activeTab, setActiveTab] = useState('overview');
     const [showEditProfile, setShowEditProfile] = useState(initialShowEdit);
 
@@ -708,7 +832,7 @@ export default function EditAgentProfileScreen({ navigation, onBack: propOnBack,
 
     // Show Edit Profile screen
     if (showEditProfile) {
-        return <EditProfileScreen onBack={handleBack} />;
+        return <EditProfileScreen onBack={handleBack} userData={userData} onUpdate={onUpdate} />;
     }
 
     return (
@@ -716,7 +840,7 @@ export default function EditAgentProfileScreen({ navigation, onBack: propOnBack,
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
             {/* Hero */}
-            <HeroSection onEditPress={() => setShowEditProfile(true)} />
+            <HeroSection onEditPress={() => setShowEditProfile(true)} userData={userData} />
 
             {/* Sticky Tab Bar */}
             <View style={styles.tabbar}>
@@ -739,7 +863,7 @@ export default function EditAgentProfileScreen({ navigation, onBack: propOnBack,
                 contentContainerStyle={styles.bodyInner}
                 showsVerticalScrollIndicator={false}
             >
-                {activeTab === 'overview' && <OverviewTab onEditPress={() => setShowEditProfile(true)} />}
+                {activeTab === 'overview' && <OverviewTab onEditPress={() => setShowEditProfile(true)} userData={userData} />}
                 {activeTab === 'listings' && <ListingsTab />}
             </ScrollView>
         </View>
