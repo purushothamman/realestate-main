@@ -592,12 +592,20 @@ export default function HomeScreen({ navigation }) {
                   activeOpacity={0.9}
                 >
                   {/* Property Image */}
-                  <View style={styles.propertyImageContainer}>
+                  <View style={[styles.propertyImageContainer, (property.status === 'sold' || property.status === 'rented') && { opacity: 0.6 }]}>
                     <Image
                       source={{ uri: getImageUrl(property.image || property.imageUrl) || DEFAULT_PROPERTY_IMAGE }}
                       style={styles.propertyImage}
                       resizeMode="cover"
                     />
+                    {/* Status Badge */}
+                    {(property.status === 'sold' || property.status === 'rented') && (
+                      <View style={[styles.statusBadge, { backgroundColor: property.status === 'sold' ? '#EF4444' : '#3B82F6' }]}>
+                        <Text style={styles.statusBadgeText}>
+                          {property.status === 'sold' ? 'Sold' : 'Rented'}
+                        </Text>
+                      </View>
+                    )}
                     {/* Type Badge */}
                     <View style={styles.typeBadge}>
                       <Text style={styles.typeBadgeText}>
@@ -678,11 +686,21 @@ export default function HomeScreen({ navigation }) {
                   onPress={() => handlePropertyClick(property)}
                   activeOpacity={0.9}
                 >
-                  <Image
-                    source={{ uri: getImageUrl(property.image || property.imageUrl) || DEFAULT_PROPERTY_IMAGE }}
-                    style={styles.recommendedImage}
-                    resizeMode="cover"
-                  />
+                  <View style={[styles.recommendedImageContainer, (property.status === 'sold' || property.status === 'rented') && { opacity: 0.6 }]}>
+                    <Image
+                      source={{ uri: getImageUrl(property.image || property.imageUrl) || DEFAULT_PROPERTY_IMAGE }}
+                      style={styles.recommendedImage}
+                      resizeMode="cover"
+                    />
+                    {/* Status Badge */}
+                    {(property.status === 'sold' || property.status === 'rented') && (
+                      <View style={[styles.statusBadgeSmall, { backgroundColor: property.status === 'sold' ? '#EF4444' : '#3B82F6' }]}>
+                        <Text style={styles.statusBadgeTextSmall}>
+                          {property.status === 'sold' ? 'Sold' : 'Rented'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                   <View style={styles.recommendedDetails}>
                     <View style={styles.recommendedTop}>
                       <Text style={styles.recommendedTitle} numberOfLines={1}>
@@ -1056,6 +1074,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
+  statusBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    zIndex: 2,
+  },
+  statusBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
   favoriteButton: {
     position: 'absolute',
     top: 12,
@@ -1125,9 +1158,29 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  recommendedImage: {
+  recommendedImageContainer: {
     width: 112,
     height: 112,
+    position: 'relative',
+  },
+  recommendedImage: {
+    width: '100%',
+    height: '100%',
+  },
+  statusBadgeSmall: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    zIndex: 2,
+  },
+  statusBadgeTextSmall: {
+    color: '#FFFFFF',
+    fontSize: 8,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   recommendedDetails: {
     flex: 1,

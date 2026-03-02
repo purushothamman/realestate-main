@@ -42,6 +42,7 @@ import {
     TrendingUp,
     Award,
     CheckCircle,
+    AlertCircle,
 } from 'lucide-react-native';
 import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../utils/api';
 
@@ -456,6 +457,13 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
                                     {listingType === 'rent' ? 'For Rent' : 'For Sale'}
                                 </Text>
                             </LinearGradient>
+                            {(property.status === 'sold' || property.status === 'rented') && (
+                                <View style={[styles.statusBadgeDetail, { backgroundColor: property.status === 'sold' ? '#EF4444' : '#3B82F6' }]}>
+                                    <Text style={styles.statusBadgeDetailText}>
+                                        {property.status === 'sold' ? 'Sold' : 'Rented'}
+                                    </Text>
+                                </View>
+                            )}
                             <View style={styles.badgeBlue}>
                                 <View style={styles.statusDot} />
                                 <Text style={styles.badgeBlueText}>
@@ -679,50 +687,59 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
 
             {isBuyer && (
                 <View style={styles.bottomCTA}>
-                    <View style={styles.ctaRow}>
-                        <TouchableOpacity
-                            style={styles.ctaButtonGreen}
-                            onPress={handleScheduleViewing}
-                            activeOpacity={0.8}
-                        >
-                            <LinearGradient
-                                colors={['#2D6A4F', '#1e4d38']}
-                                style={styles.ctaButtonGradient}
-                            >
-                                <Text style={styles.ctaButtonText}>Schedule Viewing</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.ctaButtonDark}
-                            onPress={handleMakeOffer}
-                            activeOpacity={0.8}
-                        >
-                            <LinearGradient
-                                colors={['#111827', '#000000']}
-                                style={styles.ctaButtonGradient}
-                            >
-                                <Text style={styles.ctaButtonText}>Make an Offer</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                    </View>
-                    <View style={styles.ctaRow}>
-                        <TouchableOpacity
-                            style={styles.ctaButtonOutline}
-                            onPress={handleVirtualTour}
-                            activeOpacity={0.7}
-                        >
-                            <Video size={20} color="#2D6A4F" strokeWidth={2.5} />
-                            <Text style={styles.ctaButtonOutlineText}>Virtual Tour</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.ctaButtonReport}
-                            onPress={handleReportProperty}
-                            activeOpacity={0.7}
-                        >
-                            <Flag size={20} color="#DC2626" strokeWidth={2.5} />
-                            <Text style={styles.ctaButtonReportText}>Report</Text>
-                        </TouchableOpacity>
-                    </View>
+                    {(property.status === 'sold' || property.status === 'rented') ? (
+                        <View style={styles.unavailableContainer}>
+                            <AlertCircle color="#DC2626" size={20} />
+                            <Text style={styles.unavailableText}>This property is no longer available</Text>
+                        </View>
+                    ) : (
+                        <>
+                            <View style={styles.ctaRow}>
+                                <TouchableOpacity
+                                    style={styles.ctaButtonGreen}
+                                    onPress={handleScheduleViewing}
+                                    activeOpacity={0.8}
+                                >
+                                    <LinearGradient
+                                        colors={['#2D6A4F', '#1e4d38']}
+                                        style={styles.ctaButtonGradient}
+                                    >
+                                        <Text style={styles.ctaButtonText}>Schedule Viewing</Text>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.ctaButtonDark}
+                                    onPress={handleMakeOffer}
+                                    activeOpacity={0.8}
+                                >
+                                    <LinearGradient
+                                        colors={['#111827', '#000000']}
+                                        style={styles.ctaButtonGradient}
+                                    >
+                                        <Text style={styles.ctaButtonText}>Make an Offer</Text>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </View>
+                            <View style={styles.ctaRow}>
+                                <TouchableOpacity
+                                    style={styles.ctaButtonOutline}
+                                    onPress={handleVirtualTour}
+                                    activeOpacity={0.7}
+                                >
+                                    <Video size={20} color="#2D6A4F" strokeWidth={2.5} />
+                                    <Text style={styles.ctaButtonOutlineText}>Virtual Tour</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.ctaButtonReport}
+                                    onPress={handleReportProperty}
+                                    activeOpacity={0.7}
+                                >
+                                    <Flag size={20} color="#DC2626" strokeWidth={2.5} />
+                                    <Text style={styles.ctaButtonReportText}>Report</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </>
+                    )}
                 </View>
             )}
         </View>
@@ -1410,5 +1427,33 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '700',
         letterSpacing: 0.3,
+    },
+    statusBadgeDetail: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+        marginLeft: 8,
+    },
+    statusBadgeDetailText: {
+        color: '#FFFFFF',
+        fontSize: 12,
+        fontWeight: '800',
+        textTransform: 'uppercase',
+    },
+    unavailableContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#FEF2F2',
+        padding: 16,
+        borderRadius: 14,
+        gap: 10,
+        borderWidth: 1,
+        borderColor: '#FEE2E2',
+    },
+    unavailableText: {
+        color: '#DC2626',
+        fontSize: 16,
+        fontWeight: '700',
     },
 });

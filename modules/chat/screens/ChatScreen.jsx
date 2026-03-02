@@ -195,8 +195,14 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
 
   const handleCloseDeal = async () => {
     try {
+      const effectiveInquiryId = inquiryId || chatContext?.inquiry_id;
+      if (!effectiveInquiryId) {
+        Alert.alert('Error', 'Inquiry information missing');
+        return;
+      }
+
       const token = await AsyncStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE_URL}/inquiries/${inquiryId}/close-deal`, {
+      const response = await fetch(`${API_BASE_URL}/inquiries/${effectiveInquiryId}/close-deal`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -208,6 +214,7 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
         Alert.alert('Error', data.message || 'Failed to close deal');
       }
     } catch (error) {
+      console.error('Close deal error:', error);
       Alert.alert('Error', 'Failed to connect to server');
     }
   };
@@ -253,10 +260,16 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
                 <Text style={styles.agentStatus}>{chatContext?.property_price || ''}</Text>
               </View>
             </View>
-            {showCloseDeal && (
-              <TouchableOpacity style={styles.closeDealButton} onPress={handleCloseDeal}>
-                <Text style={styles.closeDealText}>Close Deal</Text>
-              </TouchableOpacity>
+            {chatContext?.inquiry_status === 'deal_closed' ? (
+              <View style={styles.dealClosedBadge}>
+                <Text style={styles.dealClosedText}>Deal Closed</Text>
+              </View>
+            ) : (
+              showCloseDeal && (
+                <TouchableOpacity style={styles.closeDealButton} onPress={handleCloseDeal}>
+                  <Text style={styles.closeDealText}>Close Deal</Text>
+                </TouchableOpacity>
+              )
             )}
           </View>
         </View>
@@ -328,6 +341,8 @@ const styles = StyleSheet.create({
   agentStatus: { fontSize: 12, color: 'rgba(255, 255, 255, 0.8)' },
   closeDealButton: { backgroundColor: '#10B981', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   closeDealText: { color: '#FFF', fontWeight: 'bold', fontSize: 12 },
+  dealClosedBadge: { backgroundColor: '#FFD700', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  dealClosedText: { color: '#000', fontWeight: 'bold', fontSize: 12 },
   messagesArea: { flex: 1 },
   messagesContent: { padding: 16, gap: 12 },
   messageContainer: { marginBottom: 4 },

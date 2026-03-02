@@ -143,15 +143,18 @@ const AgentDashboard = ({ navigation, route }) => {
 
             const propertiesResponse = await apiRequest('/properties/my-properties');
             const notificationsResponse = await apiRequest('/notifications');
+            const inquiriesResponse = await apiRequest('/inquiries/builder?status=pending');
 
             if (propertiesResponse.success) {
                 setActiveListings(propertiesResponse.properties || []);
 
                 const properties = propertiesResponse.properties || [];
+                const pendingInquiriesCount = inquiriesResponse.success ? (inquiriesResponse.inquiries || []).length : 0;
+
                 setStats({
                     totalListings: properties.length,
                     activeLeads: Math.floor(properties.length * 1.5),
-                    siteVisits: Math.floor(properties.length * 2),
+                    pendingInquiries: pendingInquiriesCount,
                     dealsClosed: Math.floor(properties.length * 0.3),
                     newLeads: 3,
                     conversionRate: 15,
@@ -440,14 +443,19 @@ const AgentDashboard = ({ navigation, route }) => {
                                 color="#3b82f6"
                                 delay={100}
                             />
-                            <AnimatedKPICard
-                                icon={<Calendar width={22} height={22} color="#a855f7" strokeWidth={2.5} />}
-                                label="Site Visits"
-                                value={stats?.siteVisits || 0}
-                                trend={false}
-                                color="#a855f7"
-                                delay={200}
-                            />
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate('agentInquiries')}
+                                activeOpacity={0.7}
+                            >
+                                <AnimatedKPICard
+                                    icon={<Users width={22} height={22} color="#a855f7" strokeWidth={2.5} />}
+                                    label="Pending Inquiries"
+                                    value={stats?.pendingInquiries || 0}
+                                    trend={false}
+                                    color="#a855f7"
+                                    delay={200}
+                                />
+                            </TouchableOpacity>
                             <AnimatedKPICard
                                 icon={<CheckCircle width={22} height={22} color="#10b981" strokeWidth={2.5} />}
                                 label="Deals Closed"

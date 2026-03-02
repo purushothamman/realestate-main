@@ -31,6 +31,7 @@ import FavoritesScreen from './modules/user/screens/FavoritesScreen';
 import AssignAgentScreen from './modules/builder/screens/AssignAgentScreen';
 import AgentNotificationsScreen from './modules/agent/AgentNotificationsScreen';
 import BuilderNotificationsScreen from './modules/builder/screens/BuilderNotificationsScreen';
+import AgentInquiriesScreen from './modules/agent/AgentInquiriesScreen';
 import BuyerNotificationsScreen from './modules/user/screens/BuyerNotificationsScreen';
 
 
@@ -460,6 +461,14 @@ export default function App() {
           <AgentDashboard
             navigation={navigation}
             agentName={userData?.name}
+            onBack={goBack}
+          />
+        );
+
+      case 'agentInquiries':
+        return (
+          <AgentInquiriesScreen
+            navigation={navigation}
             onBack={goBack}
           />
         );
