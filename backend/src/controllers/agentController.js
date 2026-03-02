@@ -141,3 +141,74 @@ exports.getMyBuilders = async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 };
+
+// GET /api/agent/dashboard-stats
+exports.getAgentDashboardStats = async (req, res) => {
+    try {
+        const agentId = req.user.id;
+
+        // Total Listings: Properties where agent is uploader OR in property_requests (approved)
+        const [totalRows] = await pool.query(
+            `SELECT COUNT(DISTINCT p.id) as total 
+             FROM properties p
+             LEFT JOIN property_requests pr ON p.id = pr.property_id
+             WHERE (p.uploaded_by = ? AND p.uploaded_by_role = 'agent')
+                OR (pr.agent_id = ? AND pr.status = 'approved')`,
+            [agentId, agentId]
+        );
+
+        // Deals Closed: Above properties with status 'sold' or 'rented'
+        const [closedRows] = await pool.query(
+            `SELECT COUNT(DISTINCT p.id) as closed 
+             FROM properties p
+             LEFT JOIN property_requests pr ON p.id = pr.property_id
+             WHERE ((p.uploaded_by = ? AND p.uploaded_by_role = 'agent')
+                OR (pr.agent_id = ? AND pr.status = 'approved'))
+               AND p.status IN ('sold', 'rented')`,
+            [agentId, agentId]
+        );
+
+        // Active Leads: Unique inquiries directed to this agent where property is not sold/rented
+        const [leadsRows] = await pool.query(
+            `SELECT COUNT(DISTINCT i.id) as active_leads 
+             FROM inquiries i
+             JOIN properties p ON i.property_id = p.id
+             WHERE i.builder_id = ? 
+               AND p.status NOT IN ('sold', 'rented')`,
+            [agentId]
+        );
+
+        // Pending Inquiries: Inquiries directed to this agent with status 'pending'
+        const [pendingRows] = await pool.query(
+            "SELECT COUNT(*) as pending FROM inquiries WHERE builder_id = ? AND status = 'pending'",
+            [agentId]
+        );
+
+        // Monthly Revenue: 3% commission on sold/rented properties (simulation)
+        const [revenueRows] = await pool.query(
+            `SELECT SUM(p.price * 0.03) as revenue 
+             FROM properties p
+             LEFT JOIN property_requests pr ON p.id = pr.property_id
+             WHERE ((p.uploaded_by = ? AND p.uploaded_by_role = 'agent')
+                OR (pr.agent_id = ? AND pr.status = 'approved'))
+               AND p.status IN ('sold', 'rented')`,
+            [agentId, agentId]
+        );
+
+        res.json({
+            success: true,
+            stats: {
+                totalListings: totalRows[0].total || 0,
+                dealsClosed: closedRows[0].closed || 0,
+                activeLeads: leadsRows[0].active_leads || 0,
+                pendingInquiries: pendingRows[0].pending || 0,
+                newLeads: 0, // Could be derived from inquiries in last 24h
+                conversionRate: totalRows[0].total > 0 ? Math.round((closedRows[0].closed / totalRows[0].total) * 100) : 0,
+                monthlyRevenue: revenueRows[0].revenue || 0
+            }
+        });
+    } catch (err) {
+        console.error("getAgentDashboardStats error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
