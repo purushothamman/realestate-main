@@ -29,4 +29,12 @@ router.get("/assign-agent/assignments", protect, allow("builder"), builder.getAs
 router.post("/assign-agent/properties/:propertyId/assign", protect, allow("builder"), builder.assignAgentToProperty)
 router.delete("/assign-agent/properties/:propertyId/assign", protect, allow("builder"), builder.unassignAgentFromProperty)
 
+// GET /api/builder/hire-requests/:id — get full details of a hire request for builder
+router.get(
+    "/hire-requests/:id",
+    protect,
+    allow("builder"),
+    builder.getHireRequestById
+);
+
 module.exports = router

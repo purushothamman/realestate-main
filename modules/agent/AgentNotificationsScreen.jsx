@@ -15,7 +15,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../../utils/api';
+import { API_BASE_URL, getImageUrl } from '../../utils/api';
 import {
   View, Text, TextInput, StyleSheet, TouchableOpacity,
   FlatList, ScrollView, Image, Modal, Alert,
@@ -522,13 +522,27 @@ function NotificationDetail({ notif, onBack, onAction }) {
         {/* ── Sender ── */}
         <Text style={dv.secLabel}>FROM</Text>
         <View style={dv.senderCard}>
-          <Image source={{ uri: notif.sender.avatar }} style={dv.senderAvatar} />
+          {notif.sender.avatar && notif.sender.avatar.startsWith('http') ? (
+            <Image source={{ uri: notif.sender.avatar }} style={dv.senderAvatar} />
+          ) : (
+            <View style={[dv.senderAvatar, { backgroundColor: T.g600, justifyContent: 'center', alignItems: 'center' }]}>
+              <Text style={{ color: T.white, fontSize: 24, fontWeight: '800' }}>
+                {(notif.sender.name || '?').charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
             <Text style={dv.senderName}>{notif.sender.name}</Text>
             <View style={[dv.roleChip, { backgroundColor: meta.bg, borderColor: meta.border }]}>
               <TIcon color={meta.color} size={11} strokeWidth={2.5} />
               <Text style={[dv.roleChipTxt, { color: meta.color }]}>{notif.sender.role}</Text>
             </View>
+            {notif.builder?.company_name && (
+              <View style={[dv.contactLine, { marginBottom: 8 }]}>
+                <Building2 color={T.g700} size={14} strokeWidth={2} />
+                <Text style={[dv.contactTxt, { fontWeight: '700', color: T.g800 }]}>{notif.builder.company_name}</Text>
+              </View>
+            )}
             <View style={dv.contactLine}>
               <Phone color={T.n500} size={13} strokeWidth={2} />
               <Text style={dv.contactTxt}>{notif.sender.phone}</Text>
@@ -539,6 +553,37 @@ function NotificationDetail({ notif, onBack, onAction }) {
             </View>
           </View>
         </View>
+
+        {/* ── Builder Activity/Company Info ── */}
+        {notif.builder && (
+          <>
+            <Text style={dv.secLabel}>BUILDER PROFILE & ACTIVITY</Text>
+            <View style={[dv.msgCard, { borderLeftColor: T.purple, marginBottom: 20 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <View style={{ backgroundColor: T.purpleBg, padding: 8, borderRadius: 10 }}>
+                  <TrendingUp color={T.purple} size={18} strokeWidth={2} />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 11, color: T.n500, fontWeight: '600' }}>Engagement Level</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: T.n900 }}>{notif.builder.total_properties} Properties Uploaded</Text>
+                </View>
+              </View>
+
+              {notif.builder.company_city && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                  <MapPin color={T.n500} size={14} strokeWidth={2} />
+                  <Text style={{ fontSize: 13, color: T.n600, fontWeight: '600' }}>Based in {notif.builder.company_city}</Text>
+                </View>
+              )}
+
+              {notif.builder.company_description && (
+                <Text style={{ fontSize: 13, color: T.n500, fontStyle: 'italic', lineHeight: 18 }}>
+                  "{notif.builder.company_description}"
+                </Text>
+              )}
+            </View>
+          </>
+        )}
 
         {/* ── Timestamp + Status ── */}
         <View style={dv.metaBar}>
@@ -839,7 +884,37 @@ export default function AgentNotificationsScreen({ navigation, onBack }) {
       }
     } catch (_) { }
     setNotifs(p => p.map(n => n.id === notif.id ? { ...n, read: true } : n));
-    setSelected({ ...notif, read: true });
+
+    let enriched = { ...notif, read: true };
+    if (notif.type === 'hire_request' && notif.relatedEntityId) {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        if (token) {
+          const resp = await fetch(`${API_BASE_URL}/agent/hire-requests/${notif.relatedEntityId}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          const data = await resp.json();
+          if (data.success && data.request) {
+            const r = data.request;
+            enriched = {
+              ...enriched,
+              status: r.status || enriched.status,
+              builder: r,
+              sender: {
+                ...enriched.sender,
+                name: r.builder_name || enriched.sender.name,
+                email: r.builder_email || '',
+                phone: r.builder_phone || '',
+                avatar: r.builder_avatar ? getImageUrl(r.builder_avatar) : enriched.sender.avatar,
+              },
+            };
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch hire request details:', err);
+      }
+    }
+    setSelected(enriched);
   }, []);
 
   const markAllRead = useCallback(async () => {

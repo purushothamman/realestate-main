@@ -18,6 +18,14 @@ router.post(
     agent.rejectHireRequest
 );
 
+// GET /api/agent/hire-requests/:id — get full details of a hire request
+router.get(
+    "/hire-requests/:id",
+    protect,
+    allow("agent"),
+    agent.getHireRequestById
+);
+
 // GET /api/agent/my-builders — builders who have hired the logged-in agent
 router.get(
     "/my-builders",
