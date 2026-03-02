@@ -50,7 +50,7 @@ import {
 const { width } = Dimensions.get('window');
 
 
-const AnimatedKPICard = ({ icon, label, value, trend, trendValue, color, delay = 0 }) => {
+const AnimatedKPICard = ({ icon, label, value, trend, trendValue, color, delay = 0, style }) => {
     const scaleAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -64,7 +64,7 @@ const AnimatedKPICard = ({ icon, label, value, trend, trendValue, color, delay =
     }, []);
 
     return (
-        <Animated.View style={[styles.kpiCard, { transform: [{ scale: scaleAnim }] }]}>
+        <Animated.View style={[styles.kpiCard, { transform: [{ scale: scaleAnim }] }, style]}>
             <View style={styles.kpiHeader}>
                 <View style={[styles.kpiIcon, { backgroundColor: `${color}15` }]}>
                     {icon}
@@ -143,19 +143,22 @@ const AgentDashboard = ({ navigation, route }) => {
 
             const propertiesResponse = await apiRequest('/properties/my-properties');
             const notificationsResponse = await apiRequest('/notifications');
+            const statsResponse = await apiRequest('/agent/dashboard-stats');
 
             if (propertiesResponse.success) {
                 setActiveListings(propertiesResponse.properties || []);
+            }
 
-                const properties = propertiesResponse.properties || [];
+            if (statsResponse.success) {
+                const s = statsResponse.stats;
                 setStats({
-                    totalListings: properties.length,
-                    activeLeads: Math.floor(properties.length * 1.5),
-                    siteVisits: Math.floor(properties.length * 2),
-                    dealsClosed: Math.floor(properties.length * 0.3),
-                    newLeads: 3,
-                    conversionRate: 15,
-                    monthlyRevenue: properties.reduce((sum, p) => sum + (p.price * 0.03), 0)
+                    totalListings: s.totalListings,
+                    activeLeads: s.activeLeads,
+                    pendingInquiries: s.pendingInquiries,
+                    dealsClosed: s.dealsClosed,
+                    newLeads: s.newLeads || 0,
+                    conversionRate: s.conversionRate || 0,
+                    monthlyRevenue: s.monthlyRevenue || 0
                 });
             }
 
@@ -440,14 +443,21 @@ const AgentDashboard = ({ navigation, route }) => {
                                 color="#3b82f6"
                                 delay={100}
                             />
-                            <AnimatedKPICard
-                                icon={<Calendar width={22} height={22} color="#a855f7" strokeWidth={2.5} />}
-                                label="Site Visits"
-                                value={stats?.siteVisits || 0}
-                                trend={false}
-                                color="#a855f7"
-                                delay={200}
-                            />
+                            <TouchableOpacity
+                                onPress={() => navigation.navigate('agentInquiries')}
+                                activeOpacity={0.7}
+                                style={{ width: '48%' }}
+                            >
+                                <AnimatedKPICard
+                                    icon={<Users width={22} height={22} color="#a855f7" strokeWidth={2.5} />}
+                                    label="Pending Inquiries"
+                                    value={stats?.pendingInquiries || 0}
+                                    trend={false}
+                                    color="#a855f7"
+                                    delay={200}
+                                    style={{ width: '100%' }}
+                                />
+                            </TouchableOpacity>
                             <AnimatedKPICard
                                 icon={<CheckCircle width={22} height={22} color="#10b981" strokeWidth={2.5} />}
                                 label="Deals Closed"

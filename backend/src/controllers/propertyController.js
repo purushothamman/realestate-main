@@ -48,7 +48,7 @@ exports.getVerifiedProperties = async (req, res) => {
         const [rows] = await pool.query(
             `SELECT id, title, price, city, state, is_verified
              FROM properties
-             WHERE status = 'active' AND is_verified = TRUE`
+             WHERE status IN ('active', 'sold', 'rented') AND is_verified = TRUE`
         );
 
         res.json(rows);
@@ -553,7 +553,7 @@ exports.getAllProperties = async (req, res) => {
                 ) as features_json
             FROM properties p
             LEFT JOIN users u ON p.uploaded_by = u.id
-            WHERE p.status = 'active'
+            WHERE p.status IN ('active', 'sold', 'rented')
         `;
 
         const params = [req.user?.id || 0];
@@ -784,7 +784,7 @@ exports.searchProperties = async (req, res) => {
                     WHERE property_id = p.property_id AND user_id = ?
                 ) as is_favorited
             FROM properties p
-            WHERE p.status = 'active'
+            WHERE p.status IN ('active', 'sold', 'rented')
             AND (
                 p.title LIKE ? OR
                 p.description LIKE ? OR
@@ -864,7 +864,7 @@ exports.getCities = async (req, res) => {
              WHERE city IS NOT NULL 
                AND city != '' 
                AND city LIKE ? 
-               AND status = 'active'
+               AND status IN ('active', 'sold', 'rented')
              ORDER BY city ASC
              LIMIT 10`,
             [searchTerm]
@@ -924,7 +924,7 @@ exports.searchByCity = async (req, res) => {
                     SELECT COUNT(*) FROM property_images pi3 WHERE pi3.property_id = p.id
                 ) as image_count
              FROM properties p
-             WHERE p.city = ? AND p.status = 'active'
+             WHERE p.city = ? AND p.status IN ('active', 'sold', 'rented')
              ORDER BY p.created_at DESC
              LIMIT 50`,
             [city.trim()]

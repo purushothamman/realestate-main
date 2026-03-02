@@ -34,5 +34,13 @@ router.get(
     agent.getMyBuilders
 );
 
+// GET /api/agent/dashboard-stats
+router.get(
+    "/dashboard-stats",
+    protect,
+    allow("agent"),
+    agent.getAgentDashboardStats
+);
+
 module.exports = router;
 

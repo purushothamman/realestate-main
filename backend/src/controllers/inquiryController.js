@@ -356,10 +356,17 @@ exports.closeDeal = async (req, res) => {
             [inquiryId]
         );
 
-        // Update property status to sold
-        await pool.query(
-            'UPDATE properties SET status = "sold", updated_at = NOW() WHERE id = ?',
+        // Get property listing type to determine status (sold vs rented)
+        const [propertyTypeInfo] = await pool.query(
+            'SELECT listing_type FROM properties WHERE id = ?',
             [inquiry[0].property_id]
+        );
+        const newStatus = propertyTypeInfo[0]?.listing_type === 'rent' ? 'rented' : 'sold';
+
+        // Update property status
+        await pool.query(
+            'UPDATE properties SET status = ?, updated_at = NOW() WHERE id = ?',
+            [newStatus, inquiry[0].property_id]
         );
 
         // Find the chat_id for this inquiry
