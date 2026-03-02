@@ -119,6 +119,49 @@ exports.rejectHireRequest = async (req, res) => {
     }
 };
 
+// GET /api/agent/hire-requests/:id
+exports.getHireRequestById = async (req, res) => {
+    try {
+        const agentId = req.user.id;
+        const requestId = parseInt(req.params.id, 10);
+
+        if (!requestId) {
+            return res.status(400).json({ success: false, message: "Invalid request ID" });
+        }
+
+        // 1. Fetch request + builder basic info + company info
+        const [rows] = await pool.query(
+            `SELECT 
+                bar.id, bar.status, bar.created_at,
+                u.id as builder_id, u.name as builder_name, u.email as builder_email, u.phone as builder_phone, u.profile_image as builder_avatar,
+                b.company_name, b.city as company_city, b.description as company_description
+             FROM builder_agent_requests bar
+             JOIN users u ON u.id = bar.builder_id
+             LEFT JOIN builders b ON b.user_id = u.id
+             WHERE bar.id = ?`,
+            [requestId]
+        );
+
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Hire request not found" });
+        }
+
+        const request = rows[0];
+
+        // 2. Fetch total properties uploaded by this builder
+        const [propCountRows] = await pool.query(
+            "SELECT COUNT(*) as total FROM properties WHERE uploaded_by = ?",
+            [request.builder_id]
+        );
+        request.total_properties = propCountRows[0].total || 0;
+
+        res.json({ success: true, request });
+    } catch (err) {
+        console.error("getHireRequestById error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
 // GET /api/agent/my-builders — list builders who have hired this agent
 exports.getMyBuilders = async (req, res) => {
     try {

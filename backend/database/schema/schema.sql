@@ -545,3 +545,45 @@ CREATE TABLE `users` (
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-02-23 16:08:47
+
+edits: 
+
+SQL:
+
+ALTER TABLE builders
+ADD COLUMN total_projects INT default 0;
+
+
+
+------------
+CREATE TABLE agents (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+    
+    user_id INT NOT NULL,
+    
+    professional_title VARCHAR(150),
+    about_me TEXT,
+    agency_name VARCHAR(150),
+    license_id VARCHAR(100),
+    
+    experience_years INT,
+    city VARCHAR(100),
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP 
+        ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT unique_user_agent UNIQUE (user_id),
+    
+	FOREIGN KEY (user_id) 
+        REFERENCES users(id) 
+        ON DELETE CASCADE
+);
+
+UPDATE users
+SET profile_image =
+SUBSTRING(profile_image, LOCATE('/images_rs', profile_image))
+WHERE profile_image LIKE 'http%/images_rs%';
+
+
+ALTER TABLE builders DROP COLUMN profile_image;

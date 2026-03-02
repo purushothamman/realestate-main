@@ -200,6 +200,7 @@ const TYPE_CFG = {
   hire_response: { label: 'Hire Response', Icon: UserCheck, color: T.teal, bg: T.tealBg, border: T.tealBdr },
   hire_request: { label: 'Hire Request', Icon: Briefcase, color: T.blue, bg: T.blueBg, border: T.blueBdr },
   property_approved: { label: 'Approved', Icon: BadgeCheck, color: T.g700, bg: T.g100, border: T.g200 },
+  property_upload: { label: 'Property Upload', Icon: Home, color: T.g700, bg: T.g100, border: T.g200 },
   _default: { label: 'Notification', Icon: MessageSquare, color: T.n500, bg: T.n100, border: T.n200 },
 };
 
@@ -244,7 +245,7 @@ const StatusPill = ({ status }) => {
 };
 
 const TypeBadge = ({ type }) => {
-  const c = TYPE_CFG[type];
+  const c = TYPE_CFG[type] || TYPE_CFG._default;
   return (
     <View style={[atoms.badge, { backgroundColor: c.bg, borderColor: c.border }]}>
       <c.Icon color={c.color} size={10} strokeWidth={2.5} />
@@ -587,6 +588,37 @@ function AgentDetailView({ agent, onBack }) {
           </View>
         </View>
 
+        {/* Professional Specs */}
+        {(agent?.specialization || agent?.experience !== undefined) && (
+          <>
+            <SectionLabel text="PROFESSIONAL PROFILE" />
+            <View style={{ backgroundColor: T.white, borderRadius: 16, padding: 18, borderLeftWidth: 4, borderLeftColor: T.teal, borderWidth: 1, borderColor: T.n200, marginBottom: 20 }}>
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 10, color: T.n500, fontWeight: '600', marginBottom: 2 }}>SPEC</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: T.n900 }}>{agent.specialization || 'Real Estate Agent'}</Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: T.n200 }} />
+                <View style={{ flex: 1, paddingLeft: 12 }}>
+                  <Text style={{ fontSize: 10, color: T.n500, fontWeight: '600', marginBottom: 2 }}>EXP</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: T.n900 }}>{agent.experience || 0} Years</Text>
+                </View>
+              </View>
+              {agent.city && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <MapPin color={T.n500} size={14} strokeWidth={2} />
+                  <Text style={{ fontSize: 13, color: T.n600, fontWeight: '600' }}>Based in {agent.city}</Text>
+                </View>
+              )}
+              {agent.about && (
+                <Text style={{ fontSize: 13, color: T.n500, fontStyle: 'italic', lineHeight: 18 }}>
+                  "{agent.about}"
+                </Text>
+              )}
+            </View>
+          </>
+        )}
+
         {/* Contact Card */}
         <SectionLabel text="CONTACT INFORMATION" />
         <View style={{ backgroundColor: T.white, borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: T.n200, gap: 16 }}>
@@ -632,17 +664,21 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
   const [actioning, setActioning] = useState(null); // 'approve' | 'reject'
   const [showAgentDetail, setShowAgentDetail] = useState(false);
 
+  useEffect(() => {
+    setLocalStatus(notif.status);
+  }, [notif.status]);
+
   const cfg = TYPE_CFG[notif.type] || TYPE_CFG._default;
   const scfg = STATUS_CFG[localStatus] ?? STATUS_CFG.pending;
 
-  const isAgentResp = notif.type === 'agent_hire_response' || notif.type === 'agent_assignment_response';
+  const isAgentResp = notif.type === 'agent_hire_response' || notif.type === 'agent_assignment_response' || notif.type === 'hire_response';
   const isSubmission = notif.type === 'property_submission';
   const isInquiry = notif.type === 'user_inquiry';
   const canAct = isSubmission && localStatus === 'pending';
 
   /* Colour accent — green for accepted, red for rejected agent responses */
   const accentColor = isAgentResp
-    ? (notif.status === 'accepted' ? T.g600 : T.red)
+    ? (localStatus === 'accepted' ? T.g600 : T.red)
     : null;
 
   const handleSubmission = async (action) => {
@@ -713,51 +749,92 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
         {/* ── SENDER CARD ── */}
         <SectionLabel text={isInquiry ? 'FROM BUYER' : 'FROM AGENT'} />
         <View style={[detail.senderCard, accentColor && { borderLeftColor: accentColor, borderLeftWidth: 4 }]}>
-          {notif.sender.avatar && notif.sender.avatar.startsWith('http') ? (
-            <Image source={{ uri: notif.sender.avatar }} style={detail.sAvatar} />
-          ) : (
-            <View style={[detail.sAvatar, { backgroundColor: T.g600, justifyContent: 'center', alignItems: 'center' }]}>
-              <Text style={{ color: T.white, fontSize: 24, fontWeight: '800' }}>
-                {(notif.sender.name || '?').charAt(0).toUpperCase()}
-              </Text>
-            </View>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={detail.sName}>{notif.sender.name}</Text>
-
-            <View style={[detail.roleChip, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
-              <cfg.Icon color={cfg.color} size={11} strokeWidth={2.5} />
-              <Text style={[detail.roleChipTxt, { color: cfg.color }]}>{notif.sender.role}</Text>
-            </View>
-
-            {/* Agent stats row */}
-            {notif.sender.rating !== undefined && (
-              <View style={detail.agentRow}>
-                <AgentStars rating={notif.sender.rating} />
-                <Text style={detail.dot2}>·</Text>
-                <Briefcase color={T.n500} size={12} strokeWidth={2} />
-                <Text style={detail.agentMeta}>{notif.sender.experience} yrs</Text>
-                <Text style={detail.dot2}>·</Text>
-                <TrendingUp color={T.n500} size={12} strokeWidth={2} />
-                <Text style={detail.agentMeta}>{notif.sender.deals} deals</Text>
-                {notif.sender.spec && (
-                  <><Text style={detail.dot2}>·</Text>
-                    <Text style={[detail.agentMeta, { color: T.g700, fontWeight: '700' }]}>{notif.sender.spec}</Text>
-                  </>
-                )}
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 }}
+            onPress={() => (isSubmission || notif.type === 'property_upload' || isAgentResp) && setShowAgentDetail(true)}
+            disabled={!notif.sender?.id && !isAgentResp}
+          >
+            {notif.sender?.avatar ? (
+              <Image source={{ uri: notif.sender.avatar }} style={detail.sAvatar} />
+            ) : (
+              <View style={[detail.sAvatar, { backgroundColor: T.g600, justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ color: T.white, fontSize: 24, fontWeight: '800' }}>
+                  {(notif.sender?.name || '?').charAt(0).toUpperCase()}
+                </Text>
               </View>
             )}
+            <View style={{ flex: 1 }}>
+              <Text style={detail.sName}>{notif.sender?.name || 'Unknown'}</Text>
+              <View style={[detail.roleChip, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+                <cfg.Icon color={cfg.color} size={11} strokeWidth={2.5} />
+                <Text style={[detail.roleChipTxt, { color: cfg.color }]}>{notif.sender?.role || 'User'}</Text>
+              </View>
 
-            <View style={detail.contactLine}>
-              <Phone color={T.n500} size={13} strokeWidth={2} />
-              <Text style={detail.contactTxt}>{notif.sender.phone}</Text>
+              {/* Agent stats row */}
+              {notif.sender?.rating !== undefined && (
+                <View style={detail.agentRow}>
+                  <AgentStars rating={notif.sender.rating} />
+                  <Text style={detail.dot2}>·</Text>
+                  <Briefcase color={T.n500} size={12} strokeWidth={2} />
+                  <Text style={detail.agentMeta}>{notif.sender.experience} yrs</Text>
+                  <Text style={detail.dot2}>·</Text>
+                  <TrendingUp color={T.n500} size={12} strokeWidth={2} />
+                  <Text style={detail.agentMeta}>{notif.sender.deals} deals</Text>
+                  {notif.sender.spec && (
+                    <>
+                      <Text style={detail.dot2}>·</Text>
+                      <Text style={[detail.agentMeta, { color: T.g700, fontWeight: '700' }]}>{notif.sender.spec}</Text>
+                    </>
+                  )}
+                </View>
+              )}
+
+              {isAgentResp && (
+                <>
+                  <View style={detail.contactLine}>
+                    <Phone color={T.n500} size={13} strokeWidth={2} />
+                    <Text style={detail.contactTxt}>{notif.sender?.phone || 'N/A'}</Text>
+                  </View>
+                  <View style={detail.contactLine}>
+                    <Mail color={T.n500} size={13} strokeWidth={2} />
+                    <Text style={detail.contactTxt}>{notif.sender?.email || 'N/A'}</Text>
+                  </View>
+                </>
+              )}
             </View>
-            <View style={detail.contactLine}>
-              <Mail color={T.n500} size={13} strokeWidth={2} />
-              <Text style={detail.contactTxt}>{notif.sender.email}</Text>
-            </View>
-          </View>
+            {(isSubmission || notif.type === 'property_upload' || isAgentResp) && (
+              <ChevronRight color={T.n400} size={20} />
+            )}
+          </TouchableOpacity>
         </View>
+
+        {isAgentResp && notif.agent_details && (
+          <>
+            <SectionLabel text="PROFESSIONAL DETAILS" />
+            <View style={[detail.msgCard, { borderLeftColor: T.teal, marginBottom: 20 }]}>
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 11, color: T.n500, fontWeight: '600', marginBottom: 2 }}>Specialization</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: T.n900 }}>{notif.agent_details.professional_title || 'Real Estate Agent'}</Text>
+                </View>
+                <View style={{ width: 1, backgroundColor: T.n200 }} />
+                <View style={{ flex: 1, paddingLeft: 12 }}>
+                  <Text style={{ fontSize: 11, color: T.n500, fontWeight: '600', marginBottom: 2 }}>Experience</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: T.n900 }}>{notif.agent_details.experience_years || 0} Years</Text>
+                </View>
+              </View>
+
+              {notif.agent_details.about_me && (
+                <View style={{ marginTop: 4 }}>
+                  <Text style={{ fontSize: 11, color: T.n500, fontWeight: '600', marginBottom: 4 }}>About Agent</Text>
+                  <Text style={{ fontSize: 13, color: T.n600, lineHeight: 18 }}>
+                    {notif.agent_details.about_me}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
+        )}
 
         {/* ── TIMESTAMP + STATUS ── */}
         <View style={detail.metaBar}>
@@ -775,166 +852,178 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
         </View>
 
         {/* ── PROPERTY CARD ── */}
-        {notif.property && (
-          <>
-            <SectionLabel text="RELATED PROPERTY" mt={20} />
-            <View style={detail.propCard}>
-              <Image source={{ uri: notif.property.image }} style={detail.propImg} resizeMode="cover" />
-              <View style={detail.propScrim} />
-              <View style={detail.propTag}>
-                <Text style={detail.propTagTxt}>{notif.property.type}</Text>
-              </View>
-              <View style={detail.propBody}>
-                <Text style={detail.propName}>{notif.property.name}</Text>
-                <View style={detail.propRow}>
-                  <MapPin color={T.n500} size={12} strokeWidth={2} />
-                  <Text style={detail.propLoc}>{notif.property.location}</Text>
+        {
+          notif.property && (
+            <>
+              <SectionLabel text="RELATED PROPERTY" mt={20} />
+              <View style={detail.propCard}>
+                <Image source={{ uri: notif.property.image }} style={detail.propImg} resizeMode="cover" />
+                <View style={detail.propScrim} />
+                <View style={detail.propTag}>
+                  <Text style={detail.propTagTxt}>{notif.property.type}</Text>
                 </View>
-                <View style={detail.propStat}>
-                  <Home color={T.g600} size={12} strokeWidth={2} />
-                  <Text style={detail.propStatTxt}>{notif.property.units} Units</Text>
+                <View style={detail.propBody}>
+                  <Text style={detail.propName}>{notif.property.name}</Text>
+                  <View style={detail.propRow}>
+                    <MapPin color={T.n500} size={12} strokeWidth={2} />
+                    <Text style={detail.propLoc}>{notif.property.location}</Text>
+                  </View>
+                  <View style={detail.propStat}>
+                    <Home color={T.g600} size={12} strokeWidth={2} />
+                    <Text style={detail.propStatTxt}>{notif.property.units} Units</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-          </>
-        )}
+            </>
+          )
+        }
 
         {/* ── SUBMISSION DETAILS ── */}
-        {isSubmission && notif.submission && (
-          <>
-            <SectionLabel text="SUBMISSION DETAILS" mt={20} />
-            <View style={detail.infoCard}>
-              {[
-                { label: 'Listed Price', val: notif.submission.listedPrice, Icon: TrendingUp },
-                { label: 'Area per Unit', val: notif.submission.listedArea, Icon: Layers },
-                { label: 'Documents Attached', val: `${notif.submission.docsAttached} files`, Icon: FileText },
-              ].map(({ label, val, Icon: OI }) => (
-                <View key={label} style={detail.infoRow}>
-                  <View style={detail.infoIconBox}><OI color={T.g700} size={16} strokeWidth={2} /></View>
-                  <View>
-                    <Text style={detail.infoLabel}>{label}</Text>
-                    <Text style={detail.infoVal}>{val}</Text>
+        {
+          isSubmission && notif.submission && (
+            <>
+              <SectionLabel text="SUBMISSION DETAILS" mt={20} />
+              <View style={detail.infoCard}>
+                {[
+                  { label: 'Listed Price', val: notif.submission.listedPrice, Icon: TrendingUp },
+                  { label: 'Area per Unit', val: notif.submission.listedArea, Icon: Layers },
+                  { label: 'Documents Attached', val: `${notif.submission.docsAttached} files`, Icon: FileText },
+                ].map(({ label, val, Icon: OI }) => (
+                  <View key={label} style={detail.infoRow}>
+                    <View style={detail.infoIconBox}><OI color={T.g700} size={16} strokeWidth={2} /></View>
+                    <View>
+                      <Text style={detail.infoLabel}>{label}</Text>
+                      <Text style={detail.infoVal}>{val}</Text>
+                    </View>
                   </View>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
+                ))}
+              </View>
+            </>
+          )
+        }
 
         {/* ── HIRE OFFER TERMS ── */}
-        {isAgentResp && notif.offer && (
-          <>
-            <SectionLabel text="HIRE TERMS" mt={20} />
-            <View style={detail.infoCard}>
-              {[
-                { label: 'Commission', val: notif.offer.commission, Icon: TrendingUp },
-                { label: 'Duration', val: notif.offer.duration, Icon: CalendarDays },
-              ].map(({ label, val, Icon: OI }) => (
-                <View key={label} style={detail.infoRow}>
-                  <View style={detail.infoIconBox}><OI color={T.g700} size={16} strokeWidth={2} /></View>
-                  <View>
-                    <Text style={detail.infoLabel}>{label}</Text>
-                    <Text style={detail.infoVal}>{val}</Text>
+        {
+          isAgentResp && notif.offer && (
+            <>
+              <SectionLabel text="HIRE TERMS" mt={20} />
+              <View style={detail.infoCard}>
+                {[
+                  { label: 'Commission', val: notif.offer.commission, Icon: TrendingUp },
+                  { label: 'Duration', val: notif.offer.duration, Icon: CalendarDays },
+                ].map(({ label, val, Icon: OI }) => (
+                  <View key={label} style={detail.infoRow}>
+                    <View style={detail.infoIconBox}><OI color={T.g700} size={16} strokeWidth={2} /></View>
+                    <View>
+                      <Text style={detail.infoLabel}>{label}</Text>
+                      <Text style={detail.infoVal}>{val}</Text>
+                    </View>
                   </View>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
+                ))}
+              </View>
+            </>
+          )
+        }
 
         {/* ── AGENT RESPONSE RESULT BANNER ── */}
-        {isAgentResp && (
-          <View style={[
-            detail.resBanner,
-            notif.status === 'accepted'
-              ? { backgroundColor: T.g100, borderColor: T.g200 }
-              : { backgroundColor: T.redBg, borderColor: T.redBdr },
-          ]}>
-            {notif.status === 'accepted'
-              ? <CheckCircle2 color={T.g700} size={20} strokeWidth={2.5} />
-              : <XCircle color={T.red} size={20} strokeWidth={2.5} />
-            }
-            <View style={{ flex: 1 }}>
-              <Text style={[detail.resTitle, { color: notif.status === 'accepted' ? T.g800 : T.red }]}>
-                {notif.status === 'accepted' ? 'Request Accepted' : 'Request Declined'}
-              </Text>
-              <Text style={[detail.resSub, { color: notif.status === 'accepted' ? T.g700 : T.red }]}>
-                {notif.status === 'accepted'
-                  ? `${notif.sender.name} has joined your project.`
-                  : `${notif.sender.name} is unavailable — consider finding another agent.`}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        {/* ── BUILDER ACTION — APPROVE / REJECT SUBMISSION ── */}
-        {isSubmission && (
-          <>
-            <SectionLabel text="BUILDER ACTION" mt={20} />
-            {canAct ? (
-              <>
-                <View style={detail.warnBox}>
-                  <AlertTriangle color={T.amber} size={15} strokeWidth={2} />
-                  <Text style={detail.warnTxt}>
-                    Approving will publish this listing live on the platform immediately.
-                  </Text>
-                </View>
-                <View style={detail.actionRow}>
-                  <TouchableOpacity
-                    style={[detail.rejectBtn, !!actioning && { opacity: 0.55 }]}
-                    onPress={() => handleSubmission('reject')}
-                    disabled={!!actioning}
-                    activeOpacity={0.85}
-                  >
-                    {actioning === 'reject'
-                      ? <ActivityIndicator color={T.red} size="small" />
-                      : <><XCircle color={T.red} size={18} strokeWidth={2.5} />
-                        <Text style={detail.rejectTxt}>Reject</Text></>
-                    }
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[detail.approveBtn, !!actioning && { opacity: 0.55 }]}
-                    onPress={() => handleSubmission('approve')}
-                    disabled={!!actioning}
-                    activeOpacity={0.85}
-                  >
-                    {actioning === 'approve'
-                      ? <ActivityIndicator color={T.white} size="small" />
-                      : <><CheckCircle2 color={T.white} size={18} strokeWidth={2.5} />
-                        <Text style={detail.approveTxt}>Approve Listing</Text></>
-                    }
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <View style={[
-                detail.resolvedRow,
-                localStatus === 'approved'
-                  ? { backgroundColor: T.g100, borderColor: T.g200 }
-                  : { backgroundColor: T.redBg, borderColor: T.redBdr },
-              ]}>
-                {localStatus === 'approved'
-                  ? <BadgeCheck color={T.g700} size={18} strokeWidth={2.5} />
-                  : <XCircle color={T.red} size={18} strokeWidth={2.5} />
-                }
-                <Text style={[detail.resolvedTxt, { color: localStatus === 'approved' ? T.g800 : T.red }]}>
-                  {localStatus === 'approved'
-                    ? 'You approved this submission. The listing is now live.'
-                    : 'You rejected this submission. The agent has been notified.'}
+        {
+          isAgentResp && (
+            <View style={[
+              detail.resBanner,
+              notif.status === 'accepted'
+                ? { backgroundColor: T.g100, borderColor: T.g200 }
+                : { backgroundColor: T.redBg, borderColor: T.redBdr },
+            ]}>
+              {notif.status === 'accepted'
+                ? <CheckCircle2 color={T.g700} size={20} strokeWidth={2.5} />
+                : <XCircle color={T.red} size={20} strokeWidth={2.5} />
+              }
+              <View style={{ flex: 1 }}>
+                <Text style={[detail.resTitle, { color: notif.status === 'accepted' ? T.g800 : T.red }]}>
+                  {notif.status === 'accepted' ? 'Request Accepted' : 'Request Declined'}
+                </Text>
+                <Text style={[detail.resSub, { color: notif.status === 'accepted' ? T.g700 : T.red }]}>
+                  {notif.status === 'accepted'
+                    ? `${notif.sender.name} has joined your project.`
+                    : `${notif.sender.name} is unavailable — consider finding another agent.`}
                 </Text>
               </View>
-            )}
-          </>
-        )}
+            </View>
+          )
+        }
+
+        {/* ── BUILDER ACTION — APPROVE / REJECT SUBMISSION ── */}
+        {
+          isSubmission && (
+            <>
+              <SectionLabel text="BUILDER ACTION" mt={20} />
+              {canAct ? (
+                <>
+                  <View style={detail.warnBox}>
+                    <AlertTriangle color={T.amber} size={15} strokeWidth={2} />
+                    <Text style={detail.warnTxt}>
+                      Approving will publish this listing live on the platform immediately.
+                    </Text>
+                  </View>
+                  <View style={detail.actionRow}>
+                    <TouchableOpacity
+                      style={[detail.rejectBtn, !!actioning && { opacity: 0.55 }]}
+                      onPress={() => handleSubmission('reject')}
+                      disabled={!!actioning}
+                      activeOpacity={0.85}
+                    >
+                      {actioning === 'reject'
+                        ? <ActivityIndicator color={T.red} size="small" />
+                        : <><XCircle color={T.red} size={18} strokeWidth={2.5} />
+                          <Text style={detail.rejectTxt}>Reject</Text></>
+                      }
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[detail.approveBtn, !!actioning && { opacity: 0.55 }]}
+                      onPress={() => handleSubmission('approve')}
+                      disabled={!!actioning}
+                      activeOpacity={0.85}
+                    >
+                      {actioning === 'approve'
+                        ? <ActivityIndicator color={T.white} size="small" />
+                        : <><CheckCircle2 color={T.white} size={18} strokeWidth={2.5} />
+                          <Text style={detail.approveTxt}>Approve Listing</Text></>
+                      }
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <View style={[
+                  detail.resolvedRow,
+                  localStatus === 'approved'
+                    ? { backgroundColor: T.g100, borderColor: T.g200 }
+                    : { backgroundColor: T.redBg, borderColor: T.redBdr },
+                ]}>
+                  {localStatus === 'approved'
+                    ? <BadgeCheck color={T.g700} size={18} strokeWidth={2.5} />
+                    : <XCircle color={T.red} size={18} strokeWidth={2.5} />
+                  }
+                  <Text style={[detail.resolvedTxt, { color: localStatus === 'approved' ? T.g800 : T.red }]}>
+                    {localStatus === 'approved'
+                      ? 'You approved this submission. The listing is now live.'
+                      : 'You rejected this submission. The agent has been notified.'}
+                  </Text>
+                </View>
+              )}
+            </>
+          )
+        }
 
         {/* ── REPLY TO USER INQUIRY ── */}
-        {isInquiry && (
-          <>
-            <SectionLabel text="RESPOND TO INQUIRY" mt={20} />
-            <ReplyInput recipientName={notif.sender.name} onSend={handleReply} />
-          </>
-        )}
+        {
+          isInquiry && (
+            <>
+              <SectionLabel text="RESPOND TO INQUIRY" mt={20} />
+              <ReplyInput recipientName={notif.sender.name} onSend={handleReply} />
+            </>
+          )
+        }
 
         {/* ── CTA BUTTONS ── */}
         <View style={{ gap: 10, marginTop: 20 }}>
@@ -974,8 +1063,8 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
         </View>
 
         <View style={{ height: 40 }} />
-      </ScrollView>
-    </View>
+      </ScrollView >
+    </View >
   );
 }
 
@@ -1135,9 +1224,9 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
           status: 'pending',
           relatedEntityId: n.relatedEntityId,
           sender: {
-            name: n.title || 'Agent',
-            role: 'Agent',
-            avatar: 'https://i.pravatar.cc/150?img=12',
+            name: (n.type === 'hire_response' || n.type === 'agent_hire_response') ? 'Agent' : (n.title || 'User'),
+            role: n.type === 'user_inquiry' ? 'Buyer' : 'Agent',
+            avatar: null,
             email: '',
             phone: '',
           },
@@ -1171,9 +1260,12 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
     } catch (_) { }
     setNotifs(p => p.map(n => n.id === notif.id ? { ...n, read: true } : n));
 
-    // For property_submission notifications, fetch the full request details
+    // For property_submission or property_upload notifications, fetch the full request details
     let enriched = { ...notif, read: true };
-    if (notif.type === 'property_submission' && notif.relatedEntityId) {
+    const isSubmission = notif.type === 'property_submission';
+    const isUpload = notif.type === 'property_upload';
+
+    if ((isSubmission || isUpload) && notif.relatedEntityId) {
       try {
         const token = await AsyncStorage.getItem('authToken');
         if (token) {
@@ -1189,23 +1281,38 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
               : coverImage
                 ? `${API_BASE_URL.replace('/api', '')}${coverImage}`
                 : null;
+
+            let summaryText = enriched.summary;
+            let messageText = r.property?.description || enriched.message;
+
+            if (isSubmission) {
+              summaryText = `${r.agent?.name || 'Agent'} submitted "${r.property?.title || 'property'}" for your approval.`;
+            } else if (isUpload) {
+              summaryText = `Your agent has uploaded this property on your behalf.`;
+              messageText = `Your agent has uploaded this property on your behalf.`;
+            }
+
             enriched = {
               ...enriched,
               status: r.status || enriched.status,
               sender: {
-                name: r.agent?.name || enriched.sender.name,
+                id: r.agent?.id || enriched.sender?.id,
+                name: r.agent?.name || enriched.sender?.name,
                 role: 'Agent',
                 avatar: r.agent?.profile_image ? getImageUrl(r.agent.profile_image) : null,
                 email: r.agent?.email || '',
                 phone: r.agent?.phone || '',
               },
-              summary: `${r.agent?.name || 'Agent'} submitted "${r.property?.title || 'property'}" for your approval.`,
-              message: r.property?.description || enriched.message,
+              summary: summaryText,
+              message: messageText,
               property: r.property ? {
+                id: r.property.id,
                 name: r.property.title,
                 location: [r.property.address, r.property.city, r.property.state].filter(Boolean).join(', '),
                 type: r.property.listing_type || 'Residential',
                 units: r.property.bedrooms || 0,
+                price: r.property.price,
+                city: r.property.city,
                 image: imageUrl || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
               } : null,
               submission: {
@@ -1226,6 +1333,39 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
         }
       } catch (err) {
         console.error('Failed to fetch property request details:', err);
+      }
+    } else if (notif.type === 'hire_response' && notif.relatedEntityId) {
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        if (token) {
+          const resp = await fetch(`${API_BASE_URL}/builder/hire-requests/${notif.relatedEntityId}`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          const data = await resp.json();
+          if (data.success && data.request) {
+            const r = data.request;
+            enriched = {
+              ...enriched,
+              status: r.status || enriched.status,
+              agent_details: r,
+              sender: {
+                id: r.agent_id,
+                name: r.agent_name,
+                role: 'Agent',
+                avatar: r.agent_avatar ? getImageUrl(r.agent_avatar) : null,
+                email: r.agent_email || '',
+                phone: r.agent_phone || '',
+                // Enhanced fields
+                specialization: r.professional_title || '',
+                experience: r.experience_years || 0,
+                about: r.about_me || '',
+                city: r.agent_city || '',
+              },
+            };
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch hire response details:', err);
       }
     }
     setSelected(enriched);

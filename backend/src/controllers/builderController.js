@@ -433,3 +433,37 @@ exports.unassignAgentFromProperty = async (req, res) => {
     }
 };
 
+// GET /api/builder/hire-requests/:id
+exports.getHireRequestById = async (req, res) => {
+    try {
+        const builderId = req.user.id;
+        const requestId = parseInt(req.params.id, 10);
+
+        if (!requestId) {
+            return res.status(400).json({ success: false, message: "Invalid request ID" });
+        }
+
+        // Fetch request + agent info + professional details
+        const [rows] = await pool.query(
+            `SELECT 
+                bar.id, bar.status, bar.created_at, bar.decided_at,
+                u.id as agent_id, u.name as agent_name, u.email as agent_email, u.phone as agent_phone, u.profile_image as agent_avatar,
+                a.professional_title, a.experience_years, a.city as agent_city, a.about_me
+             FROM builder_agent_requests bar
+             JOIN users u ON u.id = bar.agent_id
+             LEFT JOIN agents a ON a.user_id = u.id
+             WHERE bar.id = ? AND bar.builder_id = ?`,
+            [requestId, builderId]
+        );
+
+        if (!rows || rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Hire request not found" });
+        }
+
+        res.json({ success: true, request: rows[0] });
+    } catch (err) {
+        console.error("getHireRequestById error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+

@@ -146,10 +146,8 @@ const AgentDashboard = ({ navigation, route }) => {
             const statsResponse = await apiRequest('/agent/dashboard-stats');
 
             if (propertiesResponse.success) {
-                const filtered = (propertiesResponse.properties || []).filter(
-                    p => p.status === 'sold' || p.status === 'rented'
-                );
-                setActiveListings(filtered);
+                // Show all recent properties, not just sold/rented
+                setActiveListings(propertiesResponse.properties || []);
             }
 
             if (statsResponse.success) {
@@ -802,8 +800,8 @@ const AgentDashboard = ({ navigation, route }) => {
                                     <View style={styles.emptyIconContainer}>
                                         <Building2 width={32} height={32} color="#d1d5db" />
                                     </View>
-                                    <Text style={styles.emptyText}>No sold or rented listings</Text>
-                                    <Text style={styles.emptySubtext}>Properties marked as sold or rented will appear here</Text>
+                                    <Text style={styles.emptyText}>No listings yet</Text>
+                                    <Text style={styles.emptySubtext}>Your recently added properties will appear here</Text>
                                 </View>
                             )}
                         </View>
@@ -893,38 +891,6 @@ const AgentDashboard = ({ navigation, route }) => {
                 </LinearGradient>
             </TouchableOpacity>
 
-            {/* Enhanced Bottom Navigation */}
-            <View style={styles.bottomNav}>
-                <TouchableOpacity style={styles.navItem}>
-                    <View style={styles.navIconActive}>
-                        <Home width={22} height={22} color="#2D6A4F" strokeWidth={2.5} />
-                    </View>
-                    <Text style={styles.navTextActive}>Dashboard</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.navItem}>
-                    <Building2 width={22} height={22} color="#9ca3af" strokeWidth={2.5} />
-                    <Text style={styles.navTextInactive}>Listings</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.navItem}>
-                    <Users width={22} height={22} color="#9ca3af" strokeWidth={2.5} />
-                    <Text style={styles.navTextInactive}>Leads</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.navItem}>
-                    <BarChart3 width={22} height={22} color="#9ca3af" strokeWidth={2.5} />
-                    <Text style={styles.navTextInactive}>Analytics</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={styles.navItem}
-                    onPress={() => navigation.navigate('profile')}
-                >
-                    <User width={22} height={22} color="#9ca3af" strokeWidth={2.5} />
-                    <Text style={styles.navTextInactive}>Profile</Text>
-                </TouchableOpacity>
-            </View>
         </SafeAreaView>
     );
 };
@@ -1691,7 +1657,7 @@ const styles = StyleSheet.create({
     // Enhanced FAB
     fab: {
         position: 'absolute',
-        bottom: 90,
+        bottom: 24,
         right: 24,
         shadowColor: '#2D6A4F',
         shadowOffset: { width: 0, height: 6 },
@@ -1705,48 +1671,6 @@ const styles = StyleSheet.create({
         borderRadius: 30,
         justifyContent: 'center',
         alignItems: 'center'
-    },
-
-    // Enhanced Bottom Nav
-    bottomNav: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'center',
-        backgroundColor: '#ffffff',
-        borderTopWidth: 1,
-        borderTopColor: '#f3f4f6',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-        elevation: 8,
-    },
-    navItem: {
-        alignItems: 'center',
-        gap: 6,
-        paddingVertical: 4,
-    },
-    navIconActive: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
-        backgroundColor: 'rgba(45, 106, 79, 0.1)',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    navTextActive: {
-        fontSize: 11,
-        color: '#2D6A4F',
-        fontWeight: '700',
-        letterSpacing: 0.2,
-    },
-    navTextInactive: {
-        fontSize: 11,
-        color: '#9ca3af',
-        fontWeight: '600',
-        letterSpacing: 0.2,
     }
 });
 
