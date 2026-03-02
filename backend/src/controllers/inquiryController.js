@@ -381,6 +381,29 @@ exports.closeDeal = async (req, res) => {
             messageSent = true;
         }
 
+        // --- Notify the buyer about the deal closure ---
+        try {
+            const [propInfo] = await pool.query(
+                'SELECT title FROM properties WHERE id = ?',
+                [inquiry[0].property_id]
+            );
+            const propTitle = propInfo?.[0]?.title || 'a property';
+            const buyerId = inquiry[0].user_id;
+
+            await pool.query(
+                `INSERT INTO notifications (user_id, type, title, body, related_entity_type, related_entity_id)
+                 VALUES (?, 'deal_closed', ?, ?, 'inquiry', ?)`,
+                [
+                    buyerId,
+                    `Deal closed for ${propTitle}`,
+                    `Your deal for ${propTitle} has been successfully closed.`,
+                    inquiryId,
+                ]
+            );
+        } catch (notifErr) {
+            console.error("Deal closed notification error (non-fatal):", notifErr);
+        }
+
         res.json({
             success: true,
             message: 'Deal closed successfully! Property marked as sold.',

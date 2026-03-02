@@ -32,6 +32,38 @@ exports.sendMessage = async (req, res) => {
             [chatId]
         );
 
+        // --- Notify the other participant (buyer) ---
+        try {
+            const [chatInfo] = await pool.query(
+                `SELECT c.user1_id, c.user2_id, c.property_id, p.title as property_title
+                 FROM chats c
+                 LEFT JOIN properties p ON p.id = c.property_id
+                 WHERE c.id = ?`,
+                [chatId]
+            );
+            if (chatInfo && chatInfo.length > 0) {
+                const ci = chatInfo[0];
+                const recipientId = ci.user1_id === senderId ? ci.user2_id : ci.user1_id;
+                const propTitle = ci.property_title || 'a property';
+
+                // Only notify if recipient is different from sender
+                if (recipientId && recipientId !== senderId) {
+                    await pool.query(
+                        `INSERT INTO notifications (user_id, type, title, body, related_entity_type, related_entity_id)
+                         VALUES (?, 'buyer_message', ?, ?, 'chat', ?)`,
+                        [
+                            recipientId,
+                            `New message regarding ${propTitle}`,
+                            `You received a new message regarding ${propTitle}.`,
+                            chatId,
+                        ]
+                    );
+                }
+            }
+        } catch (notifErr) {
+            console.error("Chat notification error (non-fatal):", notifErr);
+        }
+
         res.json({ success: true, message: "Message sent" });
     } catch (err) {
         console.error("Content send message error:", err);

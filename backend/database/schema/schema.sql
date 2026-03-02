@@ -580,3 +580,10 @@ CREATE TABLE agents (
         ON DELETE CASCADE
 );
 
+UPDATE users
+SET profile_image =
+SUBSTRING(profile_image, LOCATE('/images_rs', profile_image))
+WHERE profile_image LIKE 'http%/images_rs%';
+
+
+ALTER TABLE builders DROP COLUMN profile_image;
