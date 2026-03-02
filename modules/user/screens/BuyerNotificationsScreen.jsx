@@ -566,7 +566,10 @@ function NotificationDetail({ notif, onBack, navigation }) {
 
   const navigate = (action) => {
     if (action === 'chat' && notif.chatId && navigation) {
-      navigation.navigate('ChatScreen', { chatId: notif.chatId });
+      navigation.navigate('chat', {
+        chatId: notif.chatId,
+        inquiryId: notif.inquiryId
+      });
       return;
     }
     if (action === 'property' && notif.property?.id && navigation) {
@@ -943,6 +946,7 @@ export default function BuyerNotificationsScreen({ navigation, onBack }) {
           enriched = {
             ...enriched,
             chatId: d.chatId || null,
+            inquiryId: d.inquiryId || null,
             sender: d.sender ? {
               id: d.sender.id,
               name: d.sender.name,

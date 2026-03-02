@@ -85,6 +85,7 @@ exports.getNotificationDetail = async (req, res) => {
             sender: null,
             property: null,
             chatId: null,
+            inquiryId: null,
         };
 
         // 2. Enrich based on type
@@ -95,7 +96,7 @@ exports.getNotificationDetail = async (req, res) => {
 
             // Get chat details + property + last message sender
             const [chatRows] = await pool.query(
-                `SELECT c.user1_id, c.user2_id, c.property_id,
+                `SELECT c.user1_id, c.user2_id, c.property_id, c.inquiry_id,
                         p.id as prop_id, p.title as prop_title, p.price as prop_price,
                         p.city as prop_city, p.address as prop_address,
                         (SELECT image_url FROM property_images pi WHERE pi.property_id = p.id ORDER BY pi.is_primary DESC, pi.sort_order ASC LIMIT 1) as prop_image
@@ -106,6 +107,7 @@ exports.getNotificationDetail = async (req, res) => {
             );
             if (chatRows && chatRows.length > 0) {
                 const chat = chatRows[0];
+                result.inquiryId = chat.inquiry_id;
                 // The sender is the other participant (not this user)
                 const senderId = chat.user1_id === userId ? chat.user2_id : chat.user1_id;
                 const [senderRows] = await pool.query(
@@ -138,6 +140,7 @@ exports.getNotificationDetail = async (req, res) => {
         } else if (notif.type === 'deal_closed' && notif.related_entity_type === 'inquiry') {
             // Inquiry-based notification → get builder/agent who closed + property
             const inquiryId = notif.related_entity_id;
+            result.inquiryId = inquiryId;
 
             const [inqRows] = await pool.query(
                 `SELECT i.builder_id, i.property_id, i.status,
