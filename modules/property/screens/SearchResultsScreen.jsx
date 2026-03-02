@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -325,6 +326,15 @@ const FilterChip = ({ label, onToggle, isActive, index }) => {
 
 export default function SearchResultsScreen({ navigation, onPropertyClick, onBack }) {
   const [savedProperties, setSavedProperties] = useState([]);
+  const [authToken, setAuthToken] = useState(null);
+
+  useEffect(() => {
+    const getAuth = async () => {
+      const token = await AsyncStorage.getItem('authToken');
+      setAuthToken(token);
+    };
+    getAuth();
+  }, []);
   const [activeFilters, setActiveFilters] = useState([]);
   const availableFilters = ['$400k - $800k', '3+ Beds', 'Modern'];
   const [sortOption, setSortOption] = useState('Relevance');
@@ -412,10 +422,31 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
     ]).start();
   };
 
-  const toggleSave = (index) => {
-    setSavedProperties((prev) =>
-      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
-    );
+  const toggleSave = async (propertyId) => {
+    if (!authToken) {
+      console.warn('No auth token found, cannot toggle favorite');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/favorite`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setSavedProperties((prev) =>
+          data.isFavorited
+            ? [...prev, propertyId]
+            : prev.filter((id) => id !== propertyId)
+        );
+      }
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+    }
   };
 
   const toggleFilter = (filter) => {

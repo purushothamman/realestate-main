@@ -11,6 +11,7 @@ import {
   Dimensions,
   StatusBar,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import {
   Search,
@@ -27,87 +28,73 @@ import {
   ChevronLeft,
 } from 'lucide-react-native';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../utils/api';
+
 const { width } = Dimensions.get('window');
 
 const FavoritesScreen = ({ onBack, navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
-
-  const favoriteProperties = [
-    {
-      id: '1',
-      title: 'Luxury Downtown Apartment',
-      location: 'Manhattan, New York',
-      price: '$3,200/month',
-      image: 'https://images.unsplash.com/photo-1662454419736-de132ff75638?w=400',
-      beds: 2,
-      baths: 2,
-      area: 1200,
-      tag: 'For Rent',
-      savedDate: '2 days ago',
-    },
-    {
-      id: '2',
-      title: 'Modern Penthouse Suite',
-      location: 'Downtown, Los Angeles',
-      price: '$1,850,000',
-      image: 'https://images.unsplash.com/photo-1568115286680-d203e08a8be6?w=400',
-      beds: 3,
-      baths: 3,
-      area: 2400,
-      tag: 'For Sale',
-      savedDate: '5 days ago',
-    },
-    {
-      id: '3',
-      title: 'Contemporary Family Home',
-      location: 'Suburban Hills, Seattle',
-      price: '$925,000',
-      image: 'https://images.unsplash.com/photo-1706808849777-96e0d7be3bb7?w=400',
-      beds: 4,
-      baths: 3,
-      area: 3200,
-      tag: 'New',
-      savedDate: '1 week ago',
-    },
-    {
-      id: '4',
-      title: 'Beachfront Luxury Villa',
-      location: 'Malibu Beach, California',
-      price: '$4,500,000',
-      image: 'https://images.unsplash.com/photo-1729808641871-8d8b5ade6bbe?w=400',
-      beds: 5,
-      baths: 4,
-      area: 4800,
-      tag: 'For Sale',
-      savedDate: '2 weeks ago',
-    },
-    {
-      id: '5',
-      title: 'Industrial Loft Studio',
-      location: 'Arts District, Chicago',
-      price: '$2,100/month',
-      image: 'https://images.unsplash.com/photo-1668438712649-ffd85f756de5?w=400',
-      beds: 1,
-      baths: 1,
-      area: 850,
-      tag: 'For Rent',
-      savedDate: '3 weeks ago',
-    },
-  ];
+  const [favoriteProperties, setFavoriteProperties] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [authToken, setAuthToken] = useState(null);
 
   // Animation values
-  const fadeAnims = useRef(
-    favoriteProperties.map(() => new Animated.Value(0))
-  ).current;
-  const slideAnims = useRef(
-    favoriteProperties.map(() => new Animated.Value(30))
-  ).current;
+  const [fadeAnims, setFadeAnims] = useState([]);
+  const [slideAnims, setSlideAnims] = useState([]);
+  const [heartScales, setHeartScales] = useState([]);
+
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
   const headerOpacity = useRef(new Animated.Value(0)).current;
   const fabScale = useRef(new Animated.Value(1)).current;
-  const heartScales = useRef(
-    favoriteProperties.map(() => new Animated.Value(1))
-  ).current;
+
+  useEffect(() => {
+    initializeData();
+  }, []);
+
+  const initializeData = async () => {
+    try {
+      setIsLoading(true);
+      const token = await AsyncStorage.getItem('authToken');
+      const userStr = await AsyncStorage.getItem('user');
+
+      if (!token || !userStr) {
+        navigation?.replace('Login');
+        return;
+      }
+
+      setAuthToken(token);
+      setUser(JSON.parse(userStr));
+      await fetchFavorites(token);
+    } catch (err) {
+      console.error('Initialization error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchFavorites = async (token) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/properties/favorites`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (data.success) {
+        setFavoriteProperties(data.favorites);
+
+        // Initialize animations for new properties
+        const count = data.favorites.length;
+        setFadeAnims(data.favorites.map(() => new Animated.Value(0)));
+        setSlideAnims(data.favorites.map(() => new Animated.Value(30)));
+        setHeartScales(data.favorites.map(() => new Animated.Value(1)));
+      }
+    } catch (err) {
+      console.error('Fetch favorites error:', err);
+    }
+  };
 
   useEffect(() => {
     // Header fade in
@@ -125,26 +112,28 @@ const FavoritesScreen = ({ onBack, navigation }) => {
       useNativeDriver: true,
     }).start();
 
-    // Stagger animation for cards
-    const animations = fadeAnims.map((anim, index) =>
-      Animated.parallel([
-        Animated.timing(anim, {
-          toValue: 1,
-          duration: 500,
-          delay: index * 100,
-          useNativeDriver: true,
-        }),
-        Animated.spring(slideAnims[index], {
-          toValue: 0,
-          tension: 50,
-          friction: 8,
-          delay: index * 100,
-          useNativeDriver: true,
-        }),
-      ])
-    );
+    if (fadeAnims.length > 0) {
+      // Stagger animation for cards
+      const animations = fadeAnims.map((anim, index) =>
+        Animated.parallel([
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 500,
+            delay: index * 100,
+            useNativeDriver: true,
+          }),
+          Animated.spring(slideAnims[index], {
+            toValue: 0,
+            tension: 50,
+            friction: 8,
+            delay: index * 100,
+            useNativeDriver: true,
+          }),
+        ])
+      );
 
-    Animated.stagger(50, animations).start();
+      Animated.stagger(50, animations).start();
+    }
 
     // FAB pulse animation
     const pulseFab = () => {
@@ -183,7 +172,8 @@ const FavoritesScreen = ({ onBack, navigation }) => {
     }
   };
 
-  const handleHeartPress = (index) => {
+  const handleHeartPress = async (index, propertyId) => {
+    // Heart animation
     Animated.sequence([
       Animated.spring(heartScales[index], {
         toValue: 1.3,
@@ -198,7 +188,33 @@ const FavoritesScreen = ({ onBack, navigation }) => {
         useNativeDriver: true,
       }),
     ]).start();
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/favorite`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+      if (data.success && !data.isFavorited) {
+        // Remove from list if un-favorited
+        setFavoriteProperties(prev => prev.filter(p => p.id !== propertyId));
+      }
+    } catch (err) {
+      console.error('Toggle favorite error:', err);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#2D6A4F" />
+        <Text style={{ marginTop: 10, color: '#6B7280' }}>Loading favorites...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -307,7 +323,7 @@ const FavoritesScreen = ({ onBack, navigation }) => {
               {/* Property Image */}
               <View style={styles.imageContainer}>
                 <Image
-                  source={{ uri: property.image }}
+                  source={{ uri: getImageUrl(property.image) || DEFAULT_PROPERTY_IMAGE }}
                   style={styles.propertyImage}
                 />
 
@@ -326,7 +342,7 @@ const FavoritesScreen = ({ onBack, navigation }) => {
                 {/* Favorite Button */}
                 <TouchableOpacity
                   style={styles.heartButton}
-                  onPress={() => handleHeartPress(index)}
+                  onPress={() => handleHeartPress(index, property.id)}
                   activeOpacity={0.8}
                 >
                   <Animated.View
@@ -356,31 +372,35 @@ const FavoritesScreen = ({ onBack, navigation }) => {
                 </View>
 
                 {/* Price */}
-                <Text style={styles.price}>{property.price}</Text>
+                <Text style={styles.price}>
+                  {typeof property.price === 'number'
+                    ? `₹${property.price.toLocaleString('en-IN')}`
+                    : property.price}
+                </Text>
 
                 {/* Property Stats */}
                 <View style={styles.statsContainer}>
                   <View style={styles.stat}>
                     <Bed color="#6B7280" size={16} />
-                    <Text style={styles.statText}>{property.beds} Beds</Text>
+                    <Text style={styles.statText}>{property.beds || 0} Beds</Text>
                   </View>
                   <View style={styles.stat}>
                     <Bath color="#6B7280" size={16} />
-                    <Text style={styles.statText}>{property.baths} Baths</Text>
+                    <Text style={styles.statText}>{property.baths || 0} Baths</Text>
                   </View>
                   <View style={styles.stat}>
                     <Maximize color="#6B7280" size={16} />
                     <Text style={styles.statText}>
-                      {property.area.toLocaleString()} sqft
+                      {property.area ? property.area.toLocaleString() : 0} sqft
                     </Text>
                   </View>
                 </View>
 
                 {/* Saved Date */}
-                {property.savedDate && (
+                {property.createdAt && (
                   <View style={styles.savedDateContainer}>
                     <Text style={styles.savedDate}>
-                      Saved {property.savedDate}
+                      Added on {new Date(property.createdAt).toLocaleDateString()}
                     </Text>
                   </View>
                 )}
@@ -394,7 +414,11 @@ const FavoritesScreen = ({ onBack, navigation }) => {
       <Animated.View
         style={[styles.fab, { transform: [{ scale: fabScale }] }]}
       >
-        <TouchableOpacity style={styles.fabButton} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.fabButton}
+          activeOpacity={0.8}
+          onPress={() => navigation?.navigate('Explore')}
+        >
           <Plus color="#fff" size={24} />
         </TouchableOpacity>
       </Animated.View>

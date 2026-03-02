@@ -111,6 +111,7 @@ exports.getDashboard = async (req, res) => {
                 area: p.area_sqft,
                 area_sqft: p.area_sqft,
                 description: p.description,
+                uploaded_by: p.uploaded_by,
                 image: imageUrls[0] || null,
                 images: imageUrls,
                 agent,
@@ -192,7 +193,7 @@ exports.getPropertiesForAssign = async (req, res) => {
     try {
         const builderId = req.user.id;
         const [rows] = await pool.query(
-            `SELECT p.id, p.title, p.address, p.city, p.state, p.status, p.created_at,
+            `SELECT p.id, p.uploaded_by, p.title, p.address, p.city, p.state, p.status, p.created_at,
                     (SELECT image_url FROM property_images pi WHERE pi.property_id = p.id ORDER BY pi.is_primary DESC, pi.sort_order ASC LIMIT 1) AS image_url
              FROM properties p
              WHERE p.uploaded_by = ?
@@ -201,6 +202,7 @@ exports.getPropertiesForAssign = async (req, res) => {
         );
         const list = (rows || []).map((r) => ({
             id: r.id,
+            uploaded_by: r.uploaded_by,
             name: r.title,
             location: [r.address, r.city, r.state].filter(Boolean).join(', '),
             type: 'Residential',

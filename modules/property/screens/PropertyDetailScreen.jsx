@@ -93,7 +93,7 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
     const fadeAnim = useState(new Animated.Value(0))[0];
     const slideAnim = useState(new Animated.Value(30))[0];
     const isBuyer = user?.role === 'buyer';
-    const canEdit = user?.role === 'agent' || user?.role === 'builder';
+
 
     useEffect(() => {
         Animated.parallel([
@@ -126,6 +126,12 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
 
     // Extract property data from route params
     const property = route?.params?.property || {};
+
+    // Check if user is the one who uploaded the property
+    const ownerId = property.owner?.id || property.uploaded_by || property.uploadedBy;
+    const canEdit = (user?.role === 'agent' || user?.role === 'builder') &&
+        user?.id && ownerId &&
+        String(user.id) === String(ownerId);
     const propertyId = property.id || property.property_id;
     const propertyName = property.title || property.name;
     const propertyAddress = [property.address, property.city, property.state].filter(Boolean).join(', ');

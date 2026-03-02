@@ -402,6 +402,7 @@ exports.getMyProperties = async (req, res) => {
         if (userRole === 'agent') {
             query = `SELECT 
                 p.id,
+                p.uploaded_by,
                 p.title,
                 p.description,
                 p.price,
@@ -434,6 +435,7 @@ exports.getMyProperties = async (req, res) => {
             // Builder: only properties they uploaded directly
             query = `SELECT 
                 p.id,
+                p.uploaded_by,
                 p.title,
                 p.description,
                 p.price,
@@ -662,6 +664,7 @@ exports.getAllProperties = async (req, res) => {
                 // Features / amenities for detail screen
                 features: featuresArray,
                 owner: {
+                    id: prop.uploaded_by,
                     name: prop.owner_name,
                     email: prop.owner_email,
                     phone: prop.owner_phone
@@ -752,6 +755,7 @@ exports.getPropertyById = async (req, res) => {
                 image: parsedImages[0] || null,
                 features: parsedFeatures,
                 owner: {
+                    id: property.uploaded_by,
                     name: property.owner_name,
                     email: property.owner_email,
                     phone: property.owner_phone,
@@ -790,7 +794,7 @@ exports.searchProperties = async (req, res) => {
                 p.*,
                 EXISTS(
                     SELECT 1 FROM favorites 
-                    WHERE property_id = p.property_id AND user_id = ?
+                    WHERE property_id = p.id AND user_id = ?
                 ) as is_favorited
             FROM properties p
             WHERE p.status IN ('active', 'sold', 'rented')
@@ -807,7 +811,7 @@ exports.searchProperties = async (req, res) => {
         );
 
         const transformedProperties = properties.map(prop => ({
-            id: prop.property_id,
+            id: prop.id,
             title: prop.title,
             price: prop.price,
             purpose: prop.purpose,
@@ -819,6 +823,7 @@ exports.searchProperties = async (req, res) => {
             bathrooms: prop.bathrooms,
             area: `${prop.area_sqft} sq ft`,
             isFavorited: Boolean(prop.is_favorited),
+            uploaded_by: prop.uploaded_by,
         }));
 
         res.json({
@@ -902,6 +907,7 @@ exports.searchByCity = async (req, res) => {
         const [properties] = await pool.query(
             `SELECT 
                 p.id,
+                p.uploaded_by,
                 p.title,
                 p.description,
                 p.price,
@@ -970,6 +976,7 @@ exports.searchByCity = async (req, res) => {
                 imageUrl: p.primary_image || imagesArray[0] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=800',
                 images: imagesArray,
                 imageCount: p.image_count || imagesArray.length || 0,
+                uploaded_by: p.uploaded_by,
             };
         });
 
@@ -1382,5 +1389,99 @@ exports.updateProperty = async (req, res) => {
         return res.status(500).json({ success: false, message: err.message });
     } finally {
         connection.release();
+    }
+};
+
+// Toggle favorite property
+exports.toggleFavorite = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const propertyId = req.params.id;
+
+        // Check if property exists
+        const [propCheck] = await pool.query("SELECT id FROM properties WHERE id = ?", [propertyId]);
+        if (propCheck.length === 0) {
+            return res.status(404).json({ success: false, message: "Property not found" });
+        }
+
+        // Check if already favorited
+        const [favCheck] = await pool.query(
+            "SELECT id FROM favorites WHERE user_id = ? AND property_id = ?",
+            [userId, propertyId]
+        );
+
+        if (favCheck.length > 0) {
+            // Already favorited, so remove it
+            await pool.query("DELETE FROM favorites WHERE user_id = ? AND property_id = ?", [userId, propertyId]);
+            return res.json({
+                success: true,
+                message: "Property removed from favorites",
+                isFavorited: false
+            });
+        } else {
+            // Not favorited, so add it
+            await pool.query("INSERT INTO favorites (user_id, property_id) VALUES (?, ?)", [userId, propertyId]);
+            return res.json({
+                success: true,
+                message: "Property added to favorites",
+                isFavorited: true
+            });
+        }
+    } catch (err) {
+        console.error("toggleFavorite error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// Get all favorited properties for a user
+exports.getFavorites = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const query = `
+            SELECT 
+                p.*,
+                (
+                    SELECT pi.image_url 
+                    FROM property_images pi 
+                    WHERE pi.property_id = p.id 
+                    ORDER BY pi.is_primary DESC, pi.sort_order ASC 
+                    LIMIT 1
+                ) as primary_image_url
+            FROM favorites f
+            JOIN properties p ON f.property_id = p.id
+            WHERE f.user_id = ?
+            ORDER BY f.created_at DESC
+        `;
+
+        const [rows] = await pool.query(query, [userId]);
+
+        const favorites = rows.map(prop => ({
+            id: prop.id,
+            title: prop.title,
+            price: prop.price,
+            location: `${prop.city}, ${prop.state}`,
+            city: prop.city,
+            state: prop.state,
+            address: prop.address,
+            image: prop.primary_image_url,
+            beds: prop.bedrooms,
+            baths: prop.bathrooms,
+            area: prop.area_sqft,
+            tag: prop.listing_type === 'sale' ? 'For Sale' : 'For Rent',
+            isFavorited: true, // Obviously true if coming from favorites table
+            uploaded_by: prop.uploaded_by,
+            createdAt: prop.created_at
+        }));
+
+        res.json({
+            success: true,
+            favorites,
+            count: favorites.length
+        });
+
+    } catch (err) {
+        console.error("getFavorites error:", err);
+        res.status(500).json({ success: false, message: err.message });
     }
 };
