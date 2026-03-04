@@ -40,6 +40,8 @@ router.get("/favorites", protect, property.getFavorites);
 
 router.get("/", property.getAllProperties)
 
+router.get("/:id", protect, allow("builder", "agent", "admin"), property.getPropertyById)
+
 router.post("/:id/view", protect, property.addPropertyView)
 router.post("/:id/favorite", protect, property.toggleFavorite)
 

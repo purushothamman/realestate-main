@@ -92,8 +92,39 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
     const [scrollY] = useState(new Animated.Value(0));
     const fadeAnim = useState(new Animated.Value(0))[0];
     const slideAnim = useState(new Animated.Value(30))[0];
-    const isBuyer = user?.role === 'buyer';
+    // fullProperty may be enriched by an API fetch so uploaded_by is always available
+    const [fullProperty, setFullProperty] = useState(route?.params?.property || {});
+    const property = fullProperty;
+    const userRole = user?.role ? String(user.role).toLowerCase() : null;
+    const isBuyer = userRole === 'buyer';
 
+    // Check if user is the one who uploaded the property
+    const ownerId = property.owner?.id || property.uploaded_by || property.uploadedBy;
+    const canEdit = property?.can_edit;
+
+    // Fetch full property details so uploaded_by is always present
+    useEffect(() => {
+        const propertyIdToFetch = (route?.params?.property?.id) || (route?.params?.property?.property_id);
+        if (propertyIdToFetch) {
+            (async () => {
+                try {
+                    const token = await AsyncStorage.getItem('authToken');
+                    const res = await fetch(`${API_BASE_URL}/properties/${propertyIdToFetch}`, {
+                        headers: token ? { Authorization: `Bearer ${token}` } : {}
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.success && data.property) {
+                            // Merge: keep any fields already set (images, etc.) and add full details
+                            setFullProperty(prev => ({ ...prev, ...data.property }));
+                        }
+                    }
+                } catch (e) {
+                    // Non-fatal, fall back to route params data
+                }
+            })();
+        }
+    }, []);
 
     useEffect(() => {
         Animated.parallel([
@@ -125,13 +156,7 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
     // const API_BASE_URL = getApiUrl();
 
     // Extract property data from route params
-    const property = route?.params?.property || {};
 
-    // Check if user is the one who uploaded the property
-    const ownerId = property.owner?.id || property.uploaded_by || property.uploadedBy;
-    const canEdit = (user?.role === 'agent' || user?.role === 'builder') &&
-        user?.id && ownerId &&
-        String(user.id) === String(ownerId);
     const propertyId = property.id || property.property_id;
     const propertyName = property.title || property.name;
     const propertyAddress = [property.address, property.city, property.state].filter(Boolean).join(', ');

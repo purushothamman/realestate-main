@@ -470,6 +470,7 @@ exports.getMyProperties = async (req, res) => {
             if (!propertiesMap.has(row.id)) {
                 propertiesMap.set(row.id, {
                     id: row.id,
+                    uploaded_by: row.uploaded_by,
                     title: row.title,
                     description: row.description,
                     price: row.price,
@@ -501,6 +502,8 @@ exports.getMyProperties = async (req, res) => {
                 });
             }
         });
+
+
 
         // Transform to array and set primary image
         const transformedProperties = Array.from(propertiesMap.values()).map(prop => ({
@@ -691,28 +694,44 @@ exports.getAllProperties = async (req, res) => {
 // get single property
 exports.getPropertyById = async (req, res) => {
     try {
-        const { id } = req.params;
+        console.log("========== DEBUG ==========");
+        console.log("REQ USER:", req.user);  // should show { id, role } if middleware is working
+        console.log("PROPERTY ID:", req.params.id);
 
+        const { id } = req.params;
+        const userId = req.user?.id;
+        const userRole = req.user?.role;
         const [properties] = await pool.query(
             `SELECT 
-                p.*,
-                u.name as owner_name,
-                u.email as owner_email,
-                u.phone as owner_phone,
-                u.profile_image as owner_image,
-                u.role as owner_type,
-                EXISTS(
-                    SELECT 1 FROM favorites 
-                    WHERE property_id = p.id AND user_id = ?
-                ) as is_favorited,
-                JSON_ARRAYAGG(DISTINCT pi.image_url) as images,
-                JSON_ARRAYAGG(DISTINCT JSON_OBJECT('name', pf.feature_name, 'value', pf.feature_value)) as features
-            FROM properties p
-            LEFT JOIN users u ON p.uploaded_by = u.id
-            LEFT JOIN property_images pi ON p.id = pi.property_id
-            LEFT JOIN property_features pf ON p.id = pf.property_id
-            WHERE p.id = ?
-            GROUP BY p.id`,
+        p.*,
+        u.name as owner_name,
+        u.email as owner_email,
+        u.phone as owner_phone,
+        u.profile_image as owner_image,
+        u.role as owner_type,
+
+        EXISTS(
+            SELECT 1 FROM favorites 
+            WHERE property_id = p.id AND user_id = ?
+        ) as is_favorited,
+
+        (
+            SELECT JSON_ARRAYAGG(image_url)
+            FROM property_images
+            WHERE property_id = p.id
+        ) as images,
+
+        (
+            SELECT JSON_ARRAYAGG(
+                JSON_OBJECT('name', feature_name, 'value', feature_value)
+            )
+            FROM property_features
+            WHERE property_id = p.id
+        ) as features
+
+    FROM properties p
+    LEFT JOIN users u ON p.uploaded_by = u.id
+    WHERE p.id = ?`,
             [req.user?.id || 0, id]
         );
 
@@ -724,6 +743,40 @@ exports.getPropertyById = async (req, res) => {
         }
 
         const property = properties[0];
+
+
+
+        console.log("========== DEBUG ==========");
+        console.log("USER ID:", userId);
+        console.log("USER ROLE:", userRole);
+        console.log("PROPERTY uploaded_by:", property.uploaded_by);
+        console.log("PROPERTY ID:", property.id);
+        console.log("===========================");
+
+        let can_edit = false;
+
+        // Admin can edit
+        if (userRole === 'admin') {
+            can_edit = true;
+        }
+
+        // Direct uploader can edit
+        if (!can_edit && userId && String(property.uploaded_by) === String(userId)) {
+            can_edit = true;
+        }
+
+        // Agent who submitted request can edit
+        if (!can_edit && userRole === 'agent' && userId) {
+            const [reqRows] = await pool.query(
+                `SELECT id FROM property_requests 
+         WHERE property_id = ? AND agent_id = ?`,
+                [property.id, userId]
+            );
+
+            if (reqRows.length > 0) {
+                can_edit = true;
+            }
+        }
 
         // Parse images and features (handle nulls from left join)
         const parsedImages = property.images ? property.images.filter(img => img !== null) : [];
@@ -754,6 +807,7 @@ exports.getPropertyById = async (req, res) => {
                 images: parsedImages,
                 image: parsedImages[0] || null,
                 features: parsedFeatures,
+                can_edit: can_edit,
                 owner: {
                     id: property.uploaded_by,
                     name: property.owner_name,
@@ -762,6 +816,7 @@ exports.getPropertyById = async (req, res) => {
                     image: property.owner_image,
                     type: property.owner_type
                 },
+                can_edit: can_edit,
             },
         });
 
@@ -794,7 +849,7 @@ exports.searchProperties = async (req, res) => {
                 p.*,
                 EXISTS(
                     SELECT 1 FROM favorites 
-                    WHERE property_id = p.id AND user_id = ?
+                    WHERE property_id = p.property_id AND user_id = ?
                 ) as is_favorited
             FROM properties p
             WHERE p.status IN ('active', 'sold', 'rented')
@@ -811,7 +866,7 @@ exports.searchProperties = async (req, res) => {
         );
 
         const transformedProperties = properties.map(prop => ({
-            id: prop.id,
+            id: prop.property_id,
             title: prop.title,
             price: prop.price,
             purpose: prop.purpose,
