@@ -84,7 +84,8 @@ const FieldBox = ({ children, style }) => (
   <View style={[s.inputWrapper, style]}>{children}</View>
 );
 
-export default function PropertyEditScreen({ navigation, route, property, userRole = 'Builder', onSaved }) {
+export default function PropertyEditScreen({ navigation, route, property, onSaved: propOnSaved }) {
+  const onSaved = propOnSaved || route?.params?.onSaved;
   const prop = property || route?.params?.property || {};
 
   // Map numeric property_type_id → string key
@@ -126,6 +127,8 @@ export default function PropertyEditScreen({ navigation, route, property, userRo
       ? String(prop.area_sqft || prop.areaSqft)
       : prop.area ? String(prop.area) : '',
     description: prop.description || '',
+    bedrooms: prop.bedrooms ? String(prop.bedrooms) : '',
+    bathrooms: prop.bathrooms ? String(prop.bathrooms) : '',
     amenities: toIds(prop.amenities || []),
   });
 
@@ -244,6 +247,14 @@ export default function PropertyEditScreen({ navigation, route, property, userRo
 
   /* Save */
   const handleSave = async () => {
+    const propId = prop.id || prop.property_id;
+
+    if (!propId) {
+      console.error("Property ID is undefined! Cannot save.");
+      Alert.alert('Error', 'Cannot identify this property. Please go back and try again.');
+      return;
+    }
+
     const priceStr = String(form.price || '').trim();
     const titleStr = String(form.title || '').trim();
     const addrStr = String(form.address || '').trim();
@@ -254,12 +265,6 @@ export default function PropertyEditScreen({ navigation, route, property, userRo
     if (!addrStr) { Alert.alert('Required', 'Address is required.'); return; }
     if (!cityStr) { Alert.alert('Required', 'City is required.'); return; }
     if (!priceStr) { Alert.alert('Required', 'Price is required.'); return; }
-
-    const propId = prop.id || prop.property_id;
-    if (!propId) {
-      Alert.alert('Error', 'Cannot identify this property. Please go back and try again.');
-      return;
-    }
 
     setSaving(true);
     try {
@@ -279,9 +284,13 @@ export default function PropertyEditScreen({ navigation, route, property, userRo
         state: form.state || '',
         pincode: form.pincode || '',
         area_sqft: parseFloat(String(form.area).replace(/,/g, '')) || 0,
+        bedrooms: parseInt(form.bedrooms) || 0,
+        bathrooms: parseInt(form.bathrooms) || 0,
         features: form.amenities.map(id => ({ name: id, value: 'true' })),
         images: images.map((url, i) => ({ image_url: url, is_primary: i === 0, sort_order: i })),
       };
+
+
 
       const res = await fetch(`${API_BASE_URL}/properties/${propId}`, {
         method: 'PUT',
@@ -289,6 +298,7 @@ export default function PropertyEditScreen({ navigation, route, property, userRo
         body: JSON.stringify(payload),
       });
       const data = await res.json();
+
       if (!res.ok) throw new Error(data.message || 'Failed to update property');
 
       setTouched(false);
@@ -538,6 +548,35 @@ export default function PropertyEditScreen({ navigation, route, property, userRo
               keyboardType="numeric"
             />
           </FieldBox>
+
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Label>Bedrooms</Label>
+              <FieldBox>
+                <TextInput
+                  style={s.input}
+                  placeholder="e.g., 3"
+                  placeholderTextColor={N400}
+                  value={form.bedrooms}
+                  onChangeText={upd('bedrooms')}
+                  keyboardType="number-pad"
+                />
+              </FieldBox>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Label>Bathrooms</Label>
+              <FieldBox>
+                <TextInput
+                  style={s.input}
+                  placeholder="e.g., 2"
+                  placeholderTextColor={N400}
+                  value={form.bathrooms}
+                  onChangeText={upd('bathrooms')}
+                  keyboardType="number-pad"
+                />
+              </FieldBox>
+            </View>
+          </View>
         </View>
 
         {/* ── Amenities ── */}

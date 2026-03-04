@@ -376,7 +376,11 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
     const handleEditProperty = () => {
         navigation.navigate('PropertyEditScreen', {
             property: property,
-            userRole: user?.role === 'builder' ? 'Builder' : 'Agent'
+            onSaved: (updatedProperty) => {
+                if (updatedProperty) {
+                    setFullProperty(prev => ({ ...prev, ...updatedProperty }));
+                }
+            }
         });
     };
 

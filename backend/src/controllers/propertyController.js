@@ -694,10 +694,6 @@ exports.getAllProperties = async (req, res) => {
 // get single property
 exports.getPropertyById = async (req, res) => {
     try {
-        console.log("========== DEBUG ==========");
-        console.log("REQ USER:", req.user);  // should show { id, role } if middleware is working
-        console.log("PROPERTY ID:", req.params.id);
-
         const { id } = req.params;
         const userId = req.user?.id;
         const userRole = req.user?.role;
@@ -746,12 +742,6 @@ exports.getPropertyById = async (req, res) => {
 
 
 
-        console.log("========== DEBUG ==========");
-        console.log("USER ID:", userId);
-        console.log("USER ROLE:", userRole);
-        console.log("PROPERTY uploaded_by:", property.uploaded_by);
-        console.log("PROPERTY ID:", property.id);
-        console.log("===========================");
 
         let can_edit = false;
 
@@ -1362,7 +1352,7 @@ exports.updateProperty = async (req, res) => {
 
         // Allow: admin, the direct uploader, or an agent whose role is 'agent' on the property
         let authorized = userRole === 'admin'
-            || prop.uploaded_by === userId
+            || String(prop.uploaded_by) === String(userId)
             || (userRole === 'agent' && prop.uploaded_by_role === 'agent');
 
         if (!authorized && userRole === 'agent') {
@@ -1390,6 +1380,8 @@ exports.updateProperty = async (req, res) => {
             state,
             pincode,
             area_sqft,
+            bedrooms,
+            bathrooms,
             features = [],
             images = [],
         } = req.body;
@@ -1406,37 +1398,83 @@ exports.updateProperty = async (req, res) => {
                 city             = COALESCE(?, city),
                 state            = COALESCE(?, state),
                 pincode          = COALESCE(?, pincode),
-                area_sqft        = COALESCE(?, area_sqft)
+                area_sqft        = COALESCE(?, area_sqft),
+                bedrooms         = COALESCE(?, bedrooms),
+                bathrooms        = COALESCE(?, bathrooms)
              WHERE id = ?`,
             [title, description, price, listing_type, property_type_id,
-                address, city, state, pincode, area_sqft, propertyId]
+                address, city, state, pincode, area_sqft, bedrooms, bathrooms, propertyId]
         );
 
-        // Replace features if provided
-        if (features.length > 0) {
+        // Replace features if provided (even empty array to clear)
+        if (Array.isArray(features)) {
             await connection.query(`DELETE FROM property_features WHERE property_id = ?`, [propertyId]);
-            const featureRows = features.map(f => [propertyId, f.name, f.value]);
-            await connection.query(
-                `INSERT INTO property_features (property_id, feature_name, feature_value) VALUES ?`,
-                [featureRows]
-            );
+            if (features.length > 0) {
+                const featureRows = features.map(f => [propertyId, f.name, f.value]);
+                await connection.query(
+                    `INSERT INTO property_features (property_id, feature_name, feature_value) VALUES ?`,
+                    [featureRows]
+                );
+            }
         }
 
-        // Replace images if provided
-        if (images.length > 0) {
+        // Replace images if provided (even empty array to clear)
+        if (Array.isArray(images)) {
             await connection.query(`DELETE FROM property_images WHERE property_id = ?`, [propertyId]);
-            const imageRows = images.map(img => [propertyId, img.image_url, img.is_primary ? 1 : 0, img.sort_order]);
-            await connection.query(
-                `INSERT INTO property_images (property_id, image_url, is_primary, sort_order) VALUES ?`,
-                [imageRows]
-            );
+            if (images.length > 0) {
+                const imageRows = images.map(img => [propertyId, img.image_url, img.is_primary ? 1 : 0, img.sort_order || 0]);
+                await connection.query(
+                    `INSERT INTO property_images (property_id, image_url, is_primary, sort_order) VALUES ?`,
+                    [imageRows]
+                );
+            }
         }
 
         await connection.commit();
 
-        // Return updated property
-        const [updated] = await connection.query(`SELECT * FROM properties WHERE id = ?`, [propertyId]);
-        return res.json({ success: true, message: 'Property updated successfully', property: updated[0] });
+        // Return updated property (enriched like getPropertyById)
+        const [properties] = await pool.query(
+            `SELECT 
+        p.*,
+        u.name as owner_name,
+        u.email as owner_email,
+        u.phone as owner_phone,
+        u.profile_image as owner_image,
+        u.role as owner_type,
+        EXISTS(
+            SELECT 1 FROM favorites 
+            WHERE property_id = p.id AND user_id = ?
+        ) as is_favorited,
+        (SELECT JSON_ARRAYAGG(image_url) FROM property_images WHERE property_id = p.id) as images,
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT('name', feature_name, 'value', feature_value)) FROM property_features WHERE property_id = p.id) as features
+    FROM properties p
+    LEFT JOIN users u ON p.uploaded_by = u.id
+    WHERE p.id = ?`,
+            [userId || 0, propertyId]
+        );
+
+        const property = properties[0];
+        const parsedImages = property.images ? (typeof property.images === 'string' ? JSON.parse(property.images) : property.images).filter(img => img !== null) : [];
+        const parsedFeatures = property.features ? (typeof property.features === 'string' ? JSON.parse(property.features) : property.features).filter(f => f.name !== null) : [];
+
+        return res.json({
+            success: true,
+            message: 'Property updated successfully',
+            property: {
+                ...property,
+                images: parsedImages,
+                features: parsedFeatures,
+                isFavorited: Boolean(property.is_favorited),
+                owner: {
+                    id: property.uploaded_by,
+                    name: property.owner_name,
+                    email: property.owner_email,
+                    phone: property.owner_phone,
+                    image: property.owner_image,
+                    type: property.owner_type
+                }
+            }
+        });
 
     } catch (err) {
         await connection.rollback();
