@@ -32,7 +32,7 @@ import {
   RotateCcw,
 } from 'lucide-react-native';
 
-import { API_BASE_URL } from '../../../utils/api';
+import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../utils/api';
 
 /* ── Design tokens ── */
 const G = '#1B5E3B';
@@ -136,8 +136,10 @@ export default function PropertyEditScreen({ navigation, route, property, onSave
   const normalizeImages = (imgs) => {
     if (!imgs || !imgs.length) return [];
     return imgs.map(img => {
-      if (typeof img === 'string') return img;
-      return img.image_url || img.url || null;
+      let path = null;
+      if (typeof img === 'string') path = img;
+      else if (img && (img.image_url || img.url)) path = img.image_url || img.url;
+      return getImageUrl(path);
     }).filter(Boolean);
   };
 
@@ -306,9 +308,20 @@ export default function PropertyEditScreen({ navigation, route, property, onSave
       // Notify callers (e.g. refresh listings)
       if (typeof onSaved === 'function') onSaved(data.property);
 
+      // Success alert and automatic navigation back
       Alert.alert('Saved!', 'Property updated successfully.', [
-        { text: 'OK', onPress: () => navigation?.goBack?.() },
+        {
+          text: 'OK',
+          onPress: () => {
+            if (typeof navigation?.goBack === 'function') {
+              navigation.goBack();
+            }
+          }
+        },
       ]);
+      // Small timeout as fallback if user doesn't press OK immediately 
+      // or to ensure it feels responsive
+      // setTimeout(() => navigation?.goBack?.(), 1500); 
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
