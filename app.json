@@ -29,6 +29,11 @@
     },
     "plugins": [
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "11edab53-1803-4980-bce7-48506acf9c6f"
+      }
+    }
   }
 }

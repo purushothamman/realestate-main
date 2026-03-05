@@ -38,17 +38,6 @@ import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../util
 
 const { width, height } = Dimensions.get('window');
 
-// API CONFIGURATION
-// const getApiUrl = () => {
-//   if (Platform.OS === 'android') {
-//     return 'http://10.0.2.2:5000/api';
-//   } else {
-//     return 'http://localhost:5000/api';
-//   }
-// };
-
-//const API_BASE_URL = getApiUrl();
-
 export default function BuilderDashboard({
   builderName = 'John Anderson',
   navigation,

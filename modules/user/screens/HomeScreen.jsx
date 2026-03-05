@@ -35,10 +35,6 @@ import {
 import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../utils/api';
 
 
-// API Configuration
-// const API_BASE_URL = getApiUrl();
-// For physical device testing, use your computer's IP:
-// const API_BASE_URL = 'http://192.168.1.100:5000/api';
 
 export default function HomeScreen({ navigation }) {
   // State Management

@@ -68,5 +68,37 @@ router.post(
   }
 );
 
-module.exports = router;
+// Upload registration certificate (for builder registration, no auth required)
+router.post(
+  "/registration-certificate",
+  upload.single("registrationCertificate"),
+  (req, res) => {
+    console.log("📄 Registration certificate upload request received");
+    try {
+      if (!req.file) {
+        console.error("❌ No document file provided");
+        return res.status(400).json({
+          success: false,
+          message: "No document file provided",
+        });
+      }
+      console.log("✅ Document received:", req.file.filename);
 
+      const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+
+      return res.json({
+        success: true,
+        url: fileUrl,
+        documentUrl: fileUrl,
+      });
+    } catch (error) {
+      console.error("Registration certificate upload error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to upload document",
+      });
+    }
+  }
+);
+
+module.exports = router;

@@ -141,20 +141,6 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
         ]).start();
     }, []);
 
-    // API Configuration
-    // const getApiUrl = () => {
-    //     const platform = Platform.OS;
-    //     if (platform === 'android') {
-    //         return 'http://10.0.2.2:5000/api';
-    //     } else if (platform === 'ios') {
-    //         return 'http://localhost:5000/api';
-    //     } else {
-    //         return 'http://localhost:5000/api';
-    //     }
-    // };
-
-    // const API_BASE_URL = getApiUrl();
-
     // Extract property data from route params
 
     const propertyId = property.id || property.property_id;

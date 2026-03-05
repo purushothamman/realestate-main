@@ -96,19 +96,6 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
 
 
   // Animations
-  const headerGradientAnim = useRef(new Animated.Value(0)).current;
-  const sendButtonScale = useRef(new Animated.Value(1)).current;
-
-  // API Configuration
-  // const getApiUrl = () => {
-  //   const platform = Platform.OS;
-  //   if (platform === 'android') {
-  //     return 'http://10.0.2.2:5000/api';
-  //   } else {
-  //     return 'http://localhost:5000/api';
-  //   }
-  // };
-  // const API_BASE_URL = getApiUrl();
 
   // useEffect(() => {
   //   if (chatId) {

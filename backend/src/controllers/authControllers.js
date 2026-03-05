@@ -676,35 +676,26 @@ module.exports.register = async (req, res) => {
                     message: "Company name is required for builder registration"
                 });
             }
-            if (!gstNo) {
-                await connection.rollback();
-                connection.release();
-                return res.status(400).json({
-                    message: "GST number is required for builder registration"
-                });
+            // GST and PAN are optional, but if provided, validate format
+            if (gstNo && gstNo.trim()) {
+                const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+                if (!gstRegex.test(gstNo.trim())) {
+                    await connection.rollback();
+                    connection.release();
+                    return res.status(400).json({
+                        message: "Invalid GST number format"
+                    });
+                }
             }
-            if (!panNo) {
-                await connection.rollback();
-                connection.release();
-                return res.status(400).json({
-                    message: "PAN number is required for builder registration"
-                });
-            }
-            const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-            if (!gstRegex.test(gstNo.trim())) {
-                await connection.rollback();
-                connection.release();
-                return res.status(400).json({
-                    message: "Invalid GST number format"
-                });
-            }
-            const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-            if (!panRegex.test(panNo.trim())) {
-                await connection.rollback();
-                connection.release();
-                return res.status(400).json({
-                    message: "Invalid PAN number format"
-                });
+            if (panNo && panNo.trim()) {
+                const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+                if (!panRegex.test(panNo.trim())) {
+                    await connection.rollback();
+                    connection.release();
+                    return res.status(400).json({
+                        message: "Invalid PAN number format"
+                    });
+                }
             }
         }
 
