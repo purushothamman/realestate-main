@@ -688,7 +688,7 @@ function NotificationDetail({ notif, onBack, navigation }) {
             <SLabel text="RELATED PROPERTY" mt={20} />
             <View style={dv.propCard}>
               {(notif.property.image || notif.property.propImage) ? (
-                <Image source={{ uri: notif.property.image || notif.property.propImage }} style={dv.propImg} resizeMode="cover" />
+                <Image source={{ uri: getImageUrl(notif.property.image || notif.property.propImage) }} style={dv.propImg} resizeMode="cover" />
               ) : (
                 <View style={[dv.propImg, { backgroundColor: T.n200, justifyContent: 'center', alignItems: 'center' }]}>
                   <Home color={T.n400} size={40} strokeWidth={1.5} />

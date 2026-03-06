@@ -1,23 +1,29 @@
-///: 192.168.137.194
-
 import { Platform } from 'react-native';
 
-export const getApiUrl = () => {
-    // IPv4 Address . . . . . . . 192.168.137.194
-    return 'http://72.61.225.120:8000/api';
+// API URL comes from .env file (EXPO_PUBLIC_ prefix makes it available in Expo)
+// To change the API URL, edit the .env file at the project root
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://realestate.careeradvancement.in/api';
 
-};
-
-export const API_BASE_URL = getApiUrl();
 /**
  * Resolves a profile/property image URL from the database value.
- * - If already a full URL (http://...), returns as-is.
+ * - Strips known server origins from old absolute URLs (fixes APK http:// blocking)
  * - If a relative path, prepends the server base URL (no /api suffix).
+ * - If already a full external URL (e.g. unsplash), returns as-is.
  */
 export const getImageUrl = (dbPath) => {
     if (!dbPath) return null;
 
-    // If it's already a full URL or local URI, return as-is
+    // Normalize: strip any known server origins to convert old absolute URLs to relative paths
+    // This fixes property images stored as http://host/images_rs/... which Android blocks
+    if (typeof dbPath === 'string') {
+        dbPath = dbPath
+            .replace(/^https?:\/\/realestate\.careeradvancement\.in/, '')
+            .replace(/^https?:\/\/72\.61\.225\.120:\d+/, '')
+            .replace(/^https?:\/\/localhost:\d+/, '')
+            .replace(/^https?:\/\/192\.168\.\d+\.\d+:\d+/, '');
+    }
+
+    // If it's a full external URL (e.g. unsplash) or local URI, return as-is
     if (typeof dbPath === 'string' && (
         dbPath.startsWith('http') ||
         dbPath.startsWith('data:') ||

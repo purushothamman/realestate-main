@@ -857,7 +857,7 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
             <>
               <SectionLabel text="RELATED PROPERTY" mt={20} />
               <View style={detail.propCard}>
-                <Image source={{ uri: notif.property.image }} style={detail.propImg} resizeMode="cover" />
+                <Image source={{ uri: getImageUrl(notif.property.image) }} style={detail.propImg} resizeMode="cover" />
                 <View style={detail.propScrim} />
                 <View style={detail.propTag}>
                   <Text style={detail.propTagTxt}>{notif.property.type}</Text>

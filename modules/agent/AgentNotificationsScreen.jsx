@@ -605,7 +605,7 @@ function NotificationDetail({ notif, onBack, onAction }) {
           <>
             <Text style={[dv.secLabel, { marginTop: 20 }]}>RELATED PROPERTY</Text>
             <View style={dv.propCard}>
-              <Image source={{ uri: notif.property.image }} style={dv.propImg} resizeMode="cover" />
+              <Image source={{ uri: getImageUrl(notif.property.image) }} style={dv.propImg} resizeMode="cover" />
               <View style={dv.propImgOverlay} />
               <View style={dv.propTypeBadge}>
                 <Text style={dv.propTypeTxt}>{notif.property.type}</Text>
