@@ -1,5 +1,11 @@
 /**
- * BuilderNotificationsScreen.jsx
+ * BuilderNotificationsScreen.jsx  (Updated)
+ *
+ * Changes made:
+ *  1. Fully responsive for all device sizes (phones, tablets, large screens)
+ *  2. Fixed black border on search bar while typing — using state-based border color
+ *  3. Filters moved below the search bar with improved pill styling
+ *  4. Overall UI polish: spacing, shadows, typography, card design
  *
  * Builder notification centre.
  *
@@ -15,7 +21,7 @@
  *     └── NotificationDetail    ← full detail + contextual actions
  *
  * Theme  : Forest green #1B5E3B + white  (matches the rest of the app)
- * Safety : Every TextInput uses the onBlur-commit pattern — no focus flicker.
+ * Safety : Every TextInput uses state-based focus — no native border flicker.
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -25,6 +31,7 @@ import {
   View, Text, TextInput, StyleSheet, TouchableOpacity,
   FlatList, ScrollView, Image, Modal, Alert,
   ActivityIndicator, Platform, StatusBar, Dimensions,
+  useWindowDimensions,
 } from 'react-native';
 import {
   ArrowLeft, BellOff, Search, X, CheckCheck, Filter,
@@ -35,7 +42,24 @@ import {
   RefreshCw, Eye,
 } from 'lucide-react-native';
 
-const { width: SW, height: SH } = Dimensions.get('window');
+/* ══════════════════════════════════════════════════════════
+   RESPONSIVE HELPERS
+══════════════════════════════════════════════════════════ */
+const BASE_WIDTH = 375; // iPhone SE / base phone
+
+const useResponsive = () => {
+  const { width, height } = useWindowDimensions();
+  const isTablet = width >= 768;
+  const isLarge = width >= 1024;
+
+  // Scale factor: capped so it doesn't grow forever on huge screens
+  const scale = Math.min(width / BASE_WIDTH, isLarge ? 1.5 : isTablet ? 1.35 : 1.1);
+
+  const rs = (size) => Math.round(size * scale);
+  const rp = (size) => Math.round(size * Math.min(scale, 1.2)); // padding caps lower
+
+  return { width, height, isTablet, isLarge, scale, rs, rp };
+};
 
 /* ══════════════════════════════════════════════════════════
    DESIGN TOKENS
@@ -211,7 +235,13 @@ const STATUS_CFG = {
   approved: { label: 'Approved', color: T.g700, bg: T.g100, Icon: BadgeCheck },
 };
 
-const FILTER_TABS = ['All', 'Unread', 'Agent Responses', 'Submissions', 'Inquiries'];
+const FILTER_TABS = [
+  { key: 'All', icon: null },
+  { key: 'Unread', icon: null },
+  { key: 'Agent Responses', icon: UserCheck },
+  { key: 'Submissions', icon: FileText },
+  { key: 'Inquiries', icon: MessageSquare },
+];
 
 /* ══════════════════════════════════════════════════════════
    DATE HELPERS
@@ -266,29 +296,28 @@ const SectionLabel = ({ text, mt = 0 }) => (
 );
 
 const atoms = StyleSheet.create({
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
+  pill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20,
+  },
   pillTxt: { fontSize: 11, fontWeight: '700' },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
+  badge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1,
+  },
   badgeTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
   secLbl: { fontSize: 10, fontWeight: '800', color: T.n400, letterSpacing: 1.4, marginBottom: 10 },
 });
 
 /* ══════════════════════════════════════════════════════════
    FOCUS-SAFE REPLY INPUT
-   onBlur-commit pattern  ←  no parent re-renders during typing
+   State-based border — zero native flicker or black ring
 ══════════════════════════════════════════════════════════ */
 const ReplyInput = React.memo(({ recipientName, onSend }) => {
   const [val, setVal] = useState('');
   const [sending, setSending] = useState(false);
-  const wrapRef = useRef(null);
-
-  const onFocus = useCallback(() => {
-    wrapRef.current?.setNativeProps({ style: { borderColor: T.g600 } });
-  }, []);
-
-  const onBlur = useCallback(() => {
-    wrapRef.current?.setNativeProps({ style: { borderColor: T.n300 } });
-  }, []);
+  const [focused, setFocused] = useState(false);
+  const { rs } = useResponsive();
 
   const handleSend = async () => {
     if (!val.trim()) { Alert.alert('Empty Reply', 'Please type a message first.'); return; }
@@ -301,19 +330,24 @@ const ReplyInput = React.memo(({ recipientName, onSend }) => {
 
   return (
     <View style={{ gap: 12 }}>
-      <View ref={wrapRef} style={replyS.wrap}>
+      <View style={[
+        replyS.wrap,
+        focused && { borderColor: T.g600, backgroundColor: T.white },
+      ]}>
         <TextInput
-          style={replyS.input}
+          style={[replyS.input, { fontSize: rs(14) }]}
           placeholder={`Reply to ${recipientName}…`}
           placeholderTextColor={T.n400}
           value={val}
           onChangeText={setVal}
-          onFocus={onFocus}
-          onBlur={onBlur}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           multiline
           numberOfLines={3}
           textAlignVertical="top"
           blurOnSubmit={false}
+          // Prevents native Android outline/border on focus
+          underlineColorAndroid="transparent"
         />
       </View>
       <TouchableOpacity
@@ -324,7 +358,7 @@ const ReplyInput = React.memo(({ recipientName, onSend }) => {
       >
         {sending
           ? <ActivityIndicator color={T.white} size="small" />
-          : <><Send color={T.white} size={17} strokeWidth={2.5} /><Text style={replyS.btnTxt}>Send Reply</Text></>
+          : <><Send color={T.white} size={rs(17)} strokeWidth={2.5} /><Text style={[replyS.btnTxt, { fontSize: rs(15) }]}>Send Reply</Text></>
         }
       </TouchableOpacity>
     </View>
@@ -332,29 +366,63 @@ const ReplyInput = React.memo(({ recipientName, onSend }) => {
 }, () => true);
 
 const replyS = StyleSheet.create({
-  wrap: { backgroundColor: T.g50, borderWidth: 1.5, borderColor: T.n300, borderRadius: 14, padding: 14, minHeight: 90 },
-  input: { fontSize: 14, color: T.n900, minHeight: 65 },
-  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: T.g800, borderRadius: 14, paddingVertical: 14, elevation: 3, shadowColor: T.shadow, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 1, shadowRadius: 6 },
-  btnTxt: { color: T.white, fontSize: 15, fontWeight: '700' },
+  wrap: {
+    backgroundColor: T.g50, borderWidth: 1.5, borderColor: T.n300,
+    borderRadius: 14, padding: 14, minHeight: 90,
+    // Prevent any native outline on Android
+    elevation: 0,
+  },
+  input: {
+    color: T.n900, minHeight: 65,
+    // Remove default Android blue outline
+    outlineStyle: 'none',
+  },
+  btn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: T.g800, borderRadius: 14, paddingVertical: 14,
+    elevation: 3, shadowColor: T.shadow, shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 1, shadowRadius: 6,
+  },
+  btnTxt: { color: T.white, fontWeight: '700' },
 });
 
 /* ══════════════════════════════════════════════════════════
    SHARED HEADER
 ══════════════════════════════════════════════════════════ */
 function PageHeader({ title, subtitle, onBack, right, unread }) {
+  const { rs, rp, isTablet } = useResponsive();
+
   return (
-    <View style={header.bar}>
-      <TouchableOpacity style={header.btn} onPress={onBack} activeOpacity={0.7}>
-        <ArrowLeft color={T.white} size={22} strokeWidth={2.5} />
+    <View style={[
+      header.bar,
+      {
+        paddingTop: Platform.OS === 'ios' ? (isTablet ? 56 : 52) : (isTablet ? 32 : 26),
+        paddingBottom: isTablet ? 24 : 20,
+        paddingHorizontal: isTablet ? 28 : 20,
+        gap: isTablet ? 16 : 14,
+      }
+    ]}>
+      <TouchableOpacity style={[header.btn, isTablet && { width: 46, height: 46, borderRadius: 14 }]}
+        onPress={onBack} activeOpacity={0.7}>
+        <ArrowLeft color={T.white} size={rs(22)} strokeWidth={2.5} />
       </TouchableOpacity>
+
       <View style={{ flex: 1 }}>
-        <Text style={header.title}>{title}</Text>
-        {subtitle ? <Text style={header.sub}>{subtitle}</Text> : null}
+        <Text style={[header.title, { fontSize: rs(20) }]}>{title}</Text>
+        {subtitle ? <Text style={[header.sub, { fontSize: rs(12) }]}>{subtitle}</Text> : null}
       </View>
+
       {right}
+
       {unread > 0 && (
-        <View style={header.badge}>
-          <Text style={header.badgeTxt}>{unread}</Text>
+        <View style={[
+          header.badge,
+          {
+            top: Platform.OS === 'ios' ? (isTablet ? 54 : 50) : (isTablet ? 30 : 24),
+            right: isTablet ? 14 : 8,
+          }
+        ]}>
+          <Text style={header.badgeTxt}>{unread > 99 ? '99+' : unread}</Text>
         </View>
       )}
     </View>
@@ -362,11 +430,24 @@ function PageHeader({ title, subtitle, onBack, right, unread }) {
 }
 
 const header = StyleSheet.create({
-  bar: { backgroundColor: T.g800, paddingTop: Platform.OS === 'ios' ? 58 : 28, paddingBottom: 22, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 14 },
-  btn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 20, fontWeight: '800', color: T.white, letterSpacing: -0.4 },
-  sub: { fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
-  badge: { position: 'absolute', top: Platform.OS === 'ios' ? 56 : 26, right: 10, backgroundColor: T.red, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: T.g800 },
+  bar: {
+    backgroundColor: T.g800,
+    flexDirection: 'row', alignItems: 'center',
+  },
+  btn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  title: { fontWeight: '800', color: T.white, letterSpacing: -0.4 },
+  sub: { color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+  badge: {
+    position: 'absolute',
+    backgroundColor: T.red, minWidth: 20, height: 20, borderRadius: 10,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: T.g800,
+    paddingHorizontal: 3,
+  },
   badgeTxt: { fontSize: 9, fontWeight: '900', color: T.white },
 });
 
@@ -376,82 +457,99 @@ const header = StyleSheet.create({
 function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const { width, isTablet, isLarge, rs, rp } = useResponsive();
 
   const unreadCount = useMemo(() => notifs.filter(n => !n.read).length, [notifs]);
 
+  const hPad = isTablet ? 24 : 16;
+  const numCols = isLarge ? 2 : 1; // 2-column grid on large screens
+
   const filtered = useMemo(() => {
-    let list = notifs;
-    if (filter === 'Unread') list = list.filter(n => !n.read);
-    else if (filter === 'Agent Responses') list = list.filter(n => n.type === 'agent_hire_response' || n.type === 'agent_assignment_response');
-    else if (filter === 'Submissions') list = list.filter(n => n.type === 'property_submission');
-    else if (filter === 'Inquiries') list = list.filter(n => n.type === 'user_inquiry');
+    let lst = notifs;
+    if (filter === 'Unread') lst = lst.filter(n => !n.read);
+    else if (filter === 'Agent Responses') lst = lst.filter(n => n.type === 'agent_hire_response' || n.type === 'agent_assignment_response');
+    else if (filter === 'Submissions') lst = lst.filter(n => n.type === 'property_submission');
+    else if (filter === 'Inquiries') lst = lst.filter(n => n.type === 'user_inquiry');
 
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter(n =>
+      lst = lst.filter(n =>
         n.sender.name.toLowerCase().includes(q) ||
         n.summary.toLowerCase().includes(q) ||
         (n.property?.name.toLowerCase().includes(q))
       );
     }
-    return list;
+    return lst;
   }, [notifs, filter, search]);
 
-  /* Left-stripe colour — green/unread, teal/accepted, red/rejected */
   const stripeFor = (item) => {
     const isResp = item.type === 'agent_hire_response' || item.type === 'agent_assignment_response';
     if (isResp) return item.status === 'accepted' ? T.g600 : T.red;
     return item.read ? null : T.g600;
   };
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item, index }) => {
     const cfg = TYPE_CFG[item.type] || TYPE_CFG._default;
     const stripe = stripeFor(item);
+    const avatarSize = isTablet ? 56 : 50;
 
     return (
       <TouchableOpacity
-        style={[list.card, !item.read && list.unread]}
+        style={[
+          listS.card,
+          !item.read && listS.unread,
+          isLarge && { marginHorizontal: 6 },
+        ]}
         onPress={() => onOpen(item)}
         activeOpacity={0.86}
       >
-        {stripe && <View style={[list.stripe, { backgroundColor: stripe }]} />}
+        {stripe && <View style={[listS.stripe, { backgroundColor: stripe }]} />}
 
-        <View style={list.inner}>
+        <View style={[listS.inner, { padding: isTablet ? 18 : 14, gap: isTablet ? 14 : 12 }]}>
           {/* Avatar + type overlay */}
           <View>
-            <Image source={{ uri: item.sender.avatar }} style={list.avatar} />
-            <View style={[list.typeIcon, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
+            <Image
+              source={{ uri: item.sender.avatar }}
+              style={[listS.avatar, { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 }]}
+            />
+            <View style={[listS.typeIcon, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
               <cfg.Icon color={cfg.color} size={11} strokeWidth={2.5} />
             </View>
           </View>
 
           {/* Right content */}
           <View style={{ flex: 1 }}>
-            <View style={list.topRow}>
-              <Text style={list.senderName} numberOfLines={1}>{item.sender.name}</Text>
-              <Text style={list.time}>{fmtRel(item.createdAt)}</Text>
+            <View style={listS.topRow}>
+              <Text style={[listS.senderName, { fontSize: rs(14) }]} numberOfLines={1}>
+                {item.sender.name}
+              </Text>
+              <Text style={[listS.time, { fontSize: rs(11) }]}>{fmtRel(item.createdAt)}</Text>
             </View>
 
-            <View style={list.metaRow}>
+            <View style={listS.metaRow}>
               <TypeBadge type={item.type} />
-              <Text style={list.roleLabel}>{item.sender.role}</Text>
+              <Text style={[listS.roleLabel, { fontSize: rs(11) }]}>{item.sender.role}</Text>
             </View>
 
-            <Text style={[list.summary, !item.read && list.summaryBold]} numberOfLines={2}>
+            <Text style={[listS.summary, !item.read && listS.summaryBold, { fontSize: rs(13), lineHeight: rs(19) }]}
+              numberOfLines={2}>
               {item.summary}
             </Text>
 
             {item.property && (
-              <View style={list.propHint}>
-                <Home color={T.g600} size={11} strokeWidth={2} />
-                <Text style={list.propHintTxt} numberOfLines={1}>{item.property.name}</Text>
+              <View style={listS.propHint}>
+                <Home color={T.g600} size={rs(11)} strokeWidth={2} />
+                <Text style={[listS.propHintTxt, { fontSize: rs(11) }]} numberOfLines={1}>
+                  {item.property.name}
+                </Text>
               </View>
             )}
 
-            <View style={list.foot}>
+            <View style={listS.foot}>
               <StatusPill status={item.status} />
-              {!item.read && <View style={list.dot} />}
+              {!item.read && <View style={listS.dot} />}
             </View>
           </View>
         </View>
@@ -469,66 +567,118 @@ function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
         onBack={onBack}
         unread={unreadCount}
         right={
-          <TouchableOpacity style={header.btn} onPress={() => setMenuOpen(true)} activeOpacity={0.7}>
-            <MoreVertical color={T.white} size={22} strokeWidth={2} />
+          <TouchableOpacity
+            style={[header.btn, isTablet && { width: 46, height: 46, borderRadius: 14 }]}
+            onPress={() => setMenuOpen(true)}
+            activeOpacity={0.7}
+          >
+            <MoreVertical color={T.white} size={rs(22)} strokeWidth={2} />
           </TouchableOpacity>
         }
       />
 
-      {/* ── Search ── */}
-      <View style={g.searchWrap}>
-        <View style={g.searchBox}>
-          <Search color={T.n500} size={16} strokeWidth={2} />
+      {/* ── Search + Filters grouped together ── */}
+      <View style={[g.topBar, { paddingHorizontal: hPad }]}>
+
+        {/* Search box — state-driven border, no native outline */}
+        <View style={[
+          g.searchBox,
+          searchFocused && g.searchBoxFocused,
+          isTablet && { height: 52, borderRadius: 16 },
+        ]}>
+          <Search color={searchFocused ? T.g600 : T.n500} size={rs(16)} strokeWidth={2} />
           <TextInput
-            style={g.searchInput}
+            style={[g.searchInput, { fontSize: rs(14) }]}
             placeholder="Search by agent, buyer, or property…"
-            placeholderTextColor={T.n500}
+            placeholderTextColor={T.n400}
             value={search}
             onChangeText={setSearch}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            // Critical: prevent native Android focus rings
+            underlineColorAndroid="transparent"
           />
           {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <X color={T.n500} size={15} strokeWidth={2} />
+            <TouchableOpacity
+              onPress={() => setSearch('')}
+              style={g.searchClear}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <View style={g.searchClearInner}>
+                <X color={T.n600} size={rs(12)} strokeWidth={2.5} />
+              </View>
             </TouchableOpacity>
           )}
         </View>
-      </View>
 
-      {/* ── Filter chips ── */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={g.chips}>
-        {FILTER_TABS.map(f => (
-          <TouchableOpacity
-            key={f}
-            style={[g.chip, filter === f && g.chipOn]}
-            onPress={() => setFilter(f)}
-            activeOpacity={0.8}
-          >
-            {f === 'Unread' && unreadCount > 0 && (
-              <View style={[g.chipDot, filter === f && g.chipDotOn]} />
-            )}
-            <Text style={[g.chipTxt, filter === f && g.chipTxtOn]}>{f}</Text>
-            {f === 'Unread' && unreadCount > 0 && (
-              <View style={[g.chipNum, filter === f && g.chipNumOn]}>
-                <Text style={[g.chipNumTxt, filter === f && g.chipNumTxtOn]}>{unreadCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+        {/* Filter chips — directly below search */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[g.chips, { paddingVertical: 10 }]}
+          style={{ marginHorizontal: -hPad }}
+          contentInset={{ left: hPad, right: hPad }}
+        >
+          {/* Spacer for the left side when using contentInset on iOS */}
+          <View style={{ width: hPad }} />
+          {FILTER_TABS.map(({ key: f, icon: FIcon }) => {
+            const isActive = filter === f;
+            const isUnreadTab = f === 'Unread';
+            return (
+              <TouchableOpacity
+                key={f}
+                style={[
+                  g.chip,
+                  isActive && g.chipOn,
+                  isTablet && { paddingHorizontal: 16, paddingVertical: 9 },
+                ]}
+                onPress={() => setFilter(f)}
+                activeOpacity={0.8}
+              >
+                {FIcon && (
+                  <FIcon
+                    color={isActive ? T.white : T.n500}
+                    size={rs(12)}
+                    strokeWidth={2.5}
+                  />
+                )}
+                {isUnreadTab && unreadCount > 0 && (
+                  <View style={[g.chipDot, isActive && g.chipDotOn]} />
+                )}
+                <Text style={[g.chipTxt, { fontSize: rs(12) }, isActive && g.chipTxtOn]}>{f}</Text>
+                {isUnreadTab && unreadCount > 0 && (
+                  <View style={[g.chipNum, isActive && g.chipNumOn]}>
+                    <Text style={[g.chipNumTxt, isActive && g.chipNumTxtOn]}>{unreadCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+          <View style={{ width: hPad }} />
+        </ScrollView>
+      </View>
 
       {/* ── List ── */}
       <FlatList
         data={filtered}
         keyExtractor={i => i.id}
         renderItem={renderItem}
-        contentContainerStyle={list.container}
+        numColumns={numCols}
+        key={numCols} // re-render when columns change
+        contentContainerStyle={[
+          listS.container,
+          { paddingHorizontal: isLarge ? hPad - 6 : hPad, paddingBottom: 40 },
+        ]}
+        columnWrapperStyle={isLarge ? { gap: 0 } : null}
         showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+        ItemSeparatorComponent={() => <View style={{ height: isTablet ? 12 : 10 }} />}
         ListEmptyComponent={
-          <View style={g.empty}>
-            <BellOff color={T.n300} size={56} strokeWidth={1.5} />
-            <Text style={g.emptyH}>No notifications</Text>
-            <Text style={g.emptySub}>
+          <View style={[g.empty, { paddingTop: isTablet ? 100 : 80 }]}>
+            <View style={g.emptyIconWrap}>
+              <BellOff color={T.g400} size={isTablet ? 64 : 52} strokeWidth={1.5} />
+            </View>
+            <Text style={[g.emptyH, { fontSize: rs(17) }]}>No notifications</Text>
+            <Text style={[g.emptySub, { fontSize: rs(14) }]}>
               {search ? 'No results match your search' : "You're all caught up!"}
             </Text>
           </View>
@@ -538,16 +688,23 @@ function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
       {/* ── Options menu ── */}
       <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
         <TouchableOpacity style={menu.bg} activeOpacity={1} onPress={() => setMenuOpen(false)}>
-          <View style={menu.box}>
+          <View style={[menu.box, {
+            top: Platform.OS === 'ios' ? (isTablet ? 108 : 100) : (isTablet ? 78 : 70),
+            right: isTablet ? 20 : 14,
+          }]}>
             <TouchableOpacity style={menu.row} activeOpacity={0.8}
               onPress={() => { onMarkAllRead(); setMenuOpen(false); }}>
-              <CheckCheck color={T.g700} size={18} strokeWidth={2} />
-              <Text style={menu.rowTxt}>Mark all as read</Text>
+              <View style={menu.iconBox}>
+                <CheckCheck color={T.g700} size={rs(17)} strokeWidth={2} />
+              </View>
+              <Text style={[menu.rowTxt, { fontSize: rs(14) }]}>Mark all as read</Text>
             </TouchableOpacity>
             <View style={menu.div} />
             <TouchableOpacity style={menu.row} activeOpacity={0.8} onPress={() => setMenuOpen(false)}>
-              <Filter color={T.n600} size={18} strokeWidth={2} />
-              <Text style={menu.rowTxt}>Notification settings</Text>
+              <View style={[menu.iconBox, { backgroundColor: T.n100 }]}>
+                <Filter color={T.n600} size={rs(17)} strokeWidth={2} />
+              </View>
+              <Text style={[menu.rowTxt, { fontSize: rs(14) }]}>Notification settings</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -560,58 +717,85 @@ function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
    AGENT  DETAIL  VIEW
 ══════════════════════════════════════════════════════════ */
 function AgentDetailView({ agent, onBack }) {
-  const avatarUrl = agent?.avatar;
-  const initial = (agent?.name || '?').charAt(0).toUpperCase();
+  const { rs, isTablet, rp } = useResponsive();
+  const avatarSize = isTablet ? 120 : 100;
 
   return (
     <View style={g.screen}>
       <StatusBar barStyle="light-content" backgroundColor={T.g800} />
       <PageHeader title="Agent Profile" subtitle={agent?.role || 'Agent'} onBack={onBack} />
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ padding: isTablet ? 24 : 16, paddingBottom: 50 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Avatar */}
         <View style={{ alignItems: 'center', marginBottom: 20 }}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={{ width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: T.g400 }} />
+          {agent?.avatar ? (
+            <Image source={{ uri: agent.avatar }} style={{
+              width: avatarSize, height: avatarSize,
+              borderRadius: avatarSize / 2, borderWidth: 3, borderColor: T.g400,
+            }} />
           ) : (
-            <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: T.g600, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: T.g400 }}>
-              <Text style={{ color: T.white, fontSize: 42, fontWeight: '800' }}>{initial}</Text>
+            <View style={{
+              width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2,
+              backgroundColor: T.g600, justifyContent: 'center', alignItems: 'center',
+              borderWidth: 3, borderColor: T.g400,
+            }}>
+              <Text style={{ color: T.white, fontSize: rs(42), fontWeight: '800' }}>
+                {(agent?.name || '?').charAt(0).toUpperCase()}
+              </Text>
             </View>
           )}
         </View>
 
-        {/* Name & Role */}
         <View style={{ alignItems: 'center', marginBottom: 24 }}>
-          <Text style={{ fontSize: 22, fontWeight: '800', color: T.n900, letterSpacing: -0.3 }}>{agent?.name || 'Agent'}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, backgroundColor: T.g100, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: T.g200 }}>
-            <UserCheck color={T.g700} size={13} strokeWidth={2.5} />
-            <Text style={{ fontSize: 12, fontWeight: '700', color: T.g700 }}>{agent?.role || 'Agent'}</Text>
+          <Text style={{ fontSize: rs(22), fontWeight: '800', color: T.n900, letterSpacing: -0.3 }}>
+            {agent?.name || 'Agent'}
+          </Text>
+          <View style={{
+            flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6,
+            backgroundColor: T.g100, paddingHorizontal: 12, paddingVertical: 5,
+            borderRadius: 20, borderWidth: 1, borderColor: T.g200,
+          }}>
+            <UserCheck color={T.g700} size={rs(13)} strokeWidth={2.5} />
+            <Text style={{ fontSize: rs(12), fontWeight: '700', color: T.g700 }}>
+              {agent?.role || 'Agent'}
+            </Text>
           </View>
         </View>
 
-        {/* Professional Specs */}
         {(agent?.specialization || agent?.experience !== undefined) && (
           <>
             <SectionLabel text="PROFESSIONAL PROFILE" />
-            <View style={{ backgroundColor: T.white, borderRadius: 16, padding: 18, borderLeftWidth: 4, borderLeftColor: T.teal, borderWidth: 1, borderColor: T.n200, marginBottom: 20 }}>
+            <View style={{
+              backgroundColor: T.white, borderRadius: 16, padding: isTablet ? 20 : 18,
+              borderLeftWidth: 4, borderLeftColor: T.teal, borderWidth: 1, borderColor: T.n200, marginBottom: 20,
+            }}>
               <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 10, color: T.n500, fontWeight: '600', marginBottom: 2 }}>SPEC</Text>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: T.n900 }}>{agent.specialization || 'Real Estate Agent'}</Text>
+                  <Text style={{ fontSize: rs(15), fontWeight: '800', color: T.n900 }}>
+                    {agent.specialization || 'Real Estate Agent'}
+                  </Text>
                 </View>
                 <View style={{ width: 1, backgroundColor: T.n200 }} />
                 <View style={{ flex: 1, paddingLeft: 12 }}>
                   <Text style={{ fontSize: 10, color: T.n500, fontWeight: '600', marginBottom: 2 }}>EXP</Text>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: T.n900 }}>{agent.experience || 0} Years</Text>
+                  <Text style={{ fontSize: rs(15), fontWeight: '800', color: T.n900 }}>
+                    {agent.experience || 0} Years
+                  </Text>
                 </View>
               </View>
               {agent.city && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <MapPin color={T.n500} size={14} strokeWidth={2} />
-                  <Text style={{ fontSize: 13, color: T.n600, fontWeight: '600' }}>Based in {agent.city}</Text>
+                  <MapPin color={T.n500} size={rs(14)} strokeWidth={2} />
+                  <Text style={{ fontSize: rs(13), color: T.n600, fontWeight: '600' }}>
+                    Based in {agent.city}
+                  </Text>
                 </View>
               )}
               {agent.about && (
-                <Text style={{ fontSize: 13, color: T.n500, fontStyle: 'italic', lineHeight: 18 }}>
+                <Text style={{ fontSize: rs(13), color: T.n500, fontStyle: 'italic', lineHeight: rs(20) }}>
                   "{agent.about}"
                 </Text>
               )}
@@ -619,28 +803,30 @@ function AgentDetailView({ agent, onBack }) {
           </>
         )}
 
-        {/* Contact Card */}
         <SectionLabel text="CONTACT INFORMATION" />
-        <View style={{ backgroundColor: T.white, borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: T.n200, gap: 16 }}>
+        <View style={{
+          backgroundColor: T.white, borderRadius: 16, padding: isTablet ? 20 : 18,
+          borderWidth: 1.5, borderColor: T.n200, gap: 16,
+        }}>
           {agent?.email ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: T.g100, justifyContent: 'center', alignItems: 'center' }}>
-                <Mail color={T.g700} size={18} strokeWidth={2} />
+              <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: T.g100, justifyContent: 'center', alignItems: 'center' }}>
+                <Mail color={T.g700} size={rs(18)} strokeWidth={2} />
               </View>
               <View>
                 <Text style={{ fontSize: 11, color: T.n400, fontWeight: '600', marginBottom: 2 }}>Email</Text>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: T.n900 }}>{agent.email}</Text>
+                <Text style={{ fontSize: rs(15), fontWeight: '700', color: T.n900 }}>{agent.email}</Text>
               </View>
             </View>
           ) : null}
           {agent?.phone ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-              <View style={{ width: 42, height: 42, borderRadius: 12, backgroundColor: T.g100, justifyContent: 'center', alignItems: 'center' }}>
-                <Phone color={T.g700} size={18} strokeWidth={2} />
+              <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: T.g100, justifyContent: 'center', alignItems: 'center' }}>
+                <Phone color={T.g700} size={rs(18)} strokeWidth={2} />
               </View>
               <View>
                 <Text style={{ fontSize: 11, color: T.n400, fontWeight: '600', marginBottom: 2 }}>Phone</Text>
-                <Text style={{ fontSize: 15, fontWeight: '700', color: T.n900 }}>{agent.phone}</Text>
+                <Text style={{ fontSize: rs(15), fontWeight: '700', color: T.n900 }}>{agent.phone}</Text>
               </View>
             </View>
           ) : null}
@@ -648,7 +834,7 @@ function AgentDetailView({ agent, onBack }) {
 
         {(!agent?.email && !agent?.phone) ? (
           <View style={{ alignItems: 'center', paddingTop: 20 }}>
-            <Text style={{ fontSize: 14, color: T.n400 }}>No contact details available.</Text>
+            <Text style={{ fontSize: rs(14), color: T.n400 }}>No contact details available.</Text>
           </View>
         ) : null}
       </ScrollView>
@@ -661,12 +847,14 @@ function AgentDetailView({ agent, onBack }) {
 ══════════════════════════════════════════════════════════ */
 function NotificationDetail({ notif, onBack, onAction, navigation }) {
   const [localStatus, setLocalStatus] = useState(notif.status);
-  const [actioning, setActioning] = useState(null); // 'approve' | 'reject'
+  const [actioning, setActioning] = useState(null);
   const [showAgentDetail, setShowAgentDetail] = useState(false);
+  const { rs, isTablet, rp, width } = useResponsive();
 
-  useEffect(() => {
-    setLocalStatus(notif.status);
-  }, [notif.status]);
+  const hPad = isTablet ? 24 : 16;
+  const maxContentWidth = Math.min(width, 680); // cap detail width on large screens
+
+  useEffect(() => { setLocalStatus(notif.status); }, [notif.status]);
 
   const cfg = TYPE_CFG[notif.type] || TYPE_CFG._default;
   const scfg = STATUS_CFG[localStatus] ?? STATUS_CFG.pending;
@@ -676,7 +864,6 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
   const isInquiry = notif.type === 'user_inquiry';
   const canAct = isSubmission && localStatus === 'pending';
 
-  /* Colour accent — green for accepted, red for rejected agent responses */
   const accentColor = isAgentResp
     ? (localStatus === 'accepted' ? T.g600 : T.red)
     : null;
@@ -703,13 +890,10 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
       onAction(notif.id, next);
       Alert.alert(
         action === 'approve' ? '✓ Listing Approved' : 'Submission Rejected',
-        action === 'approve'
-          ? `The property is now live on the platform.`
-          : `The submission has been rejected.`,
+        action === 'approve' ? 'The property is now live on the platform.' : 'The submission has been rejected.',
         [{ text: 'OK' }]
       );
     } catch (err) {
-      console.error('handleSubmission error:', err);
       Alert.alert('Error', err.message || 'Failed to process request');
     } finally {
       setActioning(null);
@@ -720,7 +904,6 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
     Alert.alert('Reply Sent', `Your message has been delivered to ${notif.sender.name}.`);
   }, [notif.sender.name]);
 
-  // Early return AFTER all hooks
   if (showAgentDetail) {
     return <AgentDetailView agent={notif.sender} onBack={() => setShowAgentDetail(false)} />;
   }
@@ -735,14 +918,24 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
         onBack={onBack}
         right={
           <View style={[detail.hPill, { backgroundColor: scfg.bg }]}>
-            <scfg.Icon color={scfg.color} size={13} strokeWidth={2.5} />
-            <Text style={[detail.hPillTxt, { color: scfg.color }]}>{scfg.label}</Text>
+            <scfg.Icon color={scfg.color} size={rs(13)} strokeWidth={2.5} />
+            <Text style={[detail.hPillTxt, { fontSize: rs(12), color: scfg.color }]}>{scfg.label}</Text>
           </View>
         }
       />
 
       <ScrollView
-        contentContainerStyle={detail.scroll}
+        contentContainerStyle={[
+          detail.scroll,
+          {
+            paddingHorizontal: hPad,
+            paddingTop: isTablet ? 22 : 18,
+            // Center content on very wide screens
+            maxWidth: maxContentWidth,
+            alignSelf: 'center',
+            width: '100%',
+          }
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -755,35 +948,39 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
             disabled={!notif.sender?.id && !isAgentResp}
           >
             {notif.sender?.avatar ? (
-              <Image source={{ uri: notif.sender.avatar }} style={detail.sAvatar} />
+              <Image source={{ uri: notif.sender.avatar }} style={[detail.sAvatar, isTablet && { width: 70, height: 70, borderRadius: 35 }]} />
             ) : (
-              <View style={[detail.sAvatar, { backgroundColor: T.g600, justifyContent: 'center', alignItems: 'center' }]}>
-                <Text style={{ color: T.white, fontSize: 24, fontWeight: '800' }}>
+              <View style={[detail.sAvatar, isTablet && { width: 70, height: 70, borderRadius: 35 },
+                { backgroundColor: T.g600, justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ color: T.white, fontSize: rs(24), fontWeight: '800' }}>
                   {(notif.sender?.name || '?').charAt(0).toUpperCase()}
                 </Text>
               </View>
             )}
             <View style={{ flex: 1 }}>
-              <Text style={detail.sName}>{notif.sender?.name || 'Unknown'}</Text>
+              <Text style={[detail.sName, { fontSize: rs(16) }]}>{notif.sender?.name || 'Unknown'}</Text>
               <View style={[detail.roleChip, { backgroundColor: cfg.bg, borderColor: cfg.border }]}>
-                <cfg.Icon color={cfg.color} size={11} strokeWidth={2.5} />
-                <Text style={[detail.roleChipTxt, { color: cfg.color }]}>{notif.sender?.role || 'User'}</Text>
+                <cfg.Icon color={cfg.color} size={rs(11)} strokeWidth={2.5} />
+                <Text style={[detail.roleChipTxt, { fontSize: rs(11), color: cfg.color }]}>
+                  {notif.sender?.role || 'User'}
+                </Text>
               </View>
 
-              {/* Agent stats row */}
               {notif.sender?.rating !== undefined && (
-                <View style={detail.agentRow}>
+                <View style={[detail.agentRow, { flexWrap: 'wrap' }]}>
                   <AgentStars rating={notif.sender.rating} />
                   <Text style={detail.dot2}>·</Text>
-                  <Briefcase color={T.n500} size={12} strokeWidth={2} />
-                  <Text style={detail.agentMeta}>{notif.sender.experience} yrs</Text>
+                  <Briefcase color={T.n500} size={rs(12)} strokeWidth={2} />
+                  <Text style={[detail.agentMeta, { fontSize: rs(12) }]}>{notif.sender.experience} yrs</Text>
                   <Text style={detail.dot2}>·</Text>
-                  <TrendingUp color={T.n500} size={12} strokeWidth={2} />
-                  <Text style={detail.agentMeta}>{notif.sender.deals} deals</Text>
+                  <TrendingUp color={T.n500} size={rs(12)} strokeWidth={2} />
+                  <Text style={[detail.agentMeta, { fontSize: rs(12) }]}>{notif.sender.deals} deals</Text>
                   {notif.sender.spec && (
                     <>
                       <Text style={detail.dot2}>·</Text>
-                      <Text style={[detail.agentMeta, { color: T.g700, fontWeight: '700' }]}>{notif.sender.spec}</Text>
+                      <Text style={[detail.agentMeta, { fontSize: rs(12), color: T.g700, fontWeight: '700' }]}>
+                        {notif.sender.spec}
+                      </Text>
                     </>
                   )}
                 </View>
@@ -792,18 +989,18 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
               {isAgentResp && (
                 <>
                   <View style={detail.contactLine}>
-                    <Phone color={T.n500} size={13} strokeWidth={2} />
-                    <Text style={detail.contactTxt}>{notif.sender?.phone || 'N/A'}</Text>
+                    <Phone color={T.n500} size={rs(13)} strokeWidth={2} />
+                    <Text style={[detail.contactTxt, { fontSize: rs(13) }]}>{notif.sender?.phone || 'N/A'}</Text>
                   </View>
                   <View style={detail.contactLine}>
-                    <Mail color={T.n500} size={13} strokeWidth={2} />
-                    <Text style={detail.contactTxt}>{notif.sender?.email || 'N/A'}</Text>
+                    <Mail color={T.n500} size={rs(13)} strokeWidth={2} />
+                    <Text style={[detail.contactTxt, { fontSize: rs(13) }]}>{notif.sender?.email || 'N/A'}</Text>
                   </View>
                 </>
               )}
             </View>
             {(isSubmission || notif.type === 'property_upload' || isAgentResp) && (
-              <ChevronRight color={T.n400} size={20} />
+              <ChevronRight color={T.n400} size={rs(20)} />
             )}
           </TouchableOpacity>
         </View>
@@ -815,19 +1012,22 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
               <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 11, color: T.n500, fontWeight: '600', marginBottom: 2 }}>Specialization</Text>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: T.n900 }}>{notif.agent_details.professional_title || 'Real Estate Agent'}</Text>
+                  <Text style={{ fontSize: rs(15), fontWeight: '800', color: T.n900 }}>
+                    {notif.agent_details.professional_title || 'Real Estate Agent'}
+                  </Text>
                 </View>
                 <View style={{ width: 1, backgroundColor: T.n200 }} />
                 <View style={{ flex: 1, paddingLeft: 12 }}>
                   <Text style={{ fontSize: 11, color: T.n500, fontWeight: '600', marginBottom: 2 }}>Experience</Text>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: T.n900 }}>{notif.agent_details.experience_years || 0} Years</Text>
+                  <Text style={{ fontSize: rs(15), fontWeight: '800', color: T.n900 }}>
+                    {notif.agent_details.experience_years || 0} Years
+                  </Text>
                 </View>
               </View>
-
               {notif.agent_details.about_me && (
                 <View style={{ marginTop: 4 }}>
                   <Text style={{ fontSize: 11, color: T.n500, fontWeight: '600', marginBottom: 4 }}>About Agent</Text>
-                  <Text style={{ fontSize: 13, color: T.n600, lineHeight: 18 }}>
+                  <Text style={{ fontSize: rs(13), color: T.n600, lineHeight: rs(19) }}>
                     {notif.agent_details.about_me}
                   </Text>
                 </View>
@@ -839,8 +1039,8 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
         {/* ── TIMESTAMP + STATUS ── */}
         <View style={detail.metaBar}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-            <CalendarDays color={T.n500} size={14} strokeWidth={2} />
-            <Text style={detail.metaTxt} numberOfLines={2}>{fmtFull(notif.createdAt)}</Text>
+            <CalendarDays color={T.n500} size={rs(14)} strokeWidth={2} />
+            <Text style={[detail.metaTxt, { fontSize: rs(12) }]} numberOfLines={2}>{fmtFull(notif.createdAt)}</Text>
           </View>
           <StatusPill status={localStatus} />
         </View>
@@ -848,185 +1048,177 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
         {/* ── FULL MESSAGE ── */}
         <SectionLabel text="MESSAGE" />
         <View style={[detail.msgCard, accentColor && { borderLeftColor: accentColor }]}>
-          <Text style={detail.msgTxt}>{notif.message}</Text>
+          <Text style={[detail.msgTxt, { fontSize: rs(14), lineHeight: rs(23) }]}>{notif.message}</Text>
         </View>
 
         {/* ── PROPERTY CARD ── */}
-        {
-          notif.property && (
-            <>
-              <SectionLabel text="RELATED PROPERTY" mt={20} />
-              <View style={detail.propCard}>
-                <Image source={{ uri: notif.property.image }} style={detail.propImg} resizeMode="cover" />
-                <View style={detail.propScrim} />
-                <View style={detail.propTag}>
-                  <Text style={detail.propTagTxt}>{notif.property.type}</Text>
+        {notif.property && (
+          <>
+            <SectionLabel text="RELATED PROPERTY" mt={20} />
+            <View style={detail.propCard}>
+              <Image
+                source={{ uri: notif.property.image }}
+                style={[detail.propImg, isTablet && { height: 200 }]}
+                resizeMode="cover"
+              />
+              <View style={[detail.propScrim, isTablet && { height: 200 }]} />
+              <View style={detail.propTag}>
+                <Text style={detail.propTagTxt}>{notif.property.type}</Text>
+              </View>
+              <View style={detail.propBody}>
+                <Text style={[detail.propName, { fontSize: rs(16) }]}>{notif.property.name}</Text>
+                <View style={detail.propRow}>
+                  <MapPin color={T.n500} size={rs(12)} strokeWidth={2} />
+                  <Text style={[detail.propLoc, { fontSize: rs(12) }]}>{notif.property.location}</Text>
                 </View>
-                <View style={detail.propBody}>
-                  <Text style={detail.propName}>{notif.property.name}</Text>
-                  <View style={detail.propRow}>
-                    <MapPin color={T.n500} size={12} strokeWidth={2} />
-                    <Text style={detail.propLoc}>{notif.property.location}</Text>
-                  </View>
-                  <View style={detail.propStat}>
-                    <Home color={T.g600} size={12} strokeWidth={2} />
-                    <Text style={detail.propStatTxt}>{notif.property.units} Units</Text>
-                  </View>
+                <View style={detail.propStat}>
+                  <Home color={T.g600} size={rs(12)} strokeWidth={2} />
+                  <Text style={[detail.propStatTxt, { fontSize: rs(12) }]}>{notif.property.units} Units</Text>
                 </View>
-              </View>
-            </>
-          )
-        }
-
-        {/* ── SUBMISSION DETAILS ── */}
-        {
-          isSubmission && notif.submission && (
-            <>
-              <SectionLabel text="SUBMISSION DETAILS" mt={20} />
-              <View style={detail.infoCard}>
-                {[
-                  { label: 'Listed Price', val: notif.submission.listedPrice, Icon: TrendingUp },
-                  { label: 'Area per Unit', val: notif.submission.listedArea, Icon: Layers },
-                  { label: 'Documents Attached', val: `${notif.submission.docsAttached} files`, Icon: FileText },
-                ].map(({ label, val, Icon: OI }) => (
-                  <View key={label} style={detail.infoRow}>
-                    <View style={detail.infoIconBox}><OI color={T.g700} size={16} strokeWidth={2} /></View>
-                    <View>
-                      <Text style={detail.infoLabel}>{label}</Text>
-                      <Text style={detail.infoVal}>{val}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </>
-          )
-        }
-
-        {/* ── HIRE OFFER TERMS ── */}
-        {
-          isAgentResp && notif.offer && (
-            <>
-              <SectionLabel text="HIRE TERMS" mt={20} />
-              <View style={detail.infoCard}>
-                {[
-                  { label: 'Commission', val: notif.offer.commission, Icon: TrendingUp },
-                  { label: 'Duration', val: notif.offer.duration, Icon: CalendarDays },
-                ].map(({ label, val, Icon: OI }) => (
-                  <View key={label} style={detail.infoRow}>
-                    <View style={detail.infoIconBox}><OI color={T.g700} size={16} strokeWidth={2} /></View>
-                    <View>
-                      <Text style={detail.infoLabel}>{label}</Text>
-                      <Text style={detail.infoVal}>{val}</Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </>
-          )
-        }
-
-        {/* ── AGENT RESPONSE RESULT BANNER ── */}
-        {
-          isAgentResp && (
-            <View style={[
-              detail.resBanner,
-              notif.status === 'accepted'
-                ? { backgroundColor: T.g100, borderColor: T.g200 }
-                : { backgroundColor: T.redBg, borderColor: T.redBdr },
-            ]}>
-              {notif.status === 'accepted'
-                ? <CheckCircle2 color={T.g700} size={20} strokeWidth={2.5} />
-                : <XCircle color={T.red} size={20} strokeWidth={2.5} />
-              }
-              <View style={{ flex: 1 }}>
-                <Text style={[detail.resTitle, { color: notif.status === 'accepted' ? T.g800 : T.red }]}>
-                  {notif.status === 'accepted' ? 'Request Accepted' : 'Request Declined'}
-                </Text>
-                <Text style={[detail.resSub, { color: notif.status === 'accepted' ? T.g700 : T.red }]}>
-                  {notif.status === 'accepted'
-                    ? `${notif.sender.name} has joined your project.`
-                    : `${notif.sender.name} is unavailable — consider finding another agent.`}
-                </Text>
               </View>
             </View>
-          )
-        }
+          </>
+        )}
+
+        {/* ── SUBMISSION DETAILS ── */}
+        {isSubmission && notif.submission && (
+          <>
+            <SectionLabel text="SUBMISSION DETAILS" mt={20} />
+            <View style={detail.infoCard}>
+              {[
+                { label: 'Listed Price', val: notif.submission.listedPrice, Icon: TrendingUp },
+                { label: 'Area per Unit', val: notif.submission.listedArea, Icon: Layers },
+                { label: 'Documents Attached', val: `${notif.submission.docsAttached} files`, Icon: FileText },
+              ].map(({ label, val, Icon: OI }) => (
+                <View key={label} style={detail.infoRow}>
+                  <View style={detail.infoIconBox}><OI color={T.g700} size={rs(16)} strokeWidth={2} /></View>
+                  <View>
+                    <Text style={detail.infoLabel}>{label}</Text>
+                    <Text style={[detail.infoVal, { fontSize: rs(15) }]}>{val}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* ── HIRE OFFER TERMS ── */}
+        {isAgentResp && notif.offer && (
+          <>
+            <SectionLabel text="HIRE TERMS" mt={20} />
+            <View style={detail.infoCard}>
+              {[
+                { label: 'Commission', val: notif.offer.commission, Icon: TrendingUp },
+                { label: 'Duration', val: notif.offer.duration, Icon: CalendarDays },
+              ].map(({ label, val, Icon: OI }) => (
+                <View key={label} style={detail.infoRow}>
+                  <View style={detail.infoIconBox}><OI color={T.g700} size={rs(16)} strokeWidth={2} /></View>
+                  <View>
+                    <Text style={detail.infoLabel}>{label}</Text>
+                    <Text style={[detail.infoVal, { fontSize: rs(15) }]}>{val}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* ── AGENT RESPONSE RESULT BANNER ── */}
+        {isAgentResp && (
+          <View style={[
+            detail.resBanner,
+            notif.status === 'accepted'
+              ? { backgroundColor: T.g100, borderColor: T.g200 }
+              : { backgroundColor: T.redBg, borderColor: T.redBdr },
+          ]}>
+            {notif.status === 'accepted'
+              ? <CheckCircle2 color={T.g700} size={rs(20)} strokeWidth={2.5} />
+              : <XCircle color={T.red} size={rs(20)} strokeWidth={2.5} />
+            }
+            <View style={{ flex: 1 }}>
+              <Text style={[detail.resTitle, { fontSize: rs(15), color: notif.status === 'accepted' ? T.g800 : T.red }]}>
+                {notif.status === 'accepted' ? 'Request Accepted' : 'Request Declined'}
+              </Text>
+              <Text style={[detail.resSub, { fontSize: rs(13), color: notif.status === 'accepted' ? T.g700 : T.red }]}>
+                {notif.status === 'accepted'
+                  ? `${notif.sender.name} has joined your project.`
+                  : `${notif.sender.name} is unavailable — consider finding another agent.`}
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* ── BUILDER ACTION — APPROVE / REJECT SUBMISSION ── */}
-        {
-          isSubmission && (
-            <>
-              <SectionLabel text="BUILDER ACTION" mt={20} />
-              {canAct ? (
-                <>
-                  <View style={detail.warnBox}>
-                    <AlertTriangle color={T.amber} size={15} strokeWidth={2} />
-                    <Text style={detail.warnTxt}>
-                      Approving will publish this listing live on the platform immediately.
-                    </Text>
-                  </View>
-                  <View style={detail.actionRow}>
-                    <TouchableOpacity
-                      style={[detail.rejectBtn, !!actioning && { opacity: 0.55 }]}
-                      onPress={() => handleSubmission('reject')}
-                      disabled={!!actioning}
-                      activeOpacity={0.85}
-                    >
-                      {actioning === 'reject'
-                        ? <ActivityIndicator color={T.red} size="small" />
-                        : <><XCircle color={T.red} size={18} strokeWidth={2.5} />
-                          <Text style={detail.rejectTxt}>Reject</Text></>
-                      }
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[detail.approveBtn, !!actioning && { opacity: 0.55 }]}
-                      onPress={() => handleSubmission('approve')}
-                      disabled={!!actioning}
-                      activeOpacity={0.85}
-                    >
-                      {actioning === 'approve'
-                        ? <ActivityIndicator color={T.white} size="small" />
-                        : <><CheckCircle2 color={T.white} size={18} strokeWidth={2.5} />
-                          <Text style={detail.approveTxt}>Approve Listing</Text></>
-                      }
-                    </TouchableOpacity>
-                  </View>
-                </>
-              ) : (
-                <View style={[
-                  detail.resolvedRow,
-                  localStatus === 'approved'
-                    ? { backgroundColor: T.g100, borderColor: T.g200 }
-                    : { backgroundColor: T.redBg, borderColor: T.redBdr },
-                ]}>
-                  {localStatus === 'approved'
-                    ? <BadgeCheck color={T.g700} size={18} strokeWidth={2.5} />
-                    : <XCircle color={T.red} size={18} strokeWidth={2.5} />
-                  }
-                  <Text style={[detail.resolvedTxt, { color: localStatus === 'approved' ? T.g800 : T.red }]}>
-                    {localStatus === 'approved'
-                      ? 'You approved this submission. The listing is now live.'
-                      : 'You rejected this submission. The agent has been notified.'}
+        {isSubmission && (
+          <>
+            <SectionLabel text="BUILDER ACTION" mt={20} />
+            {canAct ? (
+              <>
+                <View style={detail.warnBox}>
+                  <AlertTriangle color={T.amber} size={rs(15)} strokeWidth={2} />
+                  <Text style={[detail.warnTxt, { fontSize: rs(13) }]}>
+                    Approving will publish this listing live on the platform immediately.
                   </Text>
                 </View>
-              )}
-            </>
-          )
-        }
+                <View style={[detail.actionRow, isTablet && { gap: 16 }]}>
+                  <TouchableOpacity
+                    style={[detail.rejectBtn, !!actioning && { opacity: 0.55 }]}
+                    onPress={() => handleSubmission('reject')}
+                    disabled={!!actioning}
+                    activeOpacity={0.85}
+                  >
+                    {actioning === 'reject'
+                      ? <ActivityIndicator color={T.red} size="small" />
+                      : <><XCircle color={T.red} size={rs(18)} strokeWidth={2.5} />
+                        <Text style={[detail.rejectTxt, { fontSize: rs(15) }]}>Reject</Text></>
+                    }
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[detail.approveBtn, !!actioning && { opacity: 0.55 }]}
+                    onPress={() => handleSubmission('approve')}
+                    disabled={!!actioning}
+                    activeOpacity={0.85}
+                  >
+                    {actioning === 'approve'
+                      ? <ActivityIndicator color={T.white} size="small" />
+                      : <><CheckCircle2 color={T.white} size={rs(18)} strokeWidth={2.5} />
+                        <Text style={[detail.approveTxt, { fontSize: rs(15) }]}>Approve Listing</Text></>
+                    }
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <View style={[
+                detail.resolvedRow,
+                localStatus === 'approved'
+                  ? { backgroundColor: T.g100, borderColor: T.g200 }
+                  : { backgroundColor: T.redBg, borderColor: T.redBdr },
+              ]}>
+                {localStatus === 'approved'
+                  ? <BadgeCheck color={T.g700} size={rs(18)} strokeWidth={2.5} />
+                  : <XCircle color={T.red} size={rs(18)} strokeWidth={2.5} />
+                }
+                <Text style={[detail.resolvedTxt, { fontSize: rs(13), color: localStatus === 'approved' ? T.g800 : T.red }]}>
+                  {localStatus === 'approved'
+                    ? 'You approved this submission. The listing is now live.'
+                    : 'You rejected this submission. The agent has been notified.'}
+                </Text>
+              </View>
+            )}
+          </>
+        )}
 
         {/* ── REPLY TO USER INQUIRY ── */}
-        {
-          isInquiry && (
-            <>
-              <SectionLabel text="RESPOND TO INQUIRY" mt={20} />
-              <ReplyInput recipientName={notif.sender.name} onSend={handleReply} />
-            </>
-          )
-        }
+        {isInquiry && (
+          <>
+            <SectionLabel text="RESPOND TO INQUIRY" mt={20} />
+            <ReplyInput recipientName={notif.sender.name} onSend={handleReply} />
+          </>
+        )}
 
         {/* ── CTA BUTTONS ── */}
-        <View style={{ gap: 10, marginTop: 20 }}>
+        <View style={{ gap: isTablet ? 12 : 10, marginTop: isTablet ? 24 : 20 }}>
           {notif.property && (
             <TouchableOpacity
               style={detail.ctaGreen}
@@ -1035,17 +1227,15 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
                   navigation.navigate('propertyDetail', { property: notif._fullProperty });
                 } else {
                   Alert.alert('Property Details', [
-                    notif.property.name,
-                    notif.property.location,
-                    notif.property.type,
+                    notif.property.name, notif.property.location, notif.property.type,
                   ].filter(Boolean).join('\n'));
                 }
               }}
               activeOpacity={0.85}
             >
-              <Building2 color={T.g800} size={17} strokeWidth={2.5} />
-              <Text style={detail.ctaGreenTxt}>View Property Details</Text>
-              <ChevronRight color={T.g800} size={17} strokeWidth={2.5} />
+              <Building2 color={T.g800} size={rs(17)} strokeWidth={2.5} />
+              <Text style={[detail.ctaGreenTxt, { fontSize: rs(14) }]}>View Property Details</Text>
+              <ChevronRight color={T.g800} size={rs(17)} strokeWidth={2.5} />
             </TouchableOpacity>
           )}
 
@@ -1055,39 +1245,53 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
               onPress={() => setShowAgentDetail(true)}
               activeOpacity={0.85}
             >
-              <UserCheck color={T.g700} size={17} strokeWidth={2.5} />
-              <Text style={detail.ctaNeutralTxt}>View Agent Profile</Text>
-              <ChevronRight color={T.g700} size={17} strokeWidth={2.5} />
+              <UserCheck color={T.g700} size={rs(17)} strokeWidth={2.5} />
+              <Text style={[detail.ctaNeutralTxt, { fontSize: rs(14) }]}>View Agent Profile</Text>
+              <ChevronRight color={T.g700} size={rs(17)} strokeWidth={2.5} />
             </TouchableOpacity>
           )}
         </View>
 
         <View style={{ height: 40 }} />
-      </ScrollView >
-    </View >
+      </ScrollView>
+    </View>
   );
 }
 
 /* ══════════════════════════════════════════════════════════
    STYLES — List Cards
 ══════════════════════════════════════════════════════════ */
-const list = StyleSheet.create({
-  container: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 36 },
-  card: { backgroundColor: T.white, borderRadius: 18, overflow: 'hidden', elevation: 2, shadowColor: T.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6 },
-  unread: { backgroundColor: '#FAFFFD', elevation: 4 },
+const listS = StyleSheet.create({
+  container: { paddingTop: 8, paddingBottom: 36 },
+  card: {
+    backgroundColor: T.white, borderRadius: 18, overflow: 'hidden',
+    elevation: 2, shadowColor: T.shadow,
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8,
+  },
+  unread: {
+    backgroundColor: '#FAFFFD',
+    elevation: 4,
+    shadowColor: 'rgba(27,94,59,0.18)',
+    shadowOffset: { width: 0, height: 3 }, shadowOpacity: 1, shadowRadius: 10,
+  },
   stripe: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
-  inner: { flexDirection: 'row', padding: 16, gap: 13 },
-  avatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderColor: T.n200 },
-  typeIcon: { position: 'absolute', bottom: -3, right: -4, width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: T.white },
+  inner: { flexDirection: 'row' },
+  avatar: { borderWidth: 2, borderColor: T.n200 },
+  typeIcon: {
+    position: 'absolute', bottom: -3, right: -4,
+    width: 22, height: 22, borderRadius: 11,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1.5, borderColor: T.white,
+  },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 5 },
-  senderName: { fontSize: 14, fontWeight: '800', color: T.n900, flex: 1, letterSpacing: -0.2 },
-  time: { fontSize: 11, color: T.n400, marginLeft: 6 },
+  senderName: { fontWeight: '800', color: T.n900, flex: 1, letterSpacing: -0.2 },
+  time: { color: T.n400, marginLeft: 6 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  roleLabel: { fontSize: 11, color: T.n500, fontWeight: '500' },
-  summary: { fontSize: 13, color: T.n600, lineHeight: 18, marginBottom: 8 },
+  roleLabel: { color: T.n500, fontWeight: '500' },
+  summary: { color: T.n600, marginBottom: 8 },
   summaryBold: { color: T.n800, fontWeight: '600' },
   propHint: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
-  propHintTxt: { fontSize: 11, color: T.g700, fontWeight: '600' },
+  propHintTxt: { color: T.g700, fontWeight: '600' },
   foot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: T.g600 },
 });
@@ -1096,71 +1300,114 @@ const list = StyleSheet.create({
    STYLES — Detail
 ══════════════════════════════════════════════════════════ */
 const detail = StyleSheet.create({
-  scroll: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 24 },
-  hPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 20 },
-  hPillTxt: { fontSize: 12, fontWeight: '700' },
+  scroll: { paddingBottom: 24 },
+  hPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 11, paddingVertical: 6, borderRadius: 20,
+  },
+  hPillTxt: { fontWeight: '700' },
 
-  // Sender card
-  senderCard: { flexDirection: 'row', gap: 14, backgroundColor: T.white, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: T.n200, elevation: 2, shadowColor: T.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 4, marginBottom: 14, overflow: 'hidden' },
+  senderCard: {
+    flexDirection: 'row', gap: 14, backgroundColor: T.white, borderRadius: 16, padding: 16,
+    borderWidth: 1.5, borderColor: T.n200, elevation: 2, shadowColor: T.shadow,
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 4,
+    marginBottom: 14, overflow: 'hidden',
+  },
   sAvatar: { width: 60, height: 60, borderRadius: 30, borderWidth: 2.5, borderColor: T.g400 },
-  sName: { fontSize: 16, fontWeight: '800', color: T.n900, letterSpacing: -0.3, marginBottom: 6 },
-  roleChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, borderWidth: 1, alignSelf: 'flex-start', marginBottom: 8 },
-  roleChipTxt: { fontSize: 11, fontWeight: '700' },
-  agentRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8, flexWrap: 'wrap' },
+  sName: { fontWeight: '800', color: T.n900, letterSpacing: -0.3, marginBottom: 6 },
+  roleChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4,
+    borderRadius: 8, borderWidth: 1, alignSelf: 'flex-start', marginBottom: 8,
+  },
+  roleChipTxt: { fontWeight: '700' },
+  agentRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
   dot2: { color: T.n400, fontSize: 12 },
-  agentMeta: { fontSize: 12, color: T.n500 },
+  agentMeta: { color: T.n500 },
   contactLine: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 4 },
-  contactTxt: { fontSize: 13, color: T.n600 },
+  contactTxt: { color: T.n600 },
 
-  // Meta bar
-  metaBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: T.white, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: T.n200, marginBottom: 20 },
-  metaTxt: { fontSize: 12, color: T.n600, flex: 1 },
+  metaBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: T.white, borderRadius: 12, padding: 12, borderWidth: 1,
+    borderColor: T.n200, marginBottom: 20,
+  },
+  metaTxt: { color: T.n600, flex: 1 },
 
-  // Message
-  msgCard: { backgroundColor: T.white, borderRadius: 16, padding: 18, borderWidth: 1.5, borderColor: T.n200, borderLeftWidth: 4, borderLeftColor: T.g600, marginBottom: 4 },
-  msgTxt: { fontSize: 14, color: T.n700, lineHeight: 22 },
+  msgCard: {
+    backgroundColor: T.white, borderRadius: 16, padding: 18,
+    borderWidth: 1.5, borderColor: T.n200, borderLeftWidth: 4, borderLeftColor: T.g600,
+    marginBottom: 4,
+  },
+  msgTxt: { color: T.n700 },
 
-  // Property card
-  propCard: { borderRadius: 18, overflow: 'hidden', elevation: 3, shadowColor: T.shadow, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 1, shadowRadius: 8 },
+  propCard: {
+    borderRadius: 18, overflow: 'hidden', elevation: 3, shadowColor: T.shadow,
+    shadowOffset: { width: 0, height: 3 }, shadowOpacity: 1, shadowRadius: 8,
+  },
   propImg: { width: '100%', height: 155 },
-  propScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 155, backgroundColor: 'rgba(0,0,0,0.1)' },
-  propTag: { position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(27,94,59,0.85)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  propScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 155, backgroundColor: 'rgba(0,0,0,0.08)' },
+  propTag: {
+    position: 'absolute', top: 12, left: 12, backgroundColor: 'rgba(27,94,59,0.85)',
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8,
+  },
   propTagTxt: { color: T.white, fontSize: 11, fontWeight: '700' },
   propBody: { backgroundColor: T.white, padding: 14 },
-  propName: { fontSize: 16, fontWeight: '800', color: T.n900, marginBottom: 4 },
+  propName: { fontWeight: '800', color: T.n900, marginBottom: 4 },
   propRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
-  propLoc: { fontSize: 12, color: T.n500 },
-  propStat: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: T.g100, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' },
-  propStatTxt: { fontSize: 12, fontWeight: '600', color: T.g700 },
+  propLoc: { color: T.n500 },
+  propStat: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: T.g100, paddingHorizontal: 9, paddingVertical: 4,
+    borderRadius: 8, alignSelf: 'flex-start',
+  },
+  propStatTxt: { fontWeight: '600', color: T.g700 },
 
-  // Info card (submission / hire terms)
   infoCard: { backgroundColor: T.white, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: T.g200, gap: 14 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  infoIconBox: { width: 38, height: 38, borderRadius: 10, backgroundColor: T.g100, justifyContent: 'center', alignItems: 'center' },
+  infoIconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: T.g100, justifyContent: 'center', alignItems: 'center' },
   infoLabel: { fontSize: 11, color: T.n500, fontWeight: '500', marginBottom: 2 },
-  infoVal: { fontSize: 15, fontWeight: '800', color: T.n900 },
+  infoVal: { fontWeight: '800', color: T.n900 },
 
-  // Agent response banner
-  resBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, padding: 16, borderRadius: 16, borderWidth: 1.5, marginTop: 20 },
-  resTitle: { fontSize: 15, fontWeight: '800', marginBottom: 3 },
-  resSub: { fontSize: 13, fontWeight: '500', lineHeight: 18 },
+  resBanner: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 12,
+    padding: 16, borderRadius: 16, borderWidth: 1.5, marginTop: 20,
+  },
+  resTitle: { fontWeight: '800', marginBottom: 3 },
+  resSub: { fontWeight: '500', lineHeight: 18 },
 
-  // Approve / Reject
-  warnBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: T.amberBg, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: T.amberBdr, marginBottom: 14 },
-  warnTxt: { flex: 1, fontSize: 13, color: '#92400E', lineHeight: 18 },
+  warnBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: T.amberBg, borderRadius: 12, padding: 12,
+    borderWidth: 1, borderColor: T.amberBdr, marginBottom: 14,
+  },
+  warnTxt: { flex: 1, color: '#92400E', lineHeight: 18 },
   actionRow: { flexDirection: 'row', gap: 12 },
-  rejectBtn: { flex: 0.8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: T.redBg, borderWidth: 2, borderColor: T.redBdr, borderRadius: 14, paddingVertical: 14 },
-  rejectTxt: { color: T.red, fontSize: 15, fontWeight: '700' },
-  approveBtn: { flex: 1.4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: T.g800, borderRadius: 14, paddingVertical: 14, elevation: 4, shadowColor: T.shadow, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 1, shadowRadius: 6 },
-  approveTxt: { color: T.white, fontSize: 15, fontWeight: '700' },
+  rejectBtn: {
+    flex: 0.8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: T.redBg, borderWidth: 2, borderColor: T.redBdr,
+    borderRadius: 14, paddingVertical: 14,
+  },
+  rejectTxt: { color: T.red, fontWeight: '700' },
+  approveBtn: {
+    flex: 1.4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, backgroundColor: T.g800, borderRadius: 14, paddingVertical: 14,
+    elevation: 4, shadowColor: T.shadow, shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 1, shadowRadius: 6,
+  },
+  approveTxt: { color: T.white, fontWeight: '700' },
   resolvedRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 14, borderWidth: 1.5 },
-  resolvedTxt: { flex: 1, fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  resolvedTxt: { flex: 1, fontWeight: '600', lineHeight: 18 },
 
-  // CTA buttons
-  ctaGreen: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: T.g100, borderWidth: 2, borderColor: T.g200, borderRadius: 14, padding: 16 },
-  ctaGreenTxt: { flex: 1, fontSize: 14, fontWeight: '700', color: T.g800 },
-  ctaNeutral: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: T.white, borderWidth: 2, borderColor: T.n200, borderRadius: 14, padding: 16 },
-  ctaNeutralTxt: { flex: 1, fontSize: 14, fontWeight: '600', color: T.g700 },
+  ctaGreen: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: T.g100, borderWidth: 2, borderColor: T.g200, borderRadius: 14, padding: 16,
+  },
+  ctaGreenTxt: { flex: 1, fontWeight: '700', color: T.g800 },
+  ctaNeutral: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: T.white, borderWidth: 2, borderColor: T.n200, borderRadius: 14, padding: 16,
+  },
+  ctaNeutralTxt: { flex: 1, fontWeight: '600', color: T.g700 },
 });
 
 /* ══════════════════════════════════════════════════════════
@@ -1168,23 +1415,83 @@ const detail = StyleSheet.create({
 ══════════════════════════════════════════════════════════ */
 const g = StyleSheet.create({
   screen: { flex: 1, backgroundColor: T.g50 },
-  searchWrap: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.white, borderWidth: 1.5, borderColor: T.n300, borderRadius: 14, paddingHorizontal: 13, height: 46 },
-  searchInput: { flex: 1, fontSize: 14, color: T.n900, height: '100%' },
-  chips: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 22, backgroundColor: T.white, borderWidth: 1.5, borderColor: T.n300 },
-  chipOn: { backgroundColor: T.g800, borderColor: T.g800 },
-  chipTxt: { fontSize: 12, fontWeight: '600', color: T.n500 },
+
+  // Search + filter grouped container
+  topBar: {
+    backgroundColor: T.white,
+    paddingTop: 14,
+    paddingBottom: 2,
+    borderBottomWidth: 1,
+    borderBottomColor: T.n200,
+    // Subtle shadow to separate from list
+    shadowColor: 'rgba(0,0,0,0.06)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+
+  // Search box — border changes via prop (no native focus ring)
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: T.n100,
+    borderWidth: 1.5, borderColor: T.n200,
+    borderRadius: 14, paddingHorizontal: 14, height: 46,
+  },
+  searchBoxFocused: {
+    backgroundColor: T.white,
+    borderColor: T.g600,
+    shadowColor: 'rgba(27,94,59,0.15)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  searchInput: {
+    flex: 1, color: T.n900, height: '100%',
+    // Prevent native Android blue underline/border
+    underlineColorAndroid: 'transparent',
+  },
+  searchClear: { padding: 2 },
+  searchClearInner: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: T.n300,
+    justifyContent: 'center', alignItems: 'center',
+  },
+
+  chips: { gap: 8, alignItems: 'center' },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 24,
+    backgroundColor: T.n100,
+    borderWidth: 1.5, borderColor: T.n200,
+  },
+  chipOn: {
+    backgroundColor: T.g800, borderColor: T.g800,
+    shadowColor: 'rgba(27,94,59,0.3)',
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6,
+    elevation: 4,
+  },
+  chipTxt: { fontWeight: '600', color: T.n600 },
   chipTxtOn: { color: T.white },
   chipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: T.g600 },
   chipDotOn: { backgroundColor: T.white },
-  chipNum: { backgroundColor: T.g200, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1 },
+  chipNum: {
+    backgroundColor: T.g200, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1,
+  },
   chipNumOn: { backgroundColor: 'rgba(255,255,255,0.25)' },
   chipNumTxt: { fontSize: 10, fontWeight: '800', color: T.g700 },
   chipNumTxtOn: { color: T.white },
-  empty: { alignItems: 'center', paddingTop: 80, gap: 12 },
-  emptyH: { fontSize: 17, fontWeight: '800', color: T.n600 },
-  emptySub: { fontSize: 14, color: T.n400, textAlign: 'center', paddingHorizontal: 32 },
+
+  empty: { alignItems: 'center', gap: 14 },
+  emptyIconWrap: {
+    width: 90, height: 90, borderRadius: 45,
+    backgroundColor: T.g100,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 4,
+  },
+  emptyH: { fontWeight: '800', color: T.n600 },
+  emptySub: { color: T.n400, textAlign: 'center', paddingHorizontal: 32 },
 });
 
 /* ══════════════════════════════════════════════════════════
@@ -1192,9 +1499,18 @@ const g = StyleSheet.create({
 ══════════════════════════════════════════════════════════ */
 const menu = StyleSheet.create({
   bg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)' },
-  box: { position: 'absolute', top: Platform.OS === 'ios' ? 102 : 72, right: 16, backgroundColor: T.white, borderRadius: 16, elevation: 10, shadowColor: 'rgba(0,0,0,0.2)', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, minWidth: 230 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 14 },
-  rowTxt: { fontSize: 14, fontWeight: '600', color: T.n700 },
+  box: {
+    position: 'absolute', right: 16, backgroundColor: T.white, borderRadius: 18,
+    elevation: 12, shadowColor: 'rgba(0,0,0,0.18)',
+    shadowOffset: { width: 0, height: 6 }, shadowOpacity: 1, shadowRadius: 16,
+    minWidth: 240, overflow: 'hidden',
+  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 15 },
+  iconBox: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: T.g100, justifyContent: 'center', alignItems: 'center',
+  },
+  rowTxt: { fontWeight: '600', color: T.n700 },
   div: { height: 1, backgroundColor: T.n200 },
 });
 
@@ -1205,8 +1521,8 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
   const [notifs, setNotifs] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { rs, isTablet } = useResponsive();
 
-  // Fetch real notifications from backend
   const fetchNotifications = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem('authToken');
@@ -1248,7 +1564,6 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
   const openDetail = useCallback(async (notif) => {
-    // Mark as read on backend
     try {
       const token = await AsyncStorage.getItem('authToken');
       if (token) {
@@ -1260,7 +1575,6 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
     } catch (_) { }
     setNotifs(p => p.map(n => n.id === notif.id ? { ...n, read: true } : n));
 
-    // For property_submission or property_upload notifications, fetch the full request details
     let enriched = { ...notif, read: true };
     const isSubmission = notif.type === 'property_submission';
     const isUpload = notif.type === 'property_upload';
@@ -1278,9 +1592,7 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
             const coverImage = r.property?.images?.[0];
             const imageUrl = coverImage && coverImage.startsWith('http')
               ? coverImage
-              : coverImage
-                ? `${API_BASE_URL.replace('/api', '')}${coverImage}`
-                : null;
+              : coverImage ? `${API_BASE_URL.replace('/api', '')}${coverImage}` : null;
 
             let summaryText = enriched.summary;
             let messageText = r.property?.description || enriched.message;
@@ -1320,7 +1632,6 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
                 listedArea: r.property?.area_sqft ? `${r.property.area_sqft} sq ft` : 'N/A',
                 docsAttached: r.property?.images?.length || 0,
               },
-              // Full property object for PropertyDetailScreen navigation
               _fullProperty: r.property ? {
                 ...r.property,
                 images: (r.property.images || []).map(img =>
@@ -1355,7 +1666,6 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
                 avatar: r.agent_avatar ? getImageUrl(r.agent_avatar) : null,
                 email: r.agent_email || '',
                 phone: r.agent_phone || '',
-                // Enhanced fields
                 specialization: r.professional_title || '',
                 experience: r.experience_years || 0,
                 about: r.about_me || '',
@@ -1395,8 +1705,15 @@ export default function BuilderNotificationsScreen({ navigation, onBack }) {
   if (loading) {
     return (
       <View style={[g.screen, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={T.g800} />
-        <Text style={{ marginTop: 12, color: T.n500 }}>Loading notifications…</Text>
+        <View style={{
+          width: 80, height: 80, borderRadius: 24, backgroundColor: T.g100,
+          justifyContent: 'center', alignItems: 'center', marginBottom: 16,
+        }}>
+          <ActivityIndicator size="large" color={T.g800} />
+        </View>
+        <Text style={{ fontSize: rs(15), color: T.n500, fontWeight: '500' }}>
+          Loading notifications…
+        </Text>
       </View>
     );
   }

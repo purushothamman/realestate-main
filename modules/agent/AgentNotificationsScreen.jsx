@@ -11,6 +11,7 @@
  *
  * Theme: Forest green #1B5E3B + white — consistent with the rest of the app
  * Focus-safe: every reply TextInput uses the onBlur-commit pattern.
+ * Fix: Removed black border on search focus, improved filter chip design.
  */
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -127,7 +128,13 @@ const STATUS_META = {
   approved: { label: 'Approved', color: T.g700, bg: T.g100, icon: CheckCircle2 },
 };
 
-const FILTERS = ['All', 'Unread', 'Hire Requests', 'Assignments', 'Inquiries'];
+const FILTERS = [
+  { key: 'All', label: 'All' },
+  { key: 'Unread', label: 'Unread' },
+  { key: 'Hire Requests', label: 'Hire Requests' },
+  { key: 'Assignments', label: 'Assignments' },
+  { key: 'Inquiries', label: 'Inquiries' },
+];
 
 /* ═══════════════════════════════════════════════════════════
    DATE HELPERS
@@ -185,14 +192,7 @@ const chip = StyleSheet.create({
 const ReplyInput = React.memo(({ onSend }) => {
   const [val, setVal] = useState('');
   const [sending, setSending] = useState(false);
-  const wrapRef = useRef(null);
-
-  const onFocus = useCallback(() => {
-    wrapRef.current?.setNativeProps({ style: { borderColor: T.g600 } });
-  }, []);
-  const onBlur = useCallback(() => {
-    wrapRef.current?.setNativeProps({ style: { borderColor: T.n300 } });
-  }, []);
+  const [focused, setFocused] = useState(false);
 
   const handleSend = async () => {
     if (!val.trim()) { Alert.alert('Empty Reply', 'Please type a message before sending.'); return; }
@@ -205,19 +205,20 @@ const ReplyInput = React.memo(({ onSend }) => {
 
   return (
     <View style={ri.outer}>
-      <View ref={wrapRef} style={ri.wrap}>
+      <View style={[ri.wrap, focused && ri.wrapFocused]}>
         <TextInput
           style={ri.input}
           placeholder="Type your reply to the user…"
           placeholderTextColor={T.n400}
           value={val}
           onChangeText={setVal}
-          onFocus={onFocus}
-          onBlur={onBlur}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           multiline
           numberOfLines={3}
           textAlignVertical="top"
           blurOnSubmit={false}
+          underlineColorAndroid="transparent"
         />
       </View>
       <TouchableOpacity
@@ -237,8 +238,25 @@ const ReplyInput = React.memo(({ onSend }) => {
 
 const ri = StyleSheet.create({
   outer: { gap: 12 },
-  wrap: { backgroundColor: T.g50, borderWidth: 1.5, borderColor: T.n300, borderRadius: 14, padding: 14, minHeight: 90 },
-  input: { fontSize: 14, color: T.n900, minHeight: 65 },
+  wrap: {
+    backgroundColor: T.g50,
+    borderWidth: 1.5,
+    borderColor: T.n200,
+    borderRadius: 14,
+    padding: 14,
+    minHeight: 90,
+  },
+  wrapFocused: {
+    borderColor: T.g600,
+    backgroundColor: T.white,
+  },
+  input: {
+    fontSize: 14,
+    color: T.n900,
+    minHeight: 65,
+    // Remove default outline/highlight on all platforms
+    outlineWidth: 0,
+  },
   sendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: T.g800, borderRadius: 14, paddingVertical: 14, elevation: 3, shadowColor: T.shadow, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 1, shadowRadius: 6 },
   sendDisabled: { opacity: 0.55 },
   sendTxt: { color: T.white, fontSize: 15, fontWeight: '700' },
@@ -251,6 +269,7 @@ function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   const unreadCount = useMemo(() => notifs.filter(n => !n.read).length, [notifs]);
 
@@ -321,6 +340,7 @@ function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
   return (
     <View style={ss.root}>
       <StatusBar barStyle="light-content" backgroundColor={T.g800} />
+
       {/* Header */}
       <View style={ss.header}>
         <TouchableOpacity style={ss.iconBtn} onPress={onBack} activeOpacity={0.7}>
@@ -340,46 +360,61 @@ function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
         )}
       </View>
 
-      {/* Search */}
-      <View style={ss.searchRow}>
-        <View style={ss.searchBox}>
-          <Search color={T.n500} size={16} strokeWidth={2} />
+      {/* Search + Filters grouped together */}
+      <View style={ss.searchFilterBlock}>
+        {/* Search */}
+        <View style={[ss.searchBox, searchFocused && ss.searchBoxFocused]}>
+          <Search color={searchFocused ? T.g600 : T.n400} size={16} strokeWidth={2} />
           <TextInput
             style={ss.searchInput}
             placeholder="Search notifications…"
-            placeholderTextColor={T.n500}
+            placeholderTextColor={T.n400}
             value={search}
             onChangeText={setSearch}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            underlineColorAndroid="transparent"
           />
           {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <X color={T.n500} size={15} strokeWidth={2} />
+            <TouchableOpacity
+              onPress={() => setSearch('')}
+              style={ss.searchClear}
+              activeOpacity={0.7}
+            >
+              <X color={T.n400} size={14} strokeWidth={2.5} />
             </TouchableOpacity>
           )}
         </View>
-      </View>
 
-      {/* Filter chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={ss.chips}>
-        {FILTERS.map(f => (
-          <TouchableOpacity
-            key={f}
-            style={[ss.chip, filter === f && ss.chipActive]}
-            onPress={() => setFilter(f)}
-            activeOpacity={0.8}
-          >
-            {f === 'Unread' && unreadCount > 0 && (
-              <View style={[ss.chipDot, filter === f && ss.chipDotActive]} />
-            )}
-            <Text style={[ss.chipTxt, filter === f && ss.chipTxtActive]}>{f}</Text>
-            {f === 'Unread' && unreadCount > 0 && (
-              <View style={[ss.chipBadge, filter === f && ss.chipBadgeActive]}>
-                <Text style={[ss.chipBadgeTxt, filter === f && ss.chipBadgeTxtActive]}>{unreadCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+        {/* Filter chips — directly below search */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={ss.chipsContainer}
+        >
+          {FILTERS.map(f => {
+            const isActive = filter === f.key;
+            const isUnread = f.key === 'Unread';
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[ss.chip, isActive && ss.chipActive]}
+                onPress={() => setFilter(f.key)}
+                activeOpacity={0.75}
+              >
+                <Text style={[ss.chipTxt, isActive && ss.chipTxtActive]}>{f.label}</Text>
+                {isUnread && unreadCount > 0 && (
+                  <View style={[ss.chipCountBadge, isActive && ss.chipCountBadgeActive]}>
+                    <Text style={[ss.chipCountTxt, isActive && ss.chipCountTxtActive]}>
+                      {unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
       {/* List */}
       <FlatList
@@ -423,13 +458,27 @@ function NotificationList({ notifs, onOpen, onMarkAllRead, onBack }) {
 
 const nl = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 36 },
-  card: { backgroundColor: T.white, borderRadius: 18, overflow: 'hidden', elevation: 2, shadowColor: T.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 6 },
+  card: {
+    backgroundColor: T.white,
+    borderRadius: 18,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: T.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+  },
   cardUnread: { backgroundColor: '#FAFFFD', elevation: 4 },
   stripe: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: T.g600 },
   inner: { flexDirection: 'row', padding: 16, gap: 13 },
   avatarWrap: { position: 'relative' },
   avatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderColor: T.n200 },
-  typeIcon: { position: 'absolute', bottom: -3, right: -4, width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: T.white },
+  typeIcon: {
+    position: 'absolute', bottom: -3, right: -4,
+    width: 22, height: 22, borderRadius: 11,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1.5, borderColor: T.white,
+  },
   body: { flex: 1 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 5 },
   senderName: { fontSize: 14, fontWeight: '800', color: T.n900, flex: 1, letterSpacing: -0.2 },
@@ -788,26 +837,126 @@ const dv = StyleSheet.create({
 ═══════════════════════════════════════════════════════════ */
 const ss = StyleSheet.create({
   root: { flex: 1, backgroundColor: T.g50 },
-  header: { backgroundColor: T.g800, paddingTop: Platform.OS === 'ios' ? 58 : 28, paddingBottom: 22, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 14 },
-  iconBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+
+  // Header
+  header: {
+    backgroundColor: T.g800,
+    paddingTop: Platform.OS === 'ios' ? 58 : 28,
+    paddingBottom: 22,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  iconBtn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+  },
   headerTitle: { fontSize: 20, fontWeight: '800', color: T.white, letterSpacing: -0.4 },
   headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
-  headerBadge: { position: 'absolute', top: Platform.OS === 'ios' ? 56 : 26, right: 10, backgroundColor: T.red, width: 18, height: 18, borderRadius: 9, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: T.g800 },
+  headerBadge: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 56 : 26,
+    right: 10,
+    backgroundColor: T.red,
+    width: 18, height: 18, borderRadius: 9,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: T.g800,
+  },
   headerBadgeTxt: { fontSize: 9, fontWeight: '900', color: T.white },
-  searchRow: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.white, borderWidth: 1.5, borderColor: T.n300, borderRadius: 14, paddingHorizontal: 13, height: 46 },
-  searchInput: { flex: 1, fontSize: 14, color: T.n900, height: '100%' },
-  chips: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 22, backgroundColor: T.white, borderWidth: 1.5, borderColor: T.n300 },
-  chipActive: { backgroundColor: T.g800, borderColor: T.g800 },
-  chipTxt: { fontSize: 12, fontWeight: '600', color: T.n500 },
-  chipTxtActive: { color: T.white },
-  chipDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: T.g600 },
-  chipDotActive: { backgroundColor: T.white },
-  chipBadge: { backgroundColor: T.g200, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 1 },
-  chipBadgeActive: { backgroundColor: 'rgba(255,255,255,0.25)' },
-  chipBadgeTxt: { fontSize: 10, fontWeight: '800', color: T.g700 },
-  chipBadgeTxtActive: { color: T.white },
+
+  // Search + Filter block
+  searchFilterBlock: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 4,
+    gap: 10,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: T.white,
+    borderWidth: 1.5,
+    borderColor: T.n200,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 48,
+    // Prevent any outline on web/android
+    elevation: 0,
+  },
+  searchBoxFocused: {
+    borderColor: T.g600,
+    backgroundColor: T.white,
+    elevation: 2,
+    shadowColor: T.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: T.n900,
+    height: '100%',
+    // Prevent black outline on Android & web
+    outlineWidth: 0,
+    outlineStyle: 'none',
+  },
+  searchClear: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: T.n100,
+    justifyContent: 'center', alignItems: 'center',
+  },
+
+  // Filter chips — cleaner pill design
+  chipsContainer: {
+    paddingVertical: 2,
+    gap: 8,
+    alignItems: 'center',
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 24,
+    backgroundColor: T.white,
+    borderWidth: 1.5,
+    borderColor: T.n200,
+    // subtle shadow on inactive chips
+    elevation: 1,
+    shadowColor: 'rgba(0,0,0,0.06)',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 1,
+    shadowRadius: 3,
+  },
+  chipActive: {
+    backgroundColor: T.g800,
+    borderColor: T.g800,
+    elevation: 3,
+    shadowColor: T.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+  },
+  chipTxt: { fontSize: 13, fontWeight: '600', color: T.n600 },
+  chipTxtActive: { color: T.white, fontWeight: '700' },
+
+  // Count badge on Unread chip
+  chipCountBadge: {
+    minWidth: 20, height: 20, borderRadius: 10,
+    backgroundColor: T.g100,
+    paddingHorizontal: 5,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  chipCountBadgeActive: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  chipCountTxt: { fontSize: 11, fontWeight: '800', color: T.g700 },
+  chipCountTxtActive: { color: T.white },
+
+  // Empty state
   empty: { alignItems: 'center', paddingTop: 80, gap: 12 },
   emptyTitle: { fontSize: 17, fontWeight: '800', color: T.n600 },
   emptySubtitle: { fontSize: 14, color: T.n400, textAlign: 'center' },
@@ -818,7 +967,19 @@ const ss = StyleSheet.create({
 ═══════════════════════════════════════════════════════════ */
 const mn = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)' },
-  menu: { position: 'absolute', top: Platform.OS === 'ios' ? 102 : 72, right: 16, backgroundColor: T.white, borderRadius: 16, elevation: 10, shadowColor: 'rgba(0,0,0,0.2)', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 1, shadowRadius: 12, minWidth: 210 },
+  menu: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 102 : 72,
+    right: 16,
+    backgroundColor: T.white,
+    borderRadius: 16,
+    elevation: 10,
+    shadowColor: 'rgba(0,0,0,0.2)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 1,
+    shadowRadius: 12,
+    minWidth: 210,
+  },
   item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 14 },
   itemTxt: { fontSize: 14, fontWeight: '600', color: T.n700 },
   div: { height: 1, backgroundColor: T.n200 },
