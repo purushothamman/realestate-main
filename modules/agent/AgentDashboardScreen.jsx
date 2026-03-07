@@ -13,7 +13,9 @@ import {
     Dimensions,
     ActivityIndicator,
     RefreshControl,
-    Alert
+    Alert,
+    useWindowDimensions,
+    Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -47,10 +49,32 @@ import {
     X
 } from 'lucide-react-native';
 
-const { width } = Dimensions.get('window');
+// ─── Responsive Utilities ────────────────────────────────────────────────────
 
+const BASE_WIDTH = 375; // iPhone SE / base design width
 
-const AnimatedKPICard = ({ icon, label, value, trend, trendValue, color, delay = 0, style }) => {
+const getResponsiveSize = (size, width) => {
+    const scale = width / BASE_WIDTH;
+    const clamped = Math.min(Math.max(scale, 0.85), 1.4);
+    return Math.round(size * clamped);
+};
+
+const getDeviceType = (width) => {
+    if (width >= 1024) return 'desktop';
+    if (width >= 768) return 'tablet';
+    if (width >= 414) return 'largeMobile';
+    return 'mobile';
+};
+
+const getColumns = (deviceType) => {
+    if (deviceType === 'desktop') return 4;
+    if (deviceType === 'tablet') return 2;
+    return 2;
+};
+
+// ─── AnimatedKPICard ─────────────────────────────────────────────────────────
+
+const AnimatedKPICard = ({ icon, label, value, trend, trendValue, color, delay = 0, style, rs }) => {
     const scaleAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -64,25 +88,52 @@ const AnimatedKPICard = ({ icon, label, value, trend, trendValue, color, delay =
     }, []);
 
     return (
-        <Animated.View style={[styles.kpiCard, { transform: [{ scale: scaleAnim }] }, style]}>
+        <Animated.View style={[
+            styles.kpiCard,
+            {
+                transform: [{ scale: scaleAnim }],
+                padding: rs(18),
+                borderRadius: rs(20),
+                marginBottom: rs(16),
+            },
+            style
+        ]}>
             <View style={styles.kpiHeader}>
-                <View style={[styles.kpiIcon, { backgroundColor: `${color}15` }]}>
+                <View style={[
+                    styles.kpiIcon,
+                    {
+                        backgroundColor: `${color}15`,
+                        width: rs(44),
+                        height: rs(44),
+                        borderRadius: rs(14),
+                    }
+                ]}>
                     {icon}
                 </View>
                 {trend && (
-                    <View style={styles.kpiTrendContainer}>
-                        <TrendingUp width={14} height={14} color="#10b981" strokeWidth={2.5} />
-                        <Text style={styles.kpiTrendText}>{trendValue}</Text>
+                    <View style={[styles.kpiTrendContainer, { paddingHorizontal: rs(8), paddingVertical: rs(4), borderRadius: rs(10) }]}>
+                        <TrendingUp width={rs(14)} height={rs(14)} color="#10b981" strokeWidth={2.5} />
+                        <Text style={[styles.kpiTrendText, { fontSize: rs(11) }]}>{trendValue}</Text>
                     </View>
                 )}
             </View>
-            <Text style={styles.kpiLabel}>{label}</Text>
-            <Text style={styles.kpiValue}>{value}</Text>
+            <Text style={[styles.kpiLabel, { fontSize: rs(13) }]}>{label}</Text>
+            <Text style={[styles.kpiValue, { fontSize: rs(26) }]}>{value}</Text>
         </Animated.View>
     );
 };
 
+// ─── Main Component ───────────────────────────────────────────────────────────
+
 const AgentDashboard = ({ navigation, route }) => {
+    const { width, height } = useWindowDimensions();
+    const deviceType = getDeviceType(width);
+    const isTabletOrDesktop = deviceType === 'tablet' || deviceType === 'desktop';
+    const isDesktop = deviceType === 'desktop';
+
+    // Responsive size helper bound to current width
+    const rs = (size) => getResponsiveSize(size, width);
+
     // Animation values
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(20)).current;
@@ -112,7 +163,6 @@ const AgentDashboard = ({ navigation, route }) => {
     const apiRequest = async (endpoint, options = {}) => {
         try {
             const token = await getAuthToken();
-
             const config = {
                 headers: {
                     'Content-Type': 'application/json',
@@ -121,14 +171,9 @@ const AgentDashboard = ({ navigation, route }) => {
                 },
                 ...options,
             };
-
             const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
             const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || 'API request failed');
-            }
-
+            if (!response.ok) throw new Error(data.message || 'API request failed');
             return data;
         } catch (error) {
             console.error('API Error:', error);
@@ -140,16 +185,13 @@ const AgentDashboard = ({ navigation, route }) => {
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
-
             const propertiesResponse = await apiRequest('/properties/my-properties');
             const notificationsResponse = await apiRequest('/notifications');
             const statsResponse = await apiRequest('/agent/dashboard-stats');
 
             if (propertiesResponse.success) {
-                // Show all recent properties, not just sold/rented
                 setActiveListings(propertiesResponse.properties || []);
             }
-
             if (statsResponse.success) {
                 const s = statsResponse.stats;
                 setStats({
@@ -162,11 +204,9 @@ const AgentDashboard = ({ navigation, route }) => {
                     monthlyRevenue: s.monthlyRevenue || 0
                 });
             }
-
             if (notificationsResponse?.success) {
                 setNotifications(notificationsResponse.notifications || []);
             }
-
         } catch (error) {
             console.error('Error fetching dashboard data:', error);
         } finally {
@@ -174,35 +214,27 @@ const AgentDashboard = ({ navigation, route }) => {
         }
     };
 
-    // Pull to refresh
     const onRefresh = async () => {
         setRefreshing(true);
         await fetchDashboardData();
         setRefreshing(false);
     };
 
-    // Format price for display
     const formatPrice = (price) => {
-        if (price >= 1000000) {
-            return `$${(price / 1000000).toFixed(2)}M`;
-        } else if (price >= 1000) {
-            return `$${(price / 1000).toFixed(0)}K`;
-        }
+        if (price >= 1000000) return `$${(price / 1000000).toFixed(2)}M`;
+        if (price >= 1000) return `$${(price / 1000).toFixed(0)}K`;
         return `$${price}`;
     };
 
-    // Format budget range
     const formatBudgetRange = (budgetRange) => {
         if (!budgetRange) return 'N/A';
         return `${formatPrice(budgetRange.min)} - ${formatPrice(budgetRange.max)}`;
     };
 
-    // Format time ago
     const formatTimeAgo = (date) => {
         const now = new Date();
         const then = new Date(date);
         const seconds = Math.floor((now - then) / 1000);
-
         if (seconds < 60) return 'Just now';
         if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
         if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
@@ -210,63 +242,39 @@ const AgentDashboard = ({ navigation, route }) => {
         return then.toLocaleDateString();
     };
 
-    // Derived: pending hire requests from notifications
     const pendingHireRequests = notifications.filter(
         (n) => n.type === 'hire_request' && !n.isRead
     );
 
-    // Handle lead contact
     const handleContactLead = async (lead) => {
         Alert.alert(
             'Contact Lead',
             `Call ${lead.clientName}?`,
             [
                 { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Call',
-                    onPress: () => {
-                        console.log('Calling:', lead.phone);
-                    }
-                }
+                { text: 'Call', onPress: () => { console.log('Calling:', lead.phone); } }
             ]
         );
     };
 
     useEffect(() => {
         fetchDashboardData();
-
         Animated.parallel([
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 600,
-                useNativeDriver: true
-            }),
-            Animated.timing(slideAnim, {
-                toValue: 0,
-                duration: 600,
-                useNativeDriver: true
-            })
+            Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+            Animated.timing(slideAnim, { toValue: 0, duration: 600, useNativeDriver: true })
         ]).start();
     }, []);
 
     const getStatusStyle = (status) => {
         switch (status) {
-            case 'new':
-                return { bg: '#dbeafe', text: '#1d4ed8', border: '#bfdbfe' };
-            case 'contacted':
-                return { bg: '#f3e8ff', text: '#7c3aed', border: '#e9d5ff' };
-            case 'follow-up':
-                return { bg: '#fef3c7', text: '#b45309', border: '#fde68a' };
-            case 'closed':
-                return { bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' };
-            case 'active':
-                return { bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' };
-            case 'pending':
-                return { bg: '#fef3c7', text: '#b45309', border: '#fde68a' };
-            case 'sold':
-                return { bg: '#dbeafe', text: '#1d4ed8', border: '#bfdbfe' };
-            default:
-                return { bg: '#f3f4f6', text: '#374151', border: '#e5e7eb' };
+            case 'new': return { bg: '#dbeafe', text: '#1d4ed8', border: '#bfdbfe' };
+            case 'contacted': return { bg: '#f3e8ff', text: '#7c3aed', border: '#e9d5ff' };
+            case 'follow-up': return { bg: '#fef3c7', text: '#b45309', border: '#fde68a' };
+            case 'closed': return { bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' };
+            case 'active': return { bg: '#dcfce7', text: '#15803d', border: '#bbf7d0' };
+            case 'pending': return { bg: '#fef3c7', text: '#b45309', border: '#fde68a' };
+            case 'sold': return { bg: '#dbeafe', text: '#1d4ed8', border: '#bfdbfe' };
+            default: return { bg: '#f3f4f6', text: '#374151', border: '#e5e7eb' };
         }
     };
 
@@ -281,11 +289,21 @@ const AgentDashboard = ({ navigation, route }) => {
         extrapolate: 'clamp',
     });
 
+    // KPI card width based on device
+    const kpiCardWidth = isDesktop
+        ? `${100 / 4 - 1.5}%`
+        : isTabletOrDesktop
+        ? `${100 / 2 - 1}%`
+        : '48%';
+
+    // Listing columns
+    const listingColumns = isTabletOrDesktop ? 2 : 1;
+
     if (loading && !stats) {
         return (
             <View style={[styles.container, styles.centerContent]}>
                 <ActivityIndicator size="large" color="#2D6A4F" />
-                <Text style={styles.loadingText}>Loading dashboard...</Text>
+                <Text style={[styles.loadingText, { fontSize: rs(16) }]}>Loading dashboard...</Text>
             </View>
         );
     }
@@ -294,114 +312,126 @@ const AgentDashboard = ({ navigation, route }) => {
         <SafeAreaView style={styles.container}>
             <StatusBar barStyle="dark-content" />
 
-            {/* Enhanced Fixed Header */}
+            {/* ── Fixed Header ── */}
             <Animated.View
                 style={[
                     styles.header,
                     {
                         opacity: headerOpacity,
-                        transform: [{ translateY: slideAnim }]
+                        transform: [{ translateY: slideAnim }],
+                        paddingHorizontal: rs(isTabletOrDesktop ? 32 : 24),
+                        paddingTop: rs(16),
+                        paddingBottom: rs(24),
                     }
                 ]}
             >
-                {/* Enhanced Top Bar */}
-                <View style={styles.topBar}>
-                    <View style={styles.topBarLeft}>
+                {/* Top Bar */}
+                <View style={[styles.topBar, { marginBottom: rs(20) }]}>
+                    <View style={[styles.topBarLeft, { gap: rs(12) }]}>
                         <LinearGradient
                             colors={['#2D6A4F', '#1e4d38']}
-                            style={styles.appIcon}
+                            style={[styles.appIcon, { width: rs(44), height: rs(44), borderRadius: rs(14) }]}
                         >
-                            <Building2 width={22} height={22} color="#ffffff" strokeWidth={2.5} />
+                            <Building2 width={rs(22)} height={rs(22)} color="#ffffff" strokeWidth={2.5} />
                         </LinearGradient>
                         <View>
-                            <Text style={styles.appName}>EstateHub</Text>
-                            <Text style={styles.appTagline}>Agent Portal</Text>
+                            <Text style={[styles.appName, { fontSize: rs(19) }]}>EstateHub</Text>
+                            <Text style={[styles.appTagline, { fontSize: rs(12) }]}>Agent Portal</Text>
                         </View>
                     </View>
 
-                    <View style={styles.topBarRight}>
+                    <View style={[styles.topBarRight, { gap: rs(12) }]}>
                         <TouchableOpacity
                             style={styles.notificationButton}
                             activeOpacity={0.7}
                             onPress={() => navigation.navigate('agentNotifications')}
                         >
-                            <View style={styles.notificationIconBg}>
-                                <Bell width={20} height={20} color="#6b7280" strokeWidth={2.5} />
+                            <View style={[styles.notificationIconBg, { width: rs(40), height: rs(40), borderRadius: rs(12) }]}>
+                                <Bell width={rs(20)} height={rs(20)} color="#6b7280" strokeWidth={2.5} />
                             </View>
                             {pendingHireRequests.length > 0 && (
                                 <View style={styles.notificationBadge}>
-                                    <Text style={styles.notificationBadgeText}>
+                                    <Text style={[styles.notificationBadgeText, { fontSize: rs(10) }]}>
                                         {pendingHireRequests.length}
                                     </Text>
                                 </View>
                             )}
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.settingsButton} activeOpacity={0.7}>
-                            <Settings width={20} height={20} color="#6b7280" strokeWidth={2.5} />
+                        <TouchableOpacity
+                            style={[styles.settingsButton, { width: rs(40), height: rs(40), borderRadius: rs(12) }]}
+                            activeOpacity={0.7}
+                        >
+                            <Settings width={rs(20)} height={rs(20)} color="#6b7280" strokeWidth={2.5} />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Enhanced Agent Overview */}
-                <View style={styles.agentOverviewContainer}>
+                {/* Agent Overview */}
+                <View style={[styles.agentOverviewContainer, { borderRadius: rs(20), marginBottom: rs(20) }]}>
                     <LinearGradient
                         colors={['#2D6A4F', '#1e4d38']}
-                        style={styles.agentOverview}
+                        style={[styles.agentOverview, { gap: rs(16), padding: rs(20) }]}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
                     >
                         <View style={styles.agentAvatarContainer}>
                             <Image
-                                source={{
-                                    uri: getImageUrl(agentData?.avatar) || DEFAULT_PROFILE_IMAGE
-                                }}
-                                style={styles.agentAvatar}
+                                source={{ uri: getImageUrl(agentData?.avatar) || DEFAULT_PROFILE_IMAGE }}
+                                style={[styles.agentAvatar, { width: rs(68), height: rs(68), borderRadius: rs(34) }]}
                             />
-                            <View style={styles.onlineIndicator} />
+                            <View style={[styles.onlineIndicator, { width: rs(14), height: rs(14), borderRadius: rs(7) }]} />
                         </View>
                         <View style={styles.agentInfo}>
-                            <View style={styles.agentNameRow}>
-                                <Text style={styles.agentName}>
+                            <View style={[styles.agentNameRow, { gap: rs(6), marginBottom: rs(4) }]}>
+                                <Text style={[styles.agentName, { fontSize: rs(18) }]}>
                                     {agentData?.name || 'Agent Name'}
                                 </Text>
-                                <Award width={16} height={16} color="#fbbf24" fill="#fbbf24" />
+                                <Award width={rs(16)} height={rs(16)} color="#fbbf24" fill="#fbbf24" />
                             </View>
-                            <Text style={styles.agentTitle}>
+                            <Text style={[styles.agentTitle, { fontSize: rs(13), marginBottom: rs(10) }]}>
                                 {agentData?.title || 'Real Estate Agent'}
                             </Text>
-                            <View style={styles.agentBadges}>
+                            <View style={[styles.agentBadges, { gap: rs(12) }]}>
                                 {agentData?.verified !== false && (
-                                    <View style={styles.agentBadge}>
-                                        <CheckCircle width={12} height={12} color="rgba(255,255,255,0.9)" strokeWidth={2.5} />
-                                        <Text style={styles.agentBadgeText}>Verified</Text>
+                                    <View style={[styles.agentBadge, { paddingHorizontal: rs(10), paddingVertical: rs(4), borderRadius: rs(12), gap: rs(4) }]}>
+                                        <CheckCircle width={rs(12)} height={rs(12)} color="rgba(255,255,255,0.9)" strokeWidth={2.5} />
+                                        <Text style={[styles.agentBadgeText, { fontSize: rs(12) }]}>Verified</Text>
                                     </View>
                                 )}
-                                <View style={styles.agentBadge}>
-                                    <Target width={12} height={12} color="rgba(255,255,255,0.9)" strokeWidth={2.5} />
-                                    <Text style={styles.agentBadgeText}>
+                                <View style={[styles.agentBadge, { paddingHorizontal: rs(10), paddingVertical: rs(4), borderRadius: rs(12), gap: rs(4) }]}>
+                                    <Target width={rs(12)} height={rs(12)} color="rgba(255,255,255,0.9)" strokeWidth={2.5} />
+                                    <Text style={[styles.agentBadgeText, { fontSize: rs(12) }]}>
                                         {stats?.conversionRate || 0}% CVR
                                     </Text>
                                 </View>
                             </View>
                         </View>
                         <View style={styles.sparkleIcon}>
-                            <Sparkles width={20} height={20} color="rgba(255,255,255,0.6)" />
+                            <Sparkles width={rs(20)} height={rs(20)} color="rgba(255,255,255,0.6)" />
                         </View>
                     </LinearGradient>
                 </View>
 
-                {/* Enhanced Screen Title */}
-                <View style={styles.screenTitle}>
-                    <Text style={styles.screenTitleText}>Dashboard</Text>
-                    <Text style={styles.screenSubtitle}>Track your performance and manage listings</Text>
+                {/* Screen Title */}
+                <View style={[styles.screenTitle, { gap: rs(6) }]}>
+                    <Text style={[styles.screenTitleText, { fontSize: rs(22) }]}>Dashboard</Text>
+                    <Text style={[styles.screenSubtitle, { fontSize: rs(14) }]}>
+                        Track your performance and manage listings
+                    </Text>
                 </View>
             </Animated.View>
 
-            {/* Scrollable Content */}
+            {/* ── Scrollable Content ── */}
             <Animated.ScrollView
                 style={styles.scrollView}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContent}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    {
+                        padding: rs(isTabletOrDesktop ? 32 : 24),
+                        paddingBottom: rs(100),
+                    }
+                ]}
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                     { useNativeDriver: true }
@@ -416,195 +446,229 @@ const AgentDashboard = ({ navigation, route }) => {
                 }
             >
                 <Animated.View style={{ opacity: fadeAnim }}>
-                    {/* Enhanced Performance KPIs */}
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeaderRow}>
-                            <View style={styles.sectionTitleContainer}>
-                                <Activity width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
-                                <Text style={styles.sectionTitle}>Performance Snapshot</Text>
+
+                    {/* ── Performance KPIs ── */}
+                    <View style={[styles.section, { marginBottom: rs(28) }]}>
+                        <View style={[styles.sectionHeaderRow, { marginBottom: rs(16) }]}>
+                            <View style={[styles.sectionTitleContainer, { gap: rs(10) }]}>
+                                <Activity width={rs(20)} height={rs(20)} color="#2D6A4F" strokeWidth={2.5} />
+                                <Text style={[styles.sectionTitle, { fontSize: rs(17) }]}>Performance Snapshot</Text>
                             </View>
                         </View>
 
-                        <View style={styles.kpiGrid}>
-                            <AnimatedKPICard
-                                icon={<FileText width={22} height={22} color="#2D6A4F" strokeWidth={2.5} />}
-                                label="Total Listings"
-                                value={stats?.totalListings || 0}
-                                trend={true}
-                                trendValue="+3"
-                                color="#2D6A4F"
-                                delay={0}
-                            />
-                            <AnimatedKPICard
-                                icon={<Users width={22} height={22} color="#3b82f6" strokeWidth={2.5} />}
-                                label="Active Leads"
-                                value={stats?.activeLeads || 0}
-                                trend={true}
-                                trendValue={`+${stats?.newLeads || 0}`}
-                                color="#3b82f6"
-                                delay={100}
-                            />
-                            <TouchableOpacity
-                                onPress={() => navigation.navigate('agentInquiries')}
-                                activeOpacity={0.7}
-                                style={{ width: '48%' }}
-                            >
-                                <AnimatedKPICard
-                                    icon={<Users width={22} height={22} color="#a855f7" strokeWidth={2.5} />}
-                                    label="Pending Inquiries"
-                                    value={stats?.pendingInquiries || 0}
-                                    trend={false}
-                                    color="#a855f7"
-                                    delay={200}
-                                    style={{ width: '100%' }}
-                                />
-                            </TouchableOpacity>
-                            <AnimatedKPICard
-                                icon={<CheckCircle width={22} height={22} color="#10b981" strokeWidth={2.5} />}
-                                label="Deals Closed"
-                                value={stats?.dealsClosed || 0}
-                                trend={true}
-                                trendValue="+2"
-                                color="#10b981"
-                                delay={300}
-                            />
+                        {/* KPI Grid — wraps into columns based on device */}
+                        <View style={[
+                            styles.kpiGrid,
+                            isDesktop && { flexDirection: 'row', flexWrap: 'wrap', gap: rs(12) }
+                        ]}>
+                            {[
+                                {
+                                    icon: <FileText width={rs(22)} height={rs(22)} color="#2D6A4F" strokeWidth={2.5} />,
+                                    label: 'Total Listings',
+                                    value: stats?.totalListings || 0,
+                                    trend: true, trendValue: '+3', color: '#2D6A4F', delay: 0,
+                                },
+                                {
+                                    icon: <Users width={rs(22)} height={rs(22)} color="#3b82f6" strokeWidth={2.5} />,
+                                    label: 'Active Leads',
+                                    value: stats?.activeLeads || 0,
+                                    trend: true, trendValue: `+${stats?.newLeads || 0}`, color: '#3b82f6', delay: 100,
+                                },
+                                {
+                                    icon: <Users width={rs(22)} height={rs(22)} color="#a855f7" strokeWidth={2.5} />,
+                                    label: 'Pending Inquiries',
+                                    value: stats?.pendingInquiries || 0,
+                                    trend: false, color: '#a855f7', delay: 200,
+                                    onPress: () => navigation.navigate('agentInquiries'),
+                                },
+                                {
+                                    icon: <CheckCircle width={rs(22)} height={rs(22)} color="#10b981" strokeWidth={2.5} />,
+                                    label: 'Deals Closed',
+                                    value: stats?.dealsClosed || 0,
+                                    trend: true, trendValue: '+2', color: '#10b981', delay: 300,
+                                },
+                            ].map((kpi, idx) => {
+                                const card = (
+                                    <AnimatedKPICard
+                                        key={idx}
+                                        icon={kpi.icon}
+                                        label={kpi.label}
+                                        value={kpi.value}
+                                        trend={kpi.trend}
+                                        trendValue={kpi.trendValue}
+                                        color={kpi.color}
+                                        delay={kpi.delay}
+                                        style={{ width: kpiCardWidth }}
+                                        rs={rs}
+                                    />
+                                );
+                                return kpi.onPress ? (
+                                    <TouchableOpacity
+                                        key={idx}
+                                        onPress={kpi.onPress}
+                                        activeOpacity={0.7}
+                                        style={{ width: kpiCardWidth }}
+                                    >
+                                        <AnimatedKPICard
+                                            icon={kpi.icon}
+                                            label={kpi.label}
+                                            value={kpi.value}
+                                            trend={kpi.trend}
+                                            trendValue={kpi.trendValue}
+                                            color={kpi.color}
+                                            delay={kpi.delay}
+                                            style={{ width: '100%' }}
+                                            rs={rs}
+                                        />
+                                    </TouchableOpacity>
+                                ) : card;
+                            })}
                         </View>
 
-                        {/* Enhanced Revenue Card */}
-                        <View style={styles.revenueCardContainer}>
+                        {/* Revenue Card */}
+                        <View style={[styles.revenueCardContainer, { borderRadius: rs(20) }]}>
                             <LinearGradient
                                 colors={['#3b82f6', '#8b5cf6']}
-                                style={styles.revenueCard}
+                                style={[styles.revenueCard, { padding: rs(24) }]}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                             >
                                 <View style={styles.revenueLeft}>
-                                    <Text style={styles.revenueLabel}>Monthly Revenue</Text>
-                                    <Text style={styles.revenueValue}>
+                                    <Text style={[styles.revenueLabel, { fontSize: rs(13) }]}>Monthly Revenue</Text>
+                                    <Text style={[styles.revenueValue, { fontSize: rs(32) }]}>
                                         {formatPrice(stats?.monthlyRevenue || 0)}
                                     </Text>
                                     <View style={styles.revenueChange}>
-                                        <ArrowUpRight width={14} height={14} color="#fff" strokeWidth={3} />
-                                        <Text style={styles.revenueChangeText}>+12.5% from last month</Text>
+                                        <ArrowUpRight width={rs(14)} height={rs(14)} color="#fff" strokeWidth={3} />
+                                        <Text style={[styles.revenueChangeText, { fontSize: rs(13) }]}>+12.5% from last month</Text>
                                     </View>
                                 </View>
-                                <View style={styles.revenueIcon}>
-                                    <DollarSign width={28} height={28} color="#ffffff" strokeWidth={2.5} />
+                                <View style={[styles.revenueIcon, { width: rs(56), height: rs(56), borderRadius: rs(16) }]}>
+                                    <DollarSign width={rs(28)} height={rs(28)} color="#ffffff" strokeWidth={2.5} />
                                 </View>
                             </LinearGradient>
                         </View>
                     </View>
 
-                    {/* Enhanced Quick Actions */}
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeaderRow}>
-                            <View style={styles.sectionTitleContainer}>
-                                <Sparkles width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
-                                <Text style={styles.sectionTitle}>Quick Actions</Text>
+                    {/* ── Quick Actions ── */}
+                    <View style={[styles.section, { marginBottom: rs(28) }]}>
+                        <View style={[styles.sectionHeaderRow, { marginBottom: rs(16) }]}>
+                            <View style={[styles.sectionTitleContainer, { gap: rs(10) }]}>
+                                <Sparkles width={rs(20)} height={rs(20)} color="#2D6A4F" strokeWidth={2.5} />
+                                <Text style={[styles.sectionTitle, { fontSize: rs(17) }]}>Quick Actions</Text>
                             </View>
                         </View>
 
-                        <View style={styles.actionsGrid}>
+                        <View style={[styles.actionsGrid, { gap: rs(12) }]}>
                             <TouchableOpacity
-                                style={styles.actionPrimary}
+                                style={[styles.actionPrimary, { borderRadius: rs(16), minWidth: isTabletOrDesktop ? '23%' : '47%' }]}
                                 activeOpacity={0.8}
                                 onPress={() => navigation.navigate('addPropertyAgent')}
                             >
                                 <LinearGradient
                                     colors={['#2D6A4F', '#1e4d38']}
-                                    style={styles.actionPrimaryGradient}
+                                    style={[styles.actionPrimaryGradient, { padding: rs(20), gap: rs(10) }]}
                                 >
-                                    <View style={styles.actionIconPrimary}>
-                                        <Plus width={24} height={24} color="#ffffff" strokeWidth={3} />
+                                    <View style={[styles.actionIconPrimary, { width: rs(52), height: rs(52), borderRadius: rs(16) }]}>
+                                        <Plus width={rs(24)} height={rs(24)} color="#ffffff" strokeWidth={3} />
                                     </View>
-                                    <Text style={styles.actionTextPrimary}>Add Property</Text>
+                                    <Text style={[styles.actionTextPrimary, { fontSize: rs(14) }]}>Add Property</Text>
                                 </LinearGradient>
                             </TouchableOpacity>
 
-                            <TouchableOpacity
-                                style={styles.actionSecondary}
-                                activeOpacity={0.8}
-                            >
-                                <View style={[styles.actionIconSecondary, { backgroundColor: '#eff6ff' }]}>
-                                    <Phone width={22} height={22} color="#3b82f6" strokeWidth={2.5} />
-                                </View>
-                                <Text style={styles.actionTextSecondary}>Contact Leads</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.actionSecondary}
-                                activeOpacity={0.8}
-                            >
-                                <View style={[styles.actionIconSecondary, { backgroundColor: '#faf5ff' }]}>
-                                    <Building2 width={22} height={22} color="#a855f7" strokeWidth={2.5} />
-                                </View>
-                                <Text style={styles.actionTextSecondary}>Manage Listings</Text>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity
-                                style={styles.actionSecondary}
-                                activeOpacity={0.8}
-                            >
-                                <View style={[styles.actionIconSecondary, { backgroundColor: '#f0fdf4' }]}>
-                                    <BarChart3 width={22} height={22} color="#10b981" strokeWidth={2.5} />
-                                </View>
-                                <Text style={styles.actionTextSecondary}>View Reports</Text>
-                            </TouchableOpacity>
+                            {[
+                                { icon: <Phone width={rs(22)} height={rs(22)} color="#3b82f6" strokeWidth={2.5} />, bg: '#eff6ff', label: 'Contact Leads' },
+                                { icon: <Building2 width={rs(22)} height={rs(22)} color="#a855f7" strokeWidth={2.5} />, bg: '#faf5ff', label: 'Manage Listings' },
+                                { icon: <BarChart3 width={rs(22)} height={rs(22)} color="#10b981" strokeWidth={2.5} />, bg: '#f0fdf4', label: 'View Reports' },
+                            ].map((action, idx) => (
+                                <TouchableOpacity
+                                    key={idx}
+                                    style={[
+                                        styles.actionSecondary,
+                                        {
+                                            borderRadius: rs(16),
+                                            padding: rs(20),
+                                            gap: rs(10),
+                                            minWidth: isTabletOrDesktop ? '23%' : '47%',
+                                            flex: isTabletOrDesktop ? 0 : 1,
+                                        }
+                                    ]}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={[
+                                        styles.actionIconSecondary,
+                                        { backgroundColor: action.bg, width: rs(52), height: rs(52), borderRadius: rs(16) }
+                                    ]}>
+                                        {action.icon}
+                                    </View>
+                                    <Text style={[styles.actionTextSecondary, { fontSize: rs(14) }]}>{action.label}</Text>
+                                </TouchableOpacity>
+                            ))}
                         </View>
                     </View>
 
-                    {/* Hire Requests from Builders */}
+                    {/* ── Hire Requests ── */}
                     {pendingHireRequests.length > 0 && (
-                        <View style={styles.section}>
-                            <View style={styles.sectionHeader}>
-                                <View style={styles.sectionTitleContainer}>
-                                    <Users width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
-                                    <Text style={styles.sectionTitle}>Hire Requests</Text>
+                        <View style={[styles.section, { marginBottom: rs(28) }]}>
+                            <View style={[styles.sectionHeader, { marginBottom: rs(16) }]}>
+                                <View style={[styles.sectionTitleContainer, { gap: rs(10) }]}>
+                                    <Users width={rs(20)} height={rs(20)} color="#2D6A4F" strokeWidth={2.5} />
+                                    <Text style={[styles.sectionTitle, { fontSize: rs(17) }]}>Hire Requests</Text>
                                 </View>
                             </View>
 
-                            <View style={styles.leadsList}>
+                            <View style={[
+                                styles.leadsList,
+                                isTabletOrDesktop && { flexDirection: 'row', flexWrap: 'wrap', gap: rs(12) }
+                            ]}>
                                 {pendingHireRequests.map((n) => (
-                                    <View key={n.id} style={styles.leadCard}>
-                                        <View style={styles.leadHeader}>
+                                    <View
+                                        key={n.id}
+                                        style={[
+                                            styles.leadCard,
+                                            {
+                                                borderRadius: rs(16),
+                                                padding: rs(18),
+                                            },
+                                            isTabletOrDesktop && { width: '48%' }
+                                        ]}
+                                    >
+                                        <View style={[styles.leadHeader, { gap: rs(12), marginBottom: rs(14) }]}>
                                             <View style={styles.leadInfo}>
-                                                <Text style={styles.leadName}>
+                                                <Text style={[styles.leadName, { fontSize: rs(15) }]}>
                                                     {n.title || 'New hire request'}
                                                 </Text>
-                                                <Text style={styles.leadProperty} numberOfLines={2}>
+                                                <Text style={[styles.leadProperty, { fontSize: rs(13) }]} numberOfLines={2}>
                                                     {n.body || 'A builder wants to add you as their agent.'}
                                                 </Text>
                                             </View>
-                                            <View style={styles.statusBadge}>
+                                            <View style={[styles.statusBadge, { paddingHorizontal: rs(12), paddingVertical: rs(6), borderRadius: rs(14) }]}>
                                                 <View style={[styles.statusDot, { backgroundColor: '#10b981' }]} />
-                                                <Text style={[styles.statusText, { color: '#047857' }]}>
-                                                    Pending
-                                                </Text>
+                                                <Text style={[styles.statusText, { color: '#047857', fontSize: rs(12) }]}>Pending</Text>
                                             </View>
                                         </View>
 
-                                        <View style={styles.leadFooter}>
-                                            <Text style={styles.leadDate}>
+                                        <View style={[styles.leadFooter, { paddingTop: rs(14) }]}>
+                                            <Text style={[styles.leadDate, { fontSize: rs(12) }]}>
                                                 {formatTimeAgo(n.createdAt)}
                                             </Text>
-                                            <View style={styles.leadActions}>
+                                            <View style={[styles.leadActions, { gap: rs(8) }]}>
                                                 <TouchableOpacity
-                                                    style={styles.leadActionPrimary}
+                                                    style={[styles.leadActionPrimary, { width: rs(36), height: rs(36), borderRadius: rs(10) }]}
                                                     onPress={async () => {
                                                         try {
                                                             await apiRequest(`/agent/hire-requests/${n.relatedEntityId}/accept`, { method: 'POST' });
                                                             await apiRequest(`/notifications/${n.id}/read`, { method: 'PATCH' });
-                                                            // Refresh notifications and listings (agent is now linked to builder properties)
                                                             await fetchDashboardData();
                                                         } catch (e) {
                                                             Alert.alert('Error', e.message || 'Failed to accept request');
                                                         }
                                                     }}
                                                 >
-                                                    <CheckCircle width={16} height={16} color="#ffffff" strokeWidth={2.5} />
+                                                    <CheckCircle width={rs(16)} height={rs(16)} color="#ffffff" strokeWidth={2.5} />
                                                 </TouchableOpacity>
                                                 <TouchableOpacity
-                                                    style={styles.leadActionSecondary}
+                                                    style={[styles.leadActionSecondary, { width: rs(36), height: rs(36), borderRadius: rs(10) }]}
                                                     onPress={async () => {
                                                         try {
                                                             await apiRequest(`/agent/hire-requests/${n.relatedEntityId}/reject`, { method: 'POST' });
@@ -615,7 +679,7 @@ const AgentDashboard = ({ navigation, route }) => {
                                                         }
                                                     }}
                                                 >
-                                                    <X width={16} height={16} color="#374151" strokeWidth={2.5} />
+                                                    <X width={rs(16)} height={rs(16)} color="#374151" strokeWidth={2.5} />
                                                 </TouchableOpacity>
                                             </View>
                                         </View>
@@ -625,35 +689,44 @@ const AgentDashboard = ({ navigation, route }) => {
                         </View>
                     )}
 
-                    {/* Enhanced Recent Leads Section */}
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <View style={styles.sectionTitleContainer}>
-                                <Users width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
-                                <Text style={styles.sectionTitle}>Recent Leads</Text>
+                    {/* ── Recent Leads ── */}
+                    <View style={[styles.section, { marginBottom: rs(28) }]}>
+                        <View style={[styles.sectionHeader, { marginBottom: rs(16) }]}>
+                            <View style={[styles.sectionTitleContainer, { gap: rs(10) }]}>
+                                <Users width={rs(20)} height={rs(20)} color="#2D6A4F" strokeWidth={2.5} />
+                                <Text style={[styles.sectionTitle, { fontSize: rs(17) }]}>Recent Leads</Text>
                             </View>
                             <TouchableOpacity onPress={() => { }}>
-                                <View style={styles.viewAllButton}>
-                                    <Text style={styles.viewAllButtonText}>View All</Text>
-                                    <ChevronRight width={16} height={16} color="#2D6A4F" strokeWidth={2.5} />
+                                <View style={[styles.viewAllButton, { paddingHorizontal: rs(12), paddingVertical: rs(6), borderRadius: rs(12), gap: rs(4) }]}>
+                                    <Text style={[styles.viewAllButtonText, { fontSize: rs(13) }]}>View All</Text>
+                                    <ChevronRight width={rs(16)} height={rs(16)} color="#2D6A4F" strokeWidth={2.5} />
                                 </View>
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.leadsList}>
+                        <View style={[
+                            styles.leadsList,
+                            isTabletOrDesktop && { flexDirection: 'row', flexWrap: 'wrap', gap: rs(12) }
+                        ]}>
                             {recentLeads.length > 0 ? (
                                 recentLeads.map((lead) => {
                                     const statusStyle = getStatusStyle(lead.status);
-
                                     return (
-                                        <View key={lead._id} style={styles.leadCard}>
-                                            <View style={styles.leadHeader}>
+                                        <View
+                                            key={lead._id}
+                                            style={[
+                                                styles.leadCard,
+                                                { borderRadius: rs(16), padding: rs(18) },
+                                                isTabletOrDesktop && { width: '48%' }
+                                            ]}
+                                        >
+                                            <View style={[styles.leadHeader, { gap: rs(12), marginBottom: rs(14) }]}>
                                                 <View style={styles.leadInfo}>
-                                                    <Text style={styles.leadName}>{lead.clientName}</Text>
-                                                    <Text style={styles.leadProperty} numberOfLines={1}>
+                                                    <Text style={[styles.leadName, { fontSize: rs(15) }]}>{lead.clientName}</Text>
+                                                    <Text style={[styles.leadProperty, { fontSize: rs(13) }]} numberOfLines={1}>
                                                         {lead.property?.title || 'Property'}
                                                     </Text>
-                                                    <Text style={styles.leadBudget}>
+                                                    <Text style={[styles.leadBudget, { fontSize: rs(15) }]}>
                                                         {formatBudgetRange(lead.budgetRange)}
                                                     </Text>
                                                 </View>
@@ -661,32 +734,35 @@ const AgentDashboard = ({ navigation, route }) => {
                                                     styles.statusBadge,
                                                     {
                                                         backgroundColor: statusStyle.bg,
-                                                        borderColor: statusStyle.border
+                                                        borderColor: statusStyle.border,
+                                                        paddingHorizontal: rs(12),
+                                                        paddingVertical: rs(6),
+                                                        borderRadius: rs(14),
                                                     }
                                                 ]}>
                                                     <View style={[styles.statusDot, { backgroundColor: statusStyle.text }]} />
-                                                    <Text style={[styles.statusText, { color: statusStyle.text }]}>
+                                                    <Text style={[styles.statusText, { color: statusStyle.text, fontSize: rs(12) }]}>
                                                         {getStatusLabel(lead.status)}
                                                     </Text>
                                                 </View>
                                             </View>
 
-                                            <View style={styles.leadFooter}>
-                                                <Text style={styles.leadDate}>
+                                            <View style={[styles.leadFooter, { paddingTop: rs(14) }]}>
+                                                <Text style={[styles.leadDate, { fontSize: rs(12) }]}>
                                                     {formatTimeAgo(lead.createdAt)}
                                                 </Text>
-                                                <View style={styles.leadActions}>
+                                                <View style={[styles.leadActions, { gap: rs(8) }]}>
                                                     <TouchableOpacity
-                                                        style={styles.leadActionPrimary}
+                                                        style={[styles.leadActionPrimary, { width: rs(36), height: rs(36), borderRadius: rs(10) }]}
                                                         onPress={() => handleContactLead(lead)}
                                                     >
-                                                        <Phone width={16} height={16} color="#ffffff" strokeWidth={2.5} />
+                                                        <Phone width={rs(16)} height={rs(16)} color="#ffffff" strokeWidth={2.5} />
                                                     </TouchableOpacity>
-                                                    <TouchableOpacity style={styles.leadActionSecondary}>
-                                                        <MessageSquare width={16} height={16} color="#374151" strokeWidth={2.5} />
+                                                    <TouchableOpacity style={[styles.leadActionSecondary, { width: rs(36), height: rs(36), borderRadius: rs(10) }]}>
+                                                        <MessageSquare width={rs(16)} height={rs(16)} color="#374151" strokeWidth={2.5} />
                                                     </TouchableOpacity>
-                                                    <TouchableOpacity style={styles.leadActionSecondary}>
-                                                        <Eye width={16} height={16} color="#374151" strokeWidth={2.5} />
+                                                    <TouchableOpacity style={[styles.leadActionSecondary, { width: rs(36), height: rs(36), borderRadius: rs(10) }]}>
+                                                        <Eye width={rs(16)} height={rs(16)} color="#374151" strokeWidth={2.5} />
                                                     </TouchableOpacity>
                                                 </View>
                                             </View>
@@ -694,46 +770,55 @@ const AgentDashboard = ({ navigation, route }) => {
                                     );
                                 })
                             ) : (
-                                <View style={styles.emptyState}>
-                                    <View style={styles.emptyIconContainer}>
-                                        <Users width={32} height={32} color="#d1d5db" />
+                                <View style={[styles.emptyState, { paddingVertical: rs(48), paddingHorizontal: rs(32) }]}>
+                                    <View style={[styles.emptyIconContainer, { width: rs(64), height: rs(64), borderRadius: rs(32), marginBottom: rs(16) }]}>
+                                        <Users width={rs(32)} height={rs(32)} color="#d1d5db" />
                                     </View>
-                                    <Text style={styles.emptyText}>No recent leads</Text>
-                                    <Text style={styles.emptySubtext}>New leads will appear here</Text>
+                                    <Text style={[styles.emptyText, { fontSize: rs(16) }]}>No recent leads</Text>
+                                    <Text style={[styles.emptySubtext, { fontSize: rs(14) }]}>New leads will appear here</Text>
                                 </View>
                             )}
                         </View>
                     </View>
 
-                    {/* Enhanced My Listings Overview */}
-                    <View style={styles.section}>
-                        <View style={styles.sectionHeader}>
-                            <View style={styles.sectionTitleContainer}>
-                                <Building2 width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
-                                <Text style={styles.sectionTitle}>My Listings</Text>
+                    {/* ── My Listings ── */}
+                    <View style={[styles.section, { marginBottom: rs(28) }]}>
+                        <View style={[styles.sectionHeader, { marginBottom: rs(16) }]}>
+                            <View style={[styles.sectionTitleContainer, { gap: rs(10) }]}>
+                                <Building2 width={rs(20)} height={rs(20)} color="#2D6A4F" strokeWidth={2.5} />
+                                <Text style={[styles.sectionTitle, { fontSize: rs(17) }]}>My Listings</Text>
                             </View>
                             <TouchableOpacity onPress={() => navigation.navigate('myListings')}>
-                                <View style={styles.viewAllButton}>
-                                    <Text style={styles.viewAllButtonText}>View All</Text>
-                                    <ChevronRight width={16} height={16} color="#2D6A4F" strokeWidth={2.5} />
+                                <View style={[styles.viewAllButton, { paddingHorizontal: rs(12), paddingVertical: rs(6), borderRadius: rs(12), gap: rs(4) }]}>
+                                    <Text style={[styles.viewAllButtonText, { fontSize: rs(13) }]}>View All</Text>
+                                    <ChevronRight width={rs(16)} height={rs(16)} color="#2D6A4F" strokeWidth={2.5} />
                                 </View>
                             </TouchableOpacity>
                         </View>
 
-                        <View style={styles.listingsList}>
+                        <View style={[
+                            styles.listingsList,
+                            isTabletOrDesktop && { flexDirection: 'row', flexWrap: 'wrap', gap: rs(14) }
+                        ]}>
                             {activeListings.length > 0 ? (
-                                activeListings.slice(0, 5).map((listing) => {
+                                activeListings.slice(0, isTabletOrDesktop ? 6 : 5).map((listing) => {
                                     const statusStyle = getStatusStyle(listing.status);
                                     const primaryImage = getImageUrl(listing.primaryImage) || DEFAULT_PROPERTY_IMAGE;
+                                    const listingImageHeight = isTabletOrDesktop ? rs(160) : rs(140);
 
                                     return (
                                         <TouchableOpacity
                                             key={listing.id}
-                                            style={styles.listingCard}
+                                            style={[
+                                                styles.listingCard,
+                                                { borderRadius: rs(18) },
+                                                isTabletOrDesktop && { width: '48%' },
+                                                isDesktop && { width: '32%' },
+                                            ]}
                                             onPress={() => navigation.navigate('PropertyDetailScreen', { property: listing })}
                                             activeOpacity={0.9}
                                         >
-                                            <View style={styles.listingImageContainer}>
+                                            <View style={[styles.listingImageContainer, { height: listingImageHeight }]}>
                                                 <Image
                                                     source={{ uri: primaryImage }}
                                                     style={styles.listingImage}
@@ -744,38 +829,46 @@ const AgentDashboard = ({ navigation, route }) => {
                                                 />
                                                 <View style={[
                                                     styles.listingStatusBadge,
-                                                    { backgroundColor: statusStyle.bg }
+                                                    {
+                                                        backgroundColor: statusStyle.bg,
+                                                        top: rs(12),
+                                                        left: rs(12),
+                                                        paddingHorizontal: rs(12),
+                                                        paddingVertical: rs(6),
+                                                        borderRadius: rs(14),
+                                                        gap: rs(6),
+                                                    }
                                                 ]}>
                                                     <View style={[styles.statusDot, { backgroundColor: statusStyle.text }]} />
-                                                    <Text style={[styles.listingStatusText, { color: statusStyle.text }]}>
+                                                    <Text style={[styles.listingStatusText, { color: statusStyle.text, fontSize: rs(12) }]}>
                                                         {listing.status || 'Active'}
                                                     </Text>
                                                 </View>
                                             </View>
-                                            <View style={styles.listingContent}>
-                                                <View style={styles.listingHeader}>
+                                            <View style={[styles.listingContent, { padding: rs(16) }]}>
+                                                <View style={[styles.listingHeader, { marginBottom: rs(12) }]}>
                                                     <View style={styles.listingInfo}>
-                                                        <Text style={styles.listingTitle} numberOfLines={1}>
+                                                        <Text style={[styles.listingTitle, { fontSize: rs(16), marginBottom: rs(8) }]} numberOfLines={1}>
                                                             {listing.title}
                                                         </Text>
-                                                        <View style={styles.listingLocation}>
-                                                            <View style={styles.locationIconCircle}>
-                                                                <MapPin width={10} height={10} color="#2D6A4F" strokeWidth={2.5} />
+                                                        <View style={[styles.listingLocation, { gap: rs(8) }]}>
+                                                            <View style={[styles.locationIconCircle, { width: rs(20), height: rs(20), borderRadius: rs(10) }]}>
+                                                                <MapPin width={rs(10)} height={rs(10)} color="#2D6A4F" strokeWidth={2.5} />
                                                             </View>
-                                                            <Text style={styles.listingLocationText} numberOfLines={1}>
+                                                            <Text style={[styles.listingLocationText, { fontSize: rs(13) }]} numberOfLines={1}>
                                                                 {listing.address}, {listing.city}
                                                             </Text>
                                                         </View>
                                                     </View>
                                                 </View>
 
-                                                <View style={styles.listingFooter}>
-                                                    <Text style={styles.listingPrice}>
+                                                <View style={[styles.listingFooter, { paddingTop: rs(12) }]}>
+                                                    <Text style={[styles.listingPrice, { fontSize: rs(18) }]}>
                                                         {formatPrice(listing.price)}
                                                     </Text>
-                                                    <View style={styles.listingActions}>
+                                                    <View style={[styles.listingActions, { gap: rs(10) }]}>
                                                         <TouchableOpacity
-                                                            style={styles.listingActionButton}
+                                                            style={[styles.listingActionButton, { width: rs(36), height: rs(36), borderRadius: rs(10) }]}
                                                             onPress={(e) => {
                                                                 e.stopPropagation();
                                                                 navigation.navigate('PropertyEditScreen', {
@@ -784,10 +877,10 @@ const AgentDashboard = ({ navigation, route }) => {
                                                                 });
                                                             }}
                                                         >
-                                                            <Edit width={16} height={16} color="#6b7280" strokeWidth={2.5} />
+                                                            <Edit width={rs(16)} height={rs(16)} color="#6b7280" strokeWidth={2.5} />
                                                         </TouchableOpacity>
-                                                        <TouchableOpacity style={styles.listingActionButton}>
-                                                            <Share2 width={16} height={16} color="#6b7280" strokeWidth={2.5} />
+                                                        <TouchableOpacity style={[styles.listingActionButton, { width: rs(36), height: rs(36), borderRadius: rs(10) }]}>
+                                                            <Share2 width={rs(16)} height={rs(16)} color="#6b7280" strokeWidth={2.5} />
                                                         </TouchableOpacity>
                                                     </View>
                                                 </View>
@@ -796,58 +889,68 @@ const AgentDashboard = ({ navigation, route }) => {
                                     );
                                 })
                             ) : (
-                                <View style={styles.emptyState}>
-                                    <View style={styles.emptyIconContainer}>
-                                        <Building2 width={32} height={32} color="#d1d5db" />
+                                <View style={[styles.emptyState, { paddingVertical: rs(48), paddingHorizontal: rs(32) }]}>
+                                    <View style={[styles.emptyIconContainer, { width: rs(64), height: rs(64), borderRadius: rs(32), marginBottom: rs(16) }]}>
+                                        <Building2 width={rs(32)} height={rs(32)} color="#d1d5db" />
                                     </View>
-                                    <Text style={styles.emptyText}>No listings yet</Text>
-                                    <Text style={styles.emptySubtext}>Your recently added properties will appear here</Text>
+                                    <Text style={[styles.emptyText, { fontSize: rs(16) }]}>No listings yet</Text>
+                                    <Text style={[styles.emptySubtext, { fontSize: rs(14) }]}>Your recently added properties will appear here</Text>
                                 </View>
                             )}
                         </View>
                     </View>
 
-                    {/* Enhanced Insights Section */}
-                    <View style={styles.section}>
-                        <View style={styles.insightsCard}>
-                            <View style={styles.sectionTitleContainer}>
-                                <BarChart3 width={20} height={20} color="#2D6A4F" strokeWidth={2.5} />
-                                <Text style={styles.sectionTitle}>Quick Insights</Text>
+                    {/* ── Insights ── */}
+                    <View style={[styles.section, { marginBottom: rs(28) }]}>
+                        <View style={[styles.insightsCard, { borderRadius: rs(20), padding: rs(20) }]}>
+                            <View style={[styles.sectionTitleContainer, { gap: rs(10) }]}>
+                                <BarChart3 width={rs(20)} height={rs(20)} color="#2D6A4F" strokeWidth={2.5} />
+                                <Text style={[styles.sectionTitle, { fontSize: rs(17) }]}>Quick Insights</Text>
                             </View>
 
-                            <View style={styles.insightsList}>
-                                <TouchableOpacity style={[styles.insightItem, { backgroundColor: '#f0fdf4' }]}>
-                                    <View style={styles.insightLeft}>
-                                        <View style={[styles.insightIcon, { backgroundColor: '#dcfce7' }]}>
-                                            <TrendingUp width={20} height={20} color="#16a34a" strokeWidth={2.5} />
+                            <View style={[
+                                styles.insightsList,
+                                { gap: rs(12), marginTop: rs(16) },
+                                isTabletOrDesktop && { flexDirection: 'row', flexWrap: 'wrap' }
+                            ]}>
+                                <TouchableOpacity style={[
+                                    styles.insightItem,
+                                    { backgroundColor: '#f0fdf4', padding: rs(16), borderRadius: rs(16) },
+                                    isTabletOrDesktop && { flex: 1, minWidth: '30%' }
+                                ]}>
+                                    <View style={[styles.insightLeft, { gap: rs(14) }]}>
+                                        <View style={[styles.insightIcon, { backgroundColor: '#dcfce7', width: rs(44), height: rs(44), borderRadius: rs(12) }]}>
+                                            <TrendingUp width={rs(20)} height={rs(20)} color="#16a34a" strokeWidth={2.5} />
                                         </View>
                                         <View style={styles.insightTextContainer}>
-                                            <Text style={styles.insightTitle}>Trending Properties</Text>
-                                            <Text style={styles.insightSubtitle}>
+                                            <Text style={[styles.insightTitle, { fontSize: rs(14) }]}>Trending Properties</Text>
+                                            <Text style={[styles.insightSubtitle, { fontSize: rs(12) }]}>
                                                 {stats?.totalListings || 0} properties performing well
                                             </Text>
                                         </View>
                                     </View>
-                                    <ChevronRight width={20} height={20} color="#16a34a" strokeWidth={2.5} />
+                                    <ChevronRight width={rs(20)} height={rs(20)} color="#16a34a" strokeWidth={2.5} />
                                 </TouchableOpacity>
 
-                                <View style={[styles.insightItem, { backgroundColor: '#eff6ff' }]}>
-                                    <View style={styles.insightLeft}>
-                                        <View style={[styles.insightIcon, { backgroundColor: '#dbeafe' }]}>
-                                            <Target width={20} height={20} color="#2563eb" strokeWidth={2.5} />
+                                <View style={[
+                                    styles.insightItem,
+                                    { backgroundColor: '#eff6ff', padding: rs(16), borderRadius: rs(16) },
+                                    isTabletOrDesktop && { flex: 1, minWidth: '30%' }
+                                ]}>
+                                    <View style={[styles.insightLeft, { gap: rs(14) }]}>
+                                        <View style={[styles.insightIcon, { backgroundColor: '#dbeafe', width: rs(44), height: rs(44), borderRadius: rs(12) }]}>
+                                            <Target width={rs(20)} height={rs(20)} color="#2563eb" strokeWidth={2.5} />
                                         </View>
                                         <View style={styles.insightTextContainer}>
-                                            <Text style={styles.insightTitle}>Lead Conversion Rate</Text>
-                                            <View style={styles.conversionBar}>
-                                                <View style={styles.conversionBarBg}>
-                                                    <View
-                                                        style={[
-                                                            styles.conversionBarFill,
-                                                            { width: `${stats?.conversionRate || 0}%` }
-                                                        ]}
-                                                    />
+                                            <Text style={[styles.insightTitle, { fontSize: rs(14) }]}>Lead Conversion Rate</Text>
+                                            <View style={[styles.conversionBar, { gap: rs(10), marginTop: rs(6) }]}>
+                                                <View style={[styles.conversionBarBg, { width: rs(100), height: rs(8), borderRadius: rs(4) }]}>
+                                                    <View style={[
+                                                        styles.conversionBarFill,
+                                                        { width: `${stats?.conversionRate || 0}%`, borderRadius: rs(4) }
+                                                    ]} />
                                                 </View>
-                                                <Text style={styles.conversionPercent}>
+                                                <Text style={[styles.conversionPercent, { fontSize: rs(13) }]}>
                                                     {stats?.conversionRate || 0}%
                                                 </Text>
                                             </View>
@@ -855,114 +958,103 @@ const AgentDashboard = ({ navigation, route }) => {
                                     </View>
                                 </View>
 
-                                <TouchableOpacity style={[styles.insightItem, { backgroundColor: '#faf5ff' }]}>
-                                    <View style={styles.insightLeft}>
-                                        <View style={[styles.insightIcon, { backgroundColor: '#f3e8ff' }]}>
-                                            <Award width={20} height={20} color="#9333ea" strokeWidth={2.5} />
+                                <TouchableOpacity style={[
+                                    styles.insightItem,
+                                    { backgroundColor: '#faf5ff', padding: rs(16), borderRadius: rs(16) },
+                                    isTabletOrDesktop && { flex: 1, minWidth: '30%' }
+                                ]}>
+                                    <View style={[styles.insightLeft, { gap: rs(14) }]}>
+                                        <View style={[styles.insightIcon, { backgroundColor: '#f3e8ff', width: rs(44), height: rs(44), borderRadius: rs(12) }]}>
+                                            <Award width={rs(20)} height={rs(20)} color="#9333ea" strokeWidth={2.5} />
                                         </View>
                                         <View style={styles.insightTextContainer}>
-                                            <Text style={styles.insightTitle}>High-Performing Listings</Text>
-                                            <Text style={styles.insightSubtitle}>
+                                            <Text style={[styles.insightTitle, { fontSize: rs(14) }]}>High-Performing Listings</Text>
+                                            <Text style={[styles.insightSubtitle, { fontSize: rs(12) }]}>
                                                 Top {Math.min(3, stats?.totalListings || 0)} properties this month
                                             </Text>
                                         </View>
                                     </View>
-                                    <ChevronRight width={20} height={20} color="#9333ea" strokeWidth={2.5} />
+                                    <ChevronRight width={rs(20)} height={rs(20)} color="#9333ea" strokeWidth={2.5} />
                                 </TouchableOpacity>
                             </View>
                         </View>
                     </View>
 
-                    <View style={{ height: 20 }} />
+                    <View style={{ height: rs(20) }} />
                 </Animated.View>
             </Animated.ScrollView>
 
-            {/* Enhanced Floating Add Button */}
+            {/* ── Floating Add Button ── */}
             <TouchableOpacity
-                style={styles.fab}
+                style={[styles.fab, { bottom: rs(24), right: rs(24) }]}
                 activeOpacity={0.8}
                 onPress={() => navigation.navigate('addPropertyAgent')}
             >
                 <LinearGradient
                     colors={['#2D6A4F', '#1e4d38']}
-                    style={styles.fabGradient}
+                    style={[styles.fabGradient, { width: rs(60), height: rs(60), borderRadius: rs(30) }]}
                 >
-                    <Plus width={28} height={28} color="#ffffff" strokeWidth={3} />
+                    <Plus width={rs(28)} height={rs(28)} color="#ffffff" strokeWidth={3} />
                 </LinearGradient>
             </TouchableOpacity>
-
         </SafeAreaView>
     );
 };
 
+// ─── Static Styles (non-size-dependent properties only) ──────────────────────
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f9fafb'
+        backgroundColor: '#f9fafb',
     },
     centerContent: {
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
     },
     loadingText: {
         marginTop: 16,
-        fontSize: 16,
         color: '#6b7280',
-        fontWeight: '500'
+        fontWeight: '500',
     },
     emptyState: {
         alignItems: 'center',
-        paddingVertical: 48,
-        paddingHorizontal: 32,
+        width: '100%',
     },
     emptyIconContainer: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
         backgroundColor: '#f3f4f6',
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 16,
     },
     emptyText: {
-        fontSize: 16,
         color: '#6b7280',
         fontWeight: '600',
         marginBottom: 4,
     },
     emptySubtext: {
-        fontSize: 14,
         color: '#9ca3af',
         textAlign: 'center',
     },
 
-    // Enhanced Header
+    // Header
     header: {
         backgroundColor: '#ffffff',
-        paddingHorizontal: 24,
-        paddingTop: 16,
-        paddingBottom: 24,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
         shadowRadius: 8,
-        elevation: 4
+        elevation: 4,
     },
     topBar: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 20
     },
     topBarLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12
     },
     appIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#2D6A4F',
@@ -972,13 +1064,11 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     appName: {
-        fontSize: 19,
         color: '#111827',
         fontWeight: '700',
         letterSpacing: -0.3,
     },
     appTagline: {
-        fontSize: 12,
         color: '#9ca3af',
         fontWeight: '500',
         marginTop: 2,
@@ -986,23 +1076,16 @@ const styles = StyleSheet.create({
     topBarRight: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12
     },
     notificationButton: {
-        position: 'relative'
+        position: 'relative',
     },
     notificationIconBg: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
         backgroundColor: '#f9fafb',
         justifyContent: 'center',
         alignItems: 'center',
     },
     settingsButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 12,
         backgroundColor: '#f9fafb',
         justifyContent: 'center',
         alignItems: 'center',
@@ -1023,15 +1106,12 @@ const styles = StyleSheet.create({
     },
     notificationBadgeText: {
         color: '#ffffff',
-        fontSize: 10,
         fontWeight: '800',
         letterSpacing: -0.3,
     },
 
-    // Enhanced Agent Overview
+    // Agent Overview
     agentOverviewContainer: {
-        marginBottom: 20,
-        borderRadius: 20,
         overflow: 'hidden',
         shadowColor: '#2D6A4F',
         shadowOffset: { width: 0, height: 4 },
@@ -1042,17 +1122,12 @@ const styles = StyleSheet.create({
     agentOverview: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 16,
-        padding: 20,
         position: 'relative',
     },
     agentAvatarContainer: {
         position: 'relative',
     },
     agentAvatar: {
-        width: 68,
-        height: 68,
-        borderRadius: 34,
         borderWidth: 3,
         borderColor: '#ffffff',
     },
@@ -1060,49 +1135,35 @@ const styles = StyleSheet.create({
         position: 'absolute',
         bottom: 2,
         right: 2,
-        width: 14,
-        height: 14,
-        borderRadius: 7,
         backgroundColor: '#10b981',
         borderWidth: 2,
         borderColor: '#fff',
     },
     agentInfo: {
-        flex: 1
+        flex: 1,
     },
     agentNameRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        marginBottom: 4,
     },
     agentName: {
-        fontSize: 18,
         color: '#ffffff',
         fontWeight: '700',
         letterSpacing: -0.3,
     },
     agentTitle: {
-        fontSize: 13,
         color: 'rgba(255, 255, 255, 0.85)',
-        marginBottom: 10,
         fontWeight: '500',
     },
     agentBadges: {
         flexDirection: 'row',
-        gap: 12
     },
     agentBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 12,
     },
     agentBadgeText: {
-        fontSize: 12,
         color: 'rgba(255, 255, 255, 0.95)',
         fontWeight: '600',
         letterSpacing: 0.3,
@@ -1114,51 +1175,37 @@ const styles = StyleSheet.create({
     },
 
     // Screen Title
-    screenTitle: {
-        gap: 6
-    },
+    screenTitle: {},
     screenTitleText: {
-        fontSize: 22,
         color: '#111827',
         fontWeight: '800',
         letterSpacing: -0.5,
     },
     screenSubtitle: {
-        fontSize: 14,
         color: '#6b7280',
         fontWeight: '500',
         lineHeight: 20,
     },
 
-    // Scroll View
+    // Scroll
     scrollView: {
-        flex: 1
+        flex: 1,
     },
-    scrollContent: {
-        padding: 24,
-        paddingBottom: 100
-    },
+    scrollContent: {},
 
     // Section
-    section: {
-        marginBottom: 28
-    },
-    sectionHeaderRow: {
-        marginBottom: 16
-    },
+    section: {},
+    sectionHeaderRow: {},
     sectionHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16
     },
     sectionTitleContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
     },
     sectionTitle: {
-        fontSize: 17,
         color: '#111827',
         fontWeight: '700',
         letterSpacing: -0.3,
@@ -1166,32 +1213,22 @@ const styles = StyleSheet.create({
     viewAllButton: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
         backgroundColor: 'rgba(45, 106, 79, 0.1)',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 12,
     },
     viewAllButtonText: {
-        fontSize: 13,
         color: '#2D6A4F',
         fontWeight: '700',
         letterSpacing: 0.2,
     },
 
-    // Enhanced KPI Grid
+    // KPI Grid
     kpiGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         justifyContent: 'space-between',
-        marginBottom: 20
     },
     kpiCard: {
-        width: '48%',
         backgroundColor: '#ffffff',
-        borderRadius: 20,
-        padding: 18,
-        marginBottom: 16,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.08,
@@ -1204,47 +1241,37 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 12
+        marginBottom: 12,
     },
     kpiIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
     },
     kpiTrendContainer: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 10,
     },
     kpiTrendText: {
-        fontSize: 11,
         color: '#10b981',
         fontWeight: '700',
         letterSpacing: 0.3,
     },
     kpiLabel: {
-        fontSize: 13,
         color: '#64748b',
         fontWeight: '600',
         marginBottom: 8,
         letterSpacing: 0.2,
     },
     kpiValue: {
-        fontSize: 28,
         color: '#1e293b',
         fontWeight: '800',
         letterSpacing: -1,
     },
 
-    // Enhanced Revenue Card
+    // Revenue Card
     revenueCardContainer: {
-        borderRadius: 20,
         overflow: 'hidden',
         shadowColor: '#3b82f6',
         shadowOffset: { width: 0, height: 6 },
@@ -1256,20 +1283,17 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 24,
     },
     revenueLeft: {
         flex: 1,
     },
     revenueLabel: {
-        fontSize: 13,
         color: 'rgba(255, 255, 255, 0.9)',
         marginBottom: 8,
         fontWeight: '600',
         letterSpacing: 0.5,
     },
     revenueValue: {
-        fontSize: 34,
         color: '#ffffff',
         fontWeight: '900',
         marginBottom: 8,
@@ -1281,64 +1305,46 @@ const styles = StyleSheet.create({
         gap: 4,
     },
     revenueChangeText: {
-        fontSize: 13,
         color: 'rgba(255, 255, 255, 0.9)',
         fontWeight: '600',
     },
     revenueIcon: {
-        width: 56,
-        height: 56,
-        borderRadius: 16,
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
     },
 
-    // Enhanced Actions Grid
+    // Actions Grid
     actionsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 12
     },
     actionPrimary: {
-        flex: 1,
-        minWidth: '47%',
-        borderRadius: 16,
         overflow: 'hidden',
         shadowColor: '#2D6A4F',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.25,
         shadowRadius: 10,
         elevation: 6,
+        flex: 1,
     },
     actionPrimaryGradient: {
-        padding: 20,
         alignItems: 'center',
-        gap: 10,
     },
     actionIconPrimary: {
-        width: 52,
-        height: 52,
-        borderRadius: 16,
         backgroundColor: 'rgba(255, 255, 255, 0.2)',
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
     },
     actionTextPrimary: {
-        fontSize: 14,
         color: '#ffffff',
         textAlign: 'center',
         fontWeight: '700',
         letterSpacing: 0.2,
     },
     actionSecondary: {
-        flex: 1,
-        minWidth: '47%',
         backgroundColor: '#ffffff',
-        borderRadius: 16,
-        padding: 20,
         alignItems: 'center',
-        gap: 10,
         borderWidth: 1.5,
         borderColor: '#f3f4f6',
         shadowColor: '#000',
@@ -1348,28 +1354,22 @@ const styles = StyleSheet.create({
         elevation: 2,
     },
     actionIconSecondary: {
-        width: 52,
-        height: 52,
-        borderRadius: 16,
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
     },
     actionTextSecondary: {
-        fontSize: 14,
         color: '#111827',
         textAlign: 'center',
         fontWeight: '700',
         letterSpacing: 0.2,
     },
 
-    // Enhanced Leads List
+    // Leads List
     leadsList: {
-        gap: 12
+        gap: 12,
     },
     leadCard: {
         backgroundColor: '#ffffff',
-        borderRadius: 16,
-        padding: 18,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.06,
@@ -1382,34 +1382,26 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        gap: 12,
-        marginBottom: 14
     },
     leadInfo: {
-        flex: 1
+        flex: 1,
     },
     leadName: {
-        fontSize: 15,
         color: '#111827',
         fontWeight: '700',
         marginBottom: 6,
         letterSpacing: -0.2,
     },
     leadProperty: {
-        fontSize: 13,
         color: '#6b7280',
         marginBottom: 6,
         fontWeight: '500',
     },
     leadBudget: {
-        fontSize: 15,
         color: '#2D6A4F',
-        fontWeight: '700'
+        fontWeight: '700',
     },
     statusBadge: {
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 14,
         borderWidth: 1.5,
         flexDirection: 'row',
         alignItems: 'center',
@@ -1421,7 +1413,6 @@ const styles = StyleSheet.create({
         borderRadius: 3,
     },
     statusText: {
-        fontSize: 12,
         fontWeight: '700',
         letterSpacing: 0.3,
     },
@@ -1429,24 +1420,18 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: 14,
         borderTopWidth: 1,
-        borderTopColor: '#f3f4f6'
+        borderTopColor: '#f3f4f6',
     },
     leadDate: {
-        fontSize: 12,
         color: '#9ca3af',
         fontWeight: '500',
     },
     leadActions: {
         flexDirection: 'row',
-        gap: 8
     },
     leadActionPrimary: {
-        width: 36,
-        height: 36,
         backgroundColor: '#2D6A4F',
-        borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#2D6A4F',
@@ -1456,21 +1441,17 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     leadActionSecondary: {
-        width: 36,
-        height: 36,
         backgroundColor: '#f3f4f6',
-        borderRadius: 10,
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
     },
 
-    // Enhanced Listings List
+    // Listings
     listingsList: {
-        gap: 14
+        gap: 14,
     },
     listingCard: {
         backgroundColor: '#ffffff',
-        borderRadius: 18,
         overflow: 'hidden',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
@@ -1482,7 +1463,6 @@ const styles = StyleSheet.create({
     },
     listingImageContainer: {
         position: 'relative',
-        height: 140,
     },
     listingImage: {
         width: '100%',
@@ -1495,51 +1475,34 @@ const styles = StyleSheet.create({
         right: 0,
         height: 60,
     },
-    listingContent: {
-        padding: 16
-    },
-    listingHeader: {
-        marginBottom: 12
-    },
+    listingContent: {},
+    listingHeader: {},
     listingInfo: {
-        flex: 1
+        flex: 1,
     },
     listingTitle: {
-        fontSize: 16,
         color: '#111827',
         fontWeight: '700',
-        marginBottom: 8,
         letterSpacing: -0.3,
     },
     listingLocation: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8
     },
     locationIconCircle: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
         backgroundColor: 'rgba(45, 106, 79, 0.1)',
         justifyContent: 'center',
         alignItems: 'center',
     },
     listingLocationText: {
-        fontSize: 13,
         color: '#6b7280',
         flex: 1,
         fontWeight: '500',
     },
     listingStatusBadge: {
         position: 'absolute',
-        top: 12,
-        left: 12,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 14,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.15,
@@ -1547,7 +1510,6 @@ const styles = StyleSheet.create({
         elevation: 3,
     },
     listingStatusText: {
-        fontSize: 12,
         fontWeight: '700',
         letterSpacing: 0.3,
     },
@@ -1555,34 +1517,26 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingTop: 12,
         borderTopWidth: 1,
         borderTopColor: '#f3f4f6',
     },
     listingPrice: {
-        fontSize: 18,
         color: '#2D6A4F',
         fontWeight: '800',
         letterSpacing: -0.5,
     },
     listingActions: {
         flexDirection: 'row',
-        gap: 10
     },
     listingActionButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 10,
         backgroundColor: '#f9fafb',
         justifyContent: 'center',
         alignItems: 'center',
     },
 
-    // Enhanced Insights
+    // Insights
     insightsCard: {
         backgroundColor: '#ffffff',
-        borderRadius: 20,
-        padding: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.08,
@@ -1591,87 +1545,64 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#f9fafb',
     },
-    insightsList: {
-        gap: 12,
-        marginTop: 16
-    },
+    insightsList: {},
     insightItem: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: 16,
-        borderRadius: 16
     },
     insightLeft: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 14,
-        flex: 1
+        flex: 1,
     },
     insightIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
         justifyContent: 'center',
-        alignItems: 'center'
+        alignItems: 'center',
     },
     insightTextContainer: {
         flex: 1,
     },
     insightTitle: {
-        fontSize: 14,
         color: '#111827',
         fontWeight: '700',
         marginBottom: 4,
         letterSpacing: -0.2,
     },
     insightSubtitle: {
-        fontSize: 12,
         color: '#6b7280',
         fontWeight: '500',
     },
     conversionBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        marginTop: 6
     },
     conversionBarBg: {
-        width: 100,
-        height: 8,
         backgroundColor: '#bfdbfe',
-        borderRadius: 4,
-        overflow: 'hidden'
+        overflow: 'hidden',
     },
     conversionBarFill: {
         height: '100%',
         backgroundColor: '#2563eb',
-        borderRadius: 4
     },
     conversionPercent: {
-        fontSize: 13,
         color: '#2563eb',
         fontWeight: '700',
     },
 
-    // Enhanced FAB
+    // FAB
     fab: {
         position: 'absolute',
-        bottom: 24,
-        right: 24,
         shadowColor: '#2D6A4F',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.4,
         shadowRadius: 12,
-        elevation: 10
+        elevation: 10,
     },
     fabGradient: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
         justifyContent: 'center',
-        alignItems: 'center'
-    }
+        alignItems: 'center',
+    },
 });
 
 export default AgentDashboard;

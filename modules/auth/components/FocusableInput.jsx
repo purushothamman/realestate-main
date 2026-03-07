@@ -105,6 +105,9 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#111827',
         height: '100%',
+        // Removes the default black focus outline on web/Expo web
+        outlineWidth: 0,
+        outlineStyle: 'none',
     },
     textAreaWrapper: {
         flexDirection: 'row',
@@ -124,6 +127,8 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#111827',
         minHeight: 80,
+        outlineWidth: 0,
+        outlineStyle: 'none',
     },
     errorContainer: {
         flexDirection: 'row',
