@@ -951,7 +951,7 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
               <Image source={{ uri: notif.sender.avatar }} style={[detail.sAvatar, isTablet && { width: 70, height: 70, borderRadius: 35 }]} />
             ) : (
               <View style={[detail.sAvatar, isTablet && { width: 70, height: 70, borderRadius: 35 },
-                { backgroundColor: T.g600, justifyContent: 'center', alignItems: 'center' }]}>
+              { backgroundColor: T.g600, justifyContent: 'center', alignItems: 'center' }]}>
                 <Text style={{ color: T.white, fontSize: rs(24), fontWeight: '800' }}>
                   {(notif.sender?.name || '?').charAt(0).toUpperCase()}
                 </Text>
@@ -1052,23 +1052,12 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
         </View>
 
         {/* ── PROPERTY CARD ── */}
-<<<<<<< HEAD
-        {
-          notif.property && (
-            <>
-              <SectionLabel text="RELATED PROPERTY" mt={20} />
-              <View style={detail.propCard}>
-                <Image source={{ uri: getImageUrl(notif.property.image) }} style={detail.propImg} resizeMode="cover" />
-                <View style={detail.propScrim} />
-                <View style={detail.propTag}>
-                  <Text style={detail.propTagTxt}>{notif.property.type}</Text>
-=======
         {notif.property && (
           <>
             <SectionLabel text="RELATED PROPERTY" mt={20} />
             <View style={detail.propCard}>
               <Image
-                source={{ uri: notif.property.image }}
+                source={{ uri: getImageUrl(notif.property.image) || notif.property.image }}
                 style={[detail.propImg, isTablet && { height: 200 }]}
                 resizeMode="cover"
               />
@@ -1081,7 +1070,6 @@ function NotificationDetail({ notif, onBack, onAction, navigation }) {
                 <View style={detail.propRow}>
                   <MapPin color={T.n500} size={rs(12)} strokeWidth={2} />
                   <Text style={[detail.propLoc, { fontSize: rs(12) }]}>{notif.property.location}</Text>
->>>>>>> origin/modified-frontend-pages
                 </View>
                 <View style={detail.propStat}>
                   <Home color={T.g600} size={rs(12)} strokeWidth={2} />

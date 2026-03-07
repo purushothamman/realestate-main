@@ -220,9 +220,9 @@ export default function HomeScreen({ navigation }) {
     try {
       await Promise.all([
         fetchProperties(authToken),
-        fetchUserStats(authToken, user.id),
-        fetchNotifications(authToken, user.id),
-        fetchMessages(authToken, user.id),
+        // fetchUserStats(authToken, user.id),
+        // fetchNotifications(authToken, user.id),
+        // fetchMessages(authToken, user.id),
       ]);
     } catch (err) {
       console.error('Refresh error:', err);
