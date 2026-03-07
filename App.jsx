@@ -35,7 +35,6 @@ import BuilderNotificationsScreen from './modules/builder/screens/BuilderNotific
 import AgentInquiriesScreen from './modules/agent/AgentInquiriesScreen';
 import BuyerNotificationsScreen from './modules/user/screens/BuyerNotificationsScreen';
 import ScheduleViewingScreen from './modules/property/screens/ScheduleViewingScreen';
-// import MakeOfferScreen from './modules/property/screens/MakeAnOfferScreen';
 import VirtualTourScreen from './modules/property/screens/VirtualTourScreen';
 
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -62,7 +61,6 @@ export default function App() {
   const [userData, setUserData] = useState(null);
   const [editPropertyData, setEditPropertyData] = useState(null);
 
-  // 🔹 NEW: State for ScheduleViewingScreen and VirtualTourScreen
   const [scheduleViewingData, setScheduleViewingData] = useState(null);
   const [virtualTourData, setVirtualTourData] = useState(null);
 
@@ -94,12 +92,12 @@ export default function App() {
     }
   }, [userData]);
 
-  // 🔹 Load User Data on mount
+  // 🔹 Load User Data on mount — does NOT auto-navigate to home.
+  // userData is only used to inform goBack() whether the user is authenticated.
   useEffect(() => {
     const loadUser = async () => {
       try {
         const savedUser = await AsyncStorage.getItem('user');
-        const token = await AsyncStorage.getItem('authToken');
         if (savedUser) {
           setUserData(JSON.parse(savedUser));
         }
@@ -145,13 +143,11 @@ export default function App() {
     const normalizedScreen =
       screen === 'PropertyDetailScreen' ? 'propertyDetail' : screen;
 
-    // 🚫 Prevent propertyDetail without property
     if (normalizedScreen === 'propertyDetail' && !params.property) {
       console.warn("⚠️ Tried to open propertyDetail without property.");
       return;
     }
 
-    // 🧹 Clear selectedProperty when leaving propertyDetail
     if (normalizedScreen !== 'propertyDetail') {
       setSelectedProperty(null);
     }
@@ -159,7 +155,6 @@ export default function App() {
     setScreenStack(prev => [...prev, currentScreen]);
     setCurrentScreen(normalizedScreen);
 
-    // ✅ Only set property when navigating to propertyDetail
     if (normalizedScreen === 'propertyDetail') {
       setSelectedProperty(params.property);
     }
@@ -208,7 +203,6 @@ export default function App() {
       });
     }
 
-    // 🔹 NEW: Store data for ScheduleViewingScreen
     if (normalizedScreen === 'ScheduleViewingScreen') {
       setScheduleViewingData({
         propertyId: params.propertyId,
@@ -220,7 +214,6 @@ export default function App() {
       });
     }
 
-    // 🔹 NEW: Store data for VirtualTourScreen
     if (normalizedScreen === 'VirtualTourScreen') {
       setVirtualTourData({
         propertyId: params.propertyId,
@@ -233,7 +226,11 @@ export default function App() {
     }
   };
 
-  // 🔹 Fixed goBack — notification screens always return to 'home'
+  // ✅ FIX: goBack now checks userData before deciding whether to redirect to
+  // 'home' when the stack bottoms out at a pre-auth screen.
+  // Previously, hitting a pre-auth screen in the stack ALWAYS redirected to
+  // 'home', which caused the ghost redirect when a cached userData was present
+  // but the user was intentionally in the forgot-password flow.
   const goBack = () => {
     if (SCREENS_BACK_TO_HOME.includes(currentScreen)) {
       setScreenStack([]);
@@ -243,15 +240,31 @@ export default function App() {
 
     setScreenStack(prev => {
       if (prev.length === 0) {
-        setCurrentScreen('home');
+        // Only return home if truly authenticated; otherwise stay on welcome
+        if (userData) {
+          setCurrentScreen('home');
+        } else {
+          setCurrentScreen('welcome');
+        }
         return prev;
       }
-      const last = prev[prev.length - 1];
 
+      const last = prev[prev.length - 1];
       const preAuthScreens = ['splash', 'welcome', 'login', 'register', 'otp', 'forgotPassword'];
+
       if (preAuthScreens.includes(last)) {
-        setCurrentScreen('home');
-        return [];
+        // ✅ KEY FIX: Only jump to 'home' if the user is actually logged in.
+        // If userData exists from a previous session but the user is currently
+        // in an unauthenticated flow (e.g. forgot password), navigate normally
+        // back through the pre-auth stack instead of hijacking to home.
+        if (userData && !preAuthScreens.includes(currentScreen)) {
+          setCurrentScreen('home');
+          return [];
+        } else {
+          // Navigate normally back to the pre-auth screen
+          setCurrentScreen(last);
+          return prev.slice(0, -1);
+        }
       }
 
       setCurrentScreen(last);
@@ -347,6 +360,9 @@ export default function App() {
           <ForgotPassword
             navigation={navigation}
             onBack={goBack}
+            // ✅ FIX: Pass onBackToLogin so that after OTP verification on the
+            // forgot-password flow, the user is taken to login — not home.
+            onBackToLogin={() => navigateTo('login')}
             onResetSuccess={() => navigateTo('login')}
           />
         );
@@ -610,7 +626,6 @@ export default function App() {
           />
         );
 
-      // 🔹 NEW: ScheduleViewingScreen case
       case 'ScheduleViewingScreen':
         return (
           <ScheduleViewingScreen
@@ -630,7 +645,6 @@ export default function App() {
           />
         );
 
-      // 🔹 NEW: VirtualTourScreen case
       case 'VirtualTourScreen':
         return (
           <VirtualTourScreen
