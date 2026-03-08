@@ -141,6 +141,23 @@ const ImageGallery = ({ images, heroHeight, horizontalPad, isTablet, onBack, isS
         }
     };
 
+    const viewabilityConfig = useRef({
+        itemVisiblePercentThreshold: 50,
+        minimumViewTime: 100,
+    }).current;
+
+    const onViewableItemsChanged = useRef(({ viewableItems }) => {
+        if (viewableItems.length > 0) {
+            setCurrentIndex(viewableItems[0].index || 0);
+        }
+    }).current;
+
+    const getItemLayout = (_, index) => ({
+        length: width,
+        offset: width * index,
+        index,
+    });
+
     return (
         <View style={{ height: heroHeight }}>
             <FlatList
@@ -150,10 +167,12 @@ const ImageGallery = ({ images, heroHeight, horizontalPad, isTablet, onBack, isS
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
                 keyExtractor={(_, i) => String(i)}
-                onMomentumScrollEnd={(e) => {
-                    const idx = Math.round(e.nativeEvent.contentOffset.x / width);
-                    setCurrentIndex(idx);
-                }}
+                getItemLayout={getItemLayout}
+                snapToInterval={width}
+                snapToAlignment="center"
+                decelerationRate="fast"
+                viewabilityConfig={viewabilityConfig}
+                onViewableItemsChanged={onViewableItemsChanged}
                 renderItem={({ item }) => (
                     <View style={{ width, height: heroHeight }}>
                         <Image
@@ -253,8 +272,8 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
     const heroHeight = isDesktop
         ? Math.min(height * 0.55, 520)
         : isTablet
-        ? Math.min(height * 0.5, 460)
-        : Math.min(height * 0.45, 400);
+            ? Math.min(height * 0.5, 460)
+            : Math.min(height * 0.45, 400);
 
     const horizontalPad = isDesktop ? 48 : isTablet ? 32 : 20;
 
@@ -284,7 +303,7 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
                             setFullProperty((prev) => ({ ...prev, ...data.property }));
                         }
                     }
-                } catch (e) {}
+                } catch (e) { }
             })();
         }
     }, []);
@@ -331,8 +350,8 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
         listingAgent?.role === 'agent'
             ? 'Real Estate Agent'
             : listingAgent?.role
-            ? String(listingAgent.role)
-            : 'Real Estate Agent';
+                ? String(listingAgent.role)
+                : 'Real Estate Agent';
     const agentInitials =
         String(agentName || '')
             .trim()
@@ -357,7 +376,7 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
                     })
                     .filter(Boolean);
             }
-        } catch (e) {}
+        } catch (e) { }
     }
     if (propertyImages.length === 0) {
         const single = property.primaryImage || property.imageUrl || property.image;
@@ -898,7 +917,7 @@ function FeaturesSection({ property, horizontalPad, isTablet }) {
             const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
             if (Array.isArray(parsed)) featuresList = parsed.filter((f) => f && f.name);
         }
-    } catch (e) {}
+    } catch (e) { }
 
     return (
         <View style={[styles.featuresSection, { paddingHorizontal: horizontalPad }]}>

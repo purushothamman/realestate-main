@@ -440,9 +440,21 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
 
     const handlePublish = async () => {
         try {
-            // Validate inputs
-            if (!propertyData.title || !propertyData.price || !propertyData.city || !propertyData.address) {
-                Alert.alert('Missing Fields', 'Please fill in all required fields');
+            // Use typed city text as fallback if user didn't pick from dropdown
+            const effectiveCity = propertyData.city || cityQuery.trim();
+
+            // Validate required fields and report which one is missing
+            const missing = [];
+            if (!propertyData.title.trim()) missing.push('Property Title');
+            if (!propertyData.price.trim()) missing.push('Price');
+            if (!effectiveCity) missing.push('City / Area');
+            if (!propertyData.address.trim()) missing.push('Address');
+
+            if (missing.length > 0) {
+                Alert.alert(
+                    'Missing Fields',
+                    `Please fill in the following required fields:\n• ${missing.join('\n• ')}`
+                );
                 return;
             }
 
@@ -473,6 +485,8 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                 'commercial': 4
             };
 
+            const areaRaw = (propertyData.area || '0').replace(/,/g, '');
+
             const payload = {
                 builder_id: activeBuilder.id,
                 // When uploadMode is 'hiringBuilder', backend will auto-approve
@@ -480,14 +494,14 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                 auto_for_hiring_builder: uploadMode === 'hiringBuilder',
                 title: propertyData.title,
                 description: propertyData.description || "No description provided",
-                price: parseFloat(propertyData.price.replace(/,/g, '')),
+                price: parseFloat((propertyData.price || '0').replace(/,/g, '')),
                 listing_type: propertyData.status, // 'sale' or 'rent'
                 property_type_id: propertyTypeMap[propertyData.propertyType] || 1,
                 address: propertyData.address,
-                city: propertyData.city,
+                city: effectiveCity,
                 state: propertyData.state || "Maharashtra",
                 pincode: propertyData.pincode || "400001",
-                area_sqft: parseFloat(propertyData.area.replace(/,/g, '')),
+                area_sqft: parseFloat(areaRaw) || 0,
                 bedrooms: 3, // Default or add input
                 bathrooms: 2, // Default or add input
                 features: propertyData.amenities.map(a => ({ name: a, value: 'true' })),

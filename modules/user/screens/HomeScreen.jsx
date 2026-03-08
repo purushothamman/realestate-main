@@ -424,9 +424,9 @@ export default function HomeScreen({ navigation }) {
             style={styles.notificationButton}
             onPress={() => {
               const role = user?.role;
-              if (role === 'agent') navigation?.navigate('agentNotifications');
-              else if (role === 'builder') navigation?.navigate('builderNotifications');
-              else navigation?.navigate('buyerNotifications');
+              if (role === 'agent') navigation.navigate('agentNotifications');
+              else if (role === 'builder') navigation.navigate('builderNotifications');
+              else navigation.navigate('buyerNotifications');
             }}
           >
             <Bell color="#374151" size={24} strokeWidth={2} />
