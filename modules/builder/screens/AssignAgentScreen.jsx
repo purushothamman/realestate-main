@@ -41,7 +41,7 @@ import {
   MapPin, Star, X, AlertCircle, CheckCircle2,
   Trash2, Check, Layers, Zap, Home, RefreshCw,
 } from 'lucide-react-native';
-import { API_BASE_URL } from '../../../utils/api';
+import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE, DEFAULT_PROFILE_IMAGE } from '../../../utils/api';
 
 /* ─────────────────────────────────────────────────────────
    BREAKPOINT SYSTEM
@@ -741,7 +741,7 @@ export default function AssignAgentScreen({ navigation, onBack }) {
         <View style={pc.card}>
           {/* Hero Image */}
           <Image
-            source={{ uri: item.image }}
+            source={{ uri: getImageUrl(item.image) || DEFAULT_PROPERTY_IMAGE }}
             style={[pc.heroImg, { height: dim.propImgH }]}
             resizeMode="cover"
           />
@@ -787,7 +787,7 @@ export default function AssignAgentScreen({ navigation, onBack }) {
             {assigned ? (
               <View style={[pc.assignedWrap, isXs && { gap: 6 }]}>
                 <Image
-                  source={{ uri: assigned.avatar }}
+                  source={{ uri: getImageUrl(assigned.avatar) || DEFAULT_PROFILE_IMAGE }}
                   style={[pc.assignedAvatar, isXs && { width: 34, height: 34, borderRadius: 17 }]}
                 />
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -850,7 +850,7 @@ export default function AssignAgentScreen({ navigation, onBack }) {
       <AnimatedCard index={index} style={[ag.cardOuter, agentCols > 1 && { flex: 1 }]}>
         <View style={[ag.card, isXs && { padding: 10, gap: 8 }]}>
           <Image
-            source={{ uri: item.avatar }}
+            source={{ uri: getImageUrl(item.avatar) || DEFAULT_PROFILE_IMAGE }}
             style={{ width: avSz, height: avSz, borderRadius: avSz / 2, flexShrink: 0 }}
           />
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -900,7 +900,7 @@ export default function AssignAgentScreen({ navigation, onBack }) {
           onPress={() => confirmAssign(item)}
           activeOpacity={0.78}
         >
-          <Image source={{ uri: item.avatar }} style={{ width: avSz, height: avSz, borderRadius: avSz / 2, flexShrink: 0 }} />
+          <Image source={{ uri: getImageUrl(item.avatar) || DEFAULT_PROFILE_IMAGE }} style={{ width: avSz, height: avSz, borderRadius: avSz / 2, flexShrink: 0 }} />
           <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3, flexWrap: 'wrap' }}>
               <Text style={[pkr.name, { fontSize: isXs ? 13 : 14 }]} numberOfLines={1}>{item.name}</Text>
@@ -930,7 +930,7 @@ export default function AssignAgentScreen({ navigation, onBack }) {
     return (
       <AnimatedCard index={index} style={{}}>
         <View style={[hr.row, isXs && { paddingVertical: 10 }]}>
-          <Image source={{ uri: item.avatar }} style={{ width: avSz, height: avSz, borderRadius: avSz / 2, flexShrink: 0 }} />
+          <Image source={{ uri: getImageUrl(item.avatar) || DEFAULT_PROFILE_IMAGE }} style={{ width: avSz, height: avSz, borderRadius: avSz / 2, flexShrink: 0 }} />
           <View style={{ flex: 1, marginLeft: 10, minWidth: 0 }}>
             <Text style={[hr.name, { fontSize: isXs ? 13 : 14 }]} numberOfLines={1}>{item.name}</Text>
             <View style={[hr.metaRow, isXs && { gap: 5 }]}>
