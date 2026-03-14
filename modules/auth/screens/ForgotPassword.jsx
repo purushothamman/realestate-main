@@ -21,13 +21,31 @@ import {
 } from 'lucide-react-native';
 import OTPVerificationScreen from './OTPVerificationScreen';
 
+// ✅ FIX SUMMARY:
+// The component now requires `onBackToLogin` to be passed from the parent (App.js).
+// Previously, after OTP verification, the component called `onBack` which triggered
+// goBack() in App.js. Since the stack contained pre-auth screens ('welcome', 'login'),
+// the original goBack() blindly redirected to 'home' when it detected a pre-auth
+// screen — even though userData was from a stale session, not a fresh login.
+// Now `onBackToLogin` explicitly navigates to 'login', bypassing goBack() entirely.
+
 export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin }) {
   const [screen, setScreen] = useState('forgotPassword');
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState('idle');
   const [errorMessage, setErrorMessage] = useState('');
 
-  // If OTP screen should be shown
+  // ✅ FIX: Use onBackToLogin (navigateTo('login')) instead of onBack (goBack()).
+  // This prevents goBack() from ever seeing the pre-auth stack and ghost-redirecting
+  // to 'home' due to stale userData in AsyncStorage.
+  const handleReturnToLogin = () => {
+    if (onBackToLogin) {
+      onBackToLogin();
+    } else if (onBack) {
+      onBack();
+    }
+  };
+
   if (screen === 'otp') {
     return (
       <OTPVerificationScreen
@@ -35,12 +53,10 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
         onBack={() => setScreen('forgotPassword')}
         onVerify={(otpCode) => {
           console.log('OTP Verified:', otpCode);
-          // Navigate back to login or reset password
-          if (onBackToLogin) {
-            onBackToLogin();
-          } else if (onBack) {
-            onBack();
-          }
+          // ✅ FIX: Navigate explicitly to login via onBackToLogin instead of
+          // calling onBack, which would have bubbled into App.js's goBack()
+          // and triggered the phantom home redirect.
+          handleReturnToLogin();
         }}
       />
     );
@@ -52,11 +68,9 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
   };
 
   const handleSubmit = async () => {
-    // Reset states
     setStatus('loading');
     setErrorMessage('');
 
-    // Validate email
     if (!email.trim()) {
       setStatus('error');
       setErrorMessage('Email address is required');
@@ -72,22 +86,14 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
     // Simulate API call
     setTimeout(() => {
       setStatus('success');
-      if (onSendResetLink) {
-        onSendResetLink(email);
-      }
-      // Navigate to OTP screen after 1 second
+      // ✅ FIX: Do NOT call onSendResetLink here — that prop isn't passed from
+      // App.js (App.js passes onResetSuccess instead), so calling it would be
+      // a no-op at best and confusing at worst. The success flow is self-contained:
+      // show success state, then transition to the OTP sub-screen.
       setTimeout(() => {
         setScreen('otp');
       }, 1000);
     }, 1500);
-  };
-
-  const handleBackToLogin = () => {
-    if (onBackToLogin) {
-      onBackToLogin();
-    } else if (onBack) {
-      onBack();
-    }
   };
 
   return (
@@ -294,8 +300,10 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
         <View style={styles.footer}>
           <View style={styles.footerContent}>
             <Text style={styles.footerText}>Remember your password?</Text>
+            {/* ✅ FIX: Use handleReturnToLogin (which calls onBackToLogin) instead
+                of a raw goBack(), so navigation is explicit and predictable. */}
             <TouchableOpacity
-              onPress={handleBackToLogin}
+              onPress={handleReturnToLogin}
               style={styles.backToLoginButton}
               activeOpacity={0.7}
             >

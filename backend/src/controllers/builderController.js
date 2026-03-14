@@ -208,7 +208,7 @@ exports.getPropertiesForAssign = async (req, res) => {
             type: 'Residential',
             units: '-',
             status: (r.status || 'active') === 'active' ? 'Active' : (r.status || 'Active'),
-            image: r.image_url && r.image_url.startsWith('http') ? r.image_url : (r.image_url ? `${req.protocol}://${req.get('host')}${r.image_url.startsWith('/') ? '' : '/'}${r.image_url}` : null),
+            image: r.image_url || null,
         }));
         res.json({ success: true, properties: list });
     } catch (err) {
@@ -240,7 +240,7 @@ exports.getHiredAgents = async (req, res) => {
             deals: 0,
             city: '—',
             spec: 'Agent',
-            avatar: r.profile_image && r.profile_image.startsWith('http') ? r.profile_image : (r.profile_image ? `${req.protocol}://${req.get('host')}${r.profile_image.startsWith('/') ? '' : '/'}${r.profile_image}` : `https://i.pravatar.cc/150?u=${r.id}`),
+            avatar: r.profile_image || null,
         }));
         res.json({ success: true, agents: list });
     } catch (err) {
@@ -277,7 +277,7 @@ exports.getAvailableAgents = async (req, res) => {
             deals: 0,
             city: '—',
             spec: 'Agent',
-            avatar: r.profile_image && r.profile_image.startsWith('http') ? r.profile_image : (r.profile_image ? `${req.protocol}://${req.get('host')}${r.profile_image.startsWith('/') ? '' : '/'}${r.profile_image}` : `https://i.pravatar.cc/150?u=${r.id}`),
+            avatar: r.profile_image || null,
         }));
         res.json({ success: true, agents: list });
     } catch (err) {

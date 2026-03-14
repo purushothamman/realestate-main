@@ -117,14 +117,14 @@ export function WelcomeScreen({ onGetStarted, onNavigateToLogin, onExploreAsBuil
               <Text style={styles.primaryButtonText}>Get Started</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.secondaryButton}
               onPress={onExploreAsBuilder}
               activeOpacity={0.8}
             >
               <Search color="#2D6A4F" size={20} style={styles.buttonIcon} />
               <Text style={styles.secondaryButtonText}>Explore Properties</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
           </View>
 
           {/* Secondary Actions */}

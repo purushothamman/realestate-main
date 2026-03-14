@@ -1,14 +1,17 @@
 import { registerRootComponent } from 'expo';
 
 import App from './App';
-import { LogBox } from 'react-native';
+import { Platform } from 'react-native';
 
-LogBox.ignoreLogs([
-  'Animated: `useNativeDriver`',
-  'shadow* style props are deprecated',
-  'Invalid style property',
-  'props.pointerEvents is deprecated'
-]);
+if (Platform.OS !== 'web') {
+  const { LogBox } = require('react-native');
+  LogBox.ignoreLogs([
+    'Animated: `useNativeDriver`',
+    'shadow* style props are deprecated',
+    'Invalid style property',
+    'props.pointerEvents is deprecated'
+  ]);
+}
 
 // React Native Web prints some warnings to the browser console (not LogBox).
 // Filter known noisy deprecation warnings until upstream libs remove them.

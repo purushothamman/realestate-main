@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  TextInput,
 } from 'react-native';
 import {
   ShoppingBag,
@@ -27,7 +28,86 @@ import { CoreRegistrationFields } from '../components/CoreRegistrationFields';
 import { RoleSelector } from '../components/RoleSelector';
 import { BuilderFields } from '../components/BuilderFields';
 
-// 🔹 Constants outside component to prevent recreation on re-render
+// ─────────────────────────────────────────────────────────────────────────────
+// FocusAwareTextInput
+// Drop-in replacement for <TextInput> that removes the black focus border
+// on iOS, Android, and React Native Web completely.
+// ─────────────────────────────────────────────────────────────────────────────
+export const FocusAwareTextInput = React.forwardRef(
+  (
+    {
+      style,
+      focusBorderColor = '#2D6A4F',
+      defaultBorderColor = '#E5E7EB',
+      ...props
+    },
+    ref
+  ) => {
+    const [isFocused, setIsFocused] = useState(false);
+
+    return (
+      <TextInput
+        ref={ref}
+        {...props}
+        // ── Android: removes native bottom underline ──────────────────────
+        underlineColorAndroid="transparent"
+        // ── Cursor / selection colors ─────────────────────────────────────
+        selectionColor={focusBorderColor}
+        cursorColor={focusBorderColor}           // Android API 29+
+        // ── iOS: remove the inner shadow / system focus ring ─────────────
+        // (no direct prop; handled via the style overrides below)
+        style={[
+          inputBaseStyle.input,
+          { borderColor: isFocused ? focusBorderColor : defaultBorderColor },
+          // ── React Native Web: nuke the browser focus outline ─────────
+          Platform.OS === 'web' && inputBaseStyle.webOverride,
+          style,
+        ]}
+        onFocus={(e) => {
+          setIsFocused(true);
+          props.onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          setIsFocused(false);
+          props.onBlur?.(e);
+        }}
+      />
+    );
+  }
+);
+
+FocusAwareTextInput.displayName = 'FocusAwareTextInput';
+
+const inputBaseStyle = StyleSheet.create({
+  input: {
+    height: 52,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#111827',
+    backgroundColor: '#F9FAFB',
+    // ── iOS: prevent the system from drawing its own focus shadow ────────
+    shadowColor: 'transparent',
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    // ── Android: prevent extra elevation ring ────────────────────────────
+    elevation: 0,
+  },
+  webOverride: {
+    // @ts-ignore – React Native Web specific
+    outlineStyle: 'none',
+    outlineWidth: 0,
+    outline: 'none',
+    boxShadow: 'none',
+    WebkitAppearance: 'none',
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants outside component to prevent recreation on re-render
+// ─────────────────────────────────────────────────────────────────────────────
 const USER_TYPES = [
   {
     value: 'buyer',
@@ -52,7 +132,9 @@ const USER_TYPES = [
   },
 ];
 
-// 🔹 Optimized sub-components for zero-flicker
+// ─────────────────────────────────────────────────────────────────────────────
+// LogoSection
+// ─────────────────────────────────────────────────────────────────────────────
 const LogoSection = React.memo(() => (
   <View style={styles.logoContainer}>
     <View style={styles.logoBox}>
@@ -62,13 +144,19 @@ const LogoSection = React.memo(() => (
   </View>
 ));
 
+LogoSection.displayName = 'LogoSection';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RegisterScreen
+// ─────────────────────────────────────────────────────────────────────────────
 const RegisterScreen = React.memo(({
   navigation,
   onNavigateToLogin,
   onBack,
-  onRegisterSuccess
+  onRegisterSuccess,
 }) => {
   const isAndroid = Platform.OS === 'android';
+
   const {
     formData,
     errors,
@@ -90,13 +178,12 @@ const RegisterScreen = React.memo(({
 
   const [showRoleModal, setShowRoleModal] = useState(false);
 
-  // Memoized selection logic
-  const selectedRole = React.useMemo(
+  const selectedRole = useMemo(
     () => USER_TYPES.find((type) => type.value === formData.role),
     [formData.role]
   );
 
-  const formatFileSize = React.useCallback((bytes) => {
+  const formatFileSize = useCallback((bytes) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB'];
@@ -104,7 +191,7 @@ const RegisterScreen = React.memo(({
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   }, []);
 
-  const handleSelectRole = React.useCallback((role) => {
+  const handleSelectRole = useCallback((role) => {
     handleInputChange('role', role);
     setShowRoleModal(false);
   }, [handleInputChange]);
@@ -132,7 +219,7 @@ const RegisterScreen = React.memo(({
             </Text>
           </View>
 
-          {/* Messages Container - Fixed height or controlled visibility to prevent flickering */}
+          {/* Messages */}
           <View style={styles.messageContainer}>
             {successMessage ? (
               <View style={styles.successMessage}>
@@ -165,6 +252,15 @@ const RegisterScreen = React.memo(({
               error={errors.profileImage}
             />
 
+            {/*
+              ✅ Pass FocusAwareTextInput down to CoreRegistrationFields and
+              BuilderFields so they use it instead of the raw <TextInput>.
+
+              In those components, import FocusAwareTextInput from this file:
+                import { FocusAwareTextInput } from '../screens/RegisterScreen';
+              …or move FocusAwareTextInput to a shared file (recommended):
+                src/components/FocusAwareTextInput.jsx
+            */}
             <CoreRegistrationFields
               formData={formData}
               errors={errors}
@@ -244,13 +340,14 @@ const RegisterScreen = React.memo(({
               )}
             </TouchableOpacity>
 
-            {/* Footer */}
+            {/* Divider */}
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or continue with</Text>
               <View style={styles.dividerLine} />
             </View>
 
+            {/* Login Link */}
             <View style={styles.loginLinkContainer}>
               <Text style={styles.loginLinkText}>Already have an account? </Text>
               <TouchableOpacity
@@ -264,6 +361,7 @@ const RegisterScreen = React.memo(({
               </TouchableOpacity>
             </View>
 
+            {/* Trust Badge */}
             <View style={styles.trustBadge}>
               <View style={styles.trustIcon}>
                 <Shield color="#FFFFFF" size={12} strokeWidth={2} />
@@ -279,8 +377,13 @@ const RegisterScreen = React.memo(({
   );
 });
 
+RegisterScreen.displayName = 'RegisterScreen';
+
 export default RegisterScreen;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -429,9 +532,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    //shadowOpacity: 0.2,
     shadowRadius: 8,
-    //elevation: 8,
     marginTop: 4,
   },
   registerButtonDisabled: {

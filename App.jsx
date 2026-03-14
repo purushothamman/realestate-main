@@ -34,12 +34,18 @@ import AgentNotificationsScreen from './modules/agent/AgentNotificationsScreen';
 import BuilderNotificationsScreen from './modules/builder/screens/BuilderNotificationsScreen';
 import AgentInquiriesScreen from './modules/agent/AgentInquiriesScreen';
 import BuyerNotificationsScreen from './modules/user/screens/BuyerNotificationsScreen';
-
-
+import ScheduleViewingScreen from './modules/property/screens/ScheduleViewingScreen';
+import VirtualTourScreen from './modules/property/screens/VirtualTourScreen';
 
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-
 import { API_BASE_URL } from './utils/api';
+
+// 🔹 Screens that should always go back to 'home' when back is pressed
+const SCREENS_BACK_TO_HOME = [
+  'agentNotifications',
+  'builderNotifications',
+  'buyerNotifications',
+];
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('splash');
@@ -54,6 +60,9 @@ export default function App() {
   const [chatData, setChatData] = useState(null);
   const [userData, setUserData] = useState(null);
   const [editPropertyData, setEditPropertyData] = useState(null);
+
+  const [scheduleViewingData, setScheduleViewingData] = useState(null);
+  const [virtualTourData, setVirtualTourData] = useState(null);
 
   // 🔹 Fetch Unread Messages Count
   const fetchUnreadCount = async () => {
@@ -78,28 +87,24 @@ export default function App() {
   useEffect(() => {
     if (userData) {
       fetchUnreadCount();
-      const interval = setInterval(fetchUnreadCount, 30000); // Check every 30s
+      const interval = setInterval(fetchUnreadCount, 30000);
       return () => clearInterval(interval);
     }
   }, [userData]);
 
-  // 🔹 Load User Data on mount
+  // 🔹 Load User Data on mount — does NOT auto-navigate to home.
+  // userData is only used to inform goBack() whether the user is authenticated.
   useEffect(() => {
     const loadUser = async () => {
       try {
         const savedUser = await AsyncStorage.getItem('user');
-        const token = await AsyncStorage.getItem('authToken'); // Retrieve authToken
         if (savedUser) {
           setUserData(JSON.parse(savedUser));
-          if (token) {
-            // setAuthToken(token); // Removed non-existent setter
-          }
         }
       } catch (e) {
-        console.error('Failed to load user session:', e); // Updated error message
+        console.error('Failed to load user session:', e);
       }
     };
-
     loadUser();
   }, []);
 
@@ -122,7 +127,6 @@ export default function App() {
     }
   };
 
-
   // 🔹 Splash Screen Timeout (fallback)
   useEffect(() => {
     if (currentScreen === 'splash') {
@@ -130,57 +134,20 @@ export default function App() {
         console.log('⏱️ Splash timeout - auto-navigate to welcome');
         setCurrentScreen('welcome');
       }, 5000);
-
       return () => clearTimeout(splashTimer);
     }
   }, [currentScreen]);
 
   // 🔹 Navigation handler (Stack based)
-  // const navigateTo = (screen, params = {}) => {
-  //   setScreenStack(prev => [...prev, currentScreen]);
-  //   setCurrentScreen(screen);
-
-  //   if (params.property) setSelectedProperty(params.property);
-  //   if (params.requestId !== undefined) setSelectedRequestId(params.requestId);
-  //   if (params.query !== undefined) setSearchQuery(params.query);
-
-  //   if (params.propertyId || params.propertyName || params.propertyAddress || params.propertyPrice || params.propertyImage) {
-  //     setReportPropertyData({
-  //       propertyId: params.propertyId,
-  //       propertyName: params.propertyName,
-  //       propertyAddress: params.propertyAddress,
-  //       propertyPrice: params.propertyPrice,
-  //       propertyImage: params.propertyImage,
-  //     });
-  //   }
-
-  //   if (params.propertyPrice) {
-  //     setPaymentData({
-  //       propertyId: params.propertyId,
-  //       propertyName: params.propertyName,
-  //       propertyPrice: params.propertyPrice,
-  //     });
-  //   }
-
-  //   if (screen === 'chat') {
-  //     setChatData({
-  //       chatId: params.chatId,
-  //       inquiryId: params.inquiryId,
-  //     });
-  //   }
-  // };
-
   const navigateTo = (screen, params = {}) => {
     const normalizedScreen =
       screen === 'PropertyDetailScreen' ? 'propertyDetail' : screen;
 
-    // 🚫 Prevent propertyDetail without property
     if (normalizedScreen === 'propertyDetail' && !params.property) {
       console.warn("⚠️ Tried to open propertyDetail without property.");
       return;
     }
 
-    // 🧹 Clear selectedProperty when leaving propertyDetail
     if (normalizedScreen !== 'propertyDetail') {
       setSelectedProperty(null);
     }
@@ -188,7 +155,6 @@ export default function App() {
     setScreenStack(prev => [...prev, currentScreen]);
     setCurrentScreen(normalizedScreen);
 
-    // ✅ Only set property when navigating to propertyDetail
     if (normalizedScreen === 'propertyDetail') {
       setSelectedProperty(params.property);
     }
@@ -236,16 +202,71 @@ export default function App() {
         userRole: params.userRole
       });
     }
+
+    if (normalizedScreen === 'ScheduleViewingScreen') {
+      setScheduleViewingData({
+        propertyId: params.propertyId,
+        propertyName: params.propertyName,
+        propertyAddress: params.propertyAddress,
+        propertyPrice: params.propertyPrice,
+        propertyImage: params.propertyImage,
+        property: params.property,
+      });
+    }
+
+    if (normalizedScreen === 'VirtualTourScreen') {
+      setVirtualTourData({
+        propertyId: params.propertyId,
+        propertyName: params.propertyName,
+        propertyAddress: params.propertyAddress,
+        propertyPrice: params.propertyPrice,
+        propertyImages: params.propertyImages,
+        property: params.property,
+      });
+    }
   };
 
-
+  // ✅ FIX: goBack now checks userData before deciding whether to redirect to
+  // 'home' when the stack bottoms out at a pre-auth screen.
+  // Previously, hitting a pre-auth screen in the stack ALWAYS redirected to
+  // 'home', which caused the ghost redirect when a cached userData was present
+  // but the user was intentionally in the forgot-password flow.
   const goBack = () => {
+    if (SCREENS_BACK_TO_HOME.includes(currentScreen)) {
+      setScreenStack([]);
+      setCurrentScreen('home');
+      return;
+    }
+
     setScreenStack(prev => {
       if (prev.length === 0) {
-        setCurrentScreen('home');
+        // Only return home if truly authenticated; otherwise stay on welcome
+        if (userData) {
+          setCurrentScreen('home');
+        } else {
+          setCurrentScreen('welcome');
+        }
         return prev;
       }
+
       const last = prev[prev.length - 1];
+      const preAuthScreens = ['splash', 'welcome', 'login', 'register', 'otp', 'forgotPassword'];
+
+      if (preAuthScreens.includes(last)) {
+        // ✅ KEY FIX: Only jump to 'home' if the user is actually logged in.
+        // If userData exists from a previous session but the user is currently
+        // in an unauthenticated flow (e.g. forgot password), navigate normally
+        // back through the pre-auth stack instead of hijacking to home.
+        if (userData && !preAuthScreens.includes(currentScreen)) {
+          setCurrentScreen('home');
+          return [];
+        } else {
+          // Navigate normally back to the pre-auth screen
+          setCurrentScreen(last);
+          return prev.slice(0, -1);
+        }
+      }
+
       setCurrentScreen(last);
       return prev.slice(0, -1);
     });
@@ -262,6 +283,8 @@ export default function App() {
       setReportPropertyData(null);
       setPaymentData(null);
       setChatData(null);
+      setScheduleViewingData(null);
+      setVirtualTourData(null);
     } catch (e) {
       console.error('Error during logout:', e);
     }
@@ -280,10 +303,6 @@ export default function App() {
   const handleNavigateToLogin = useCallback(() => navigateTo('login'), [navigateTo]);
 
   const showNavbarScreens = ['home', 'messages', 'profile', 'searchResults', 'favorites', 'builderDashboard', 'agentDashboard'];
-
-
-
-
 
   // 🔹 Render Screens
   const renderScreen = () => {
@@ -305,7 +324,6 @@ export default function App() {
 
       case 'login':
         return (
-
           <LoginScreen
             navigation={navigation}
             onBack={goBack}
@@ -313,8 +331,6 @@ export default function App() {
               if (user) setUserData(user);
               navigateTo('home');
             }}
-
-
             onForgotPassword={() => navigateTo('forgotPassword')}
             onRegister={() => navigateTo('register')}
           />
@@ -344,6 +360,9 @@ export default function App() {
           <ForgotPassword
             navigation={navigation}
             onBack={goBack}
+            // ✅ FIX: Pass onBackToLogin so that after OTP verification on the
+            // forgot-password flow, the user is taken to login — not home.
+            onBackToLogin={() => navigateTo('login')}
             onResetSuccess={() => navigateTo('login')}
           />
         );
@@ -356,9 +375,7 @@ export default function App() {
             onProfilePress={() => navigateTo('profile')}
             onLogout={resetApp}
             onSearch={(query) => navigateTo('searchResults', { query })}
-            onPropertyClick={(property) =>
-              navigateTo('propertyDetail', { property })
-            }
+            onPropertyClick={(property) => navigateTo('propertyDetail', { property })}
           />
         );
 
@@ -391,19 +408,13 @@ export default function App() {
           />
         );
 
-
-
-
-
       case 'searchResults':
         return (
           <SearchResultsScreen
             navigation={navigation}
             searchQuery={searchQuery}
             onBack={goBack}
-            onPropertyClick={(property) =>
-              navigateTo('propertyDetail', { property })
-            }
+            onPropertyClick={(property) => navigateTo('propertyDetail', { property })}
           />
         );
 
@@ -412,9 +423,7 @@ export default function App() {
           <ExploreProperties
             navigation={navigation}
             onBack={goBack}
-            onPropertyClick={(property) =>
-              navigateTo('propertyDetail', { property })
-            }
+            onPropertyClick={(property) => navigateTo('propertyDetail', { property })}
           />
         );
 
@@ -424,9 +433,7 @@ export default function App() {
             navigation={navigation}
             builderName={userData?.name}
             onBack={goBack}
-            onPropertyClick={(property) =>
-              navigateTo('propertyDetail', { property })
-            }
+            onPropertyClick={(property) => navigateTo('propertyDetail', { property })}
             onAddProperty={() => navigateTo('addProperty')}
             onAssignAgent={() => navigateTo('assignAgent')}
           />
@@ -482,15 +489,6 @@ export default function App() {
           />
         );
 
-      case 'agentProfile':
-        return (
-          <AgentProfile
-            navigation={navigation}
-            onBack={goBack}
-            userData={userData}
-          />
-        );
-
       case 'editProfile':
         return (
           <EditScreen
@@ -525,14 +523,11 @@ export default function App() {
           />
         );
 
-
       case 'addProperty':
         return (
           <AddProperty
             onBack={goBack}
-            onPropertyAdded={() => {
-              navigateTo('builderDashboard');
-            }}
+            onPropertyAdded={() => navigateTo('builderDashboard')}
           />
         );
 
@@ -540,9 +535,7 @@ export default function App() {
         return (
           <AddPropertiesAgent
             onBack={goBack}
-            onPropertyAdded={() => {
-              navigateTo('agentDashboard');
-            }}
+            onPropertyAdded={() => navigateTo('agentDashboard')}
           />
         );
 
@@ -564,7 +557,6 @@ export default function App() {
             property={editPropertyData?.property}
             userRole={editPropertyData?.userRole}
             onSaved={() => {
-              // Signal parent screens to refresh their listing data
               setEditPropertyData(prev => ({ ...prev, savedAt: Date.now() }));
             }}
           />
@@ -610,14 +602,12 @@ export default function App() {
             route={{
               params: {
                 chatId: chatData?.chatId,
-                inquiryId: chatData?.inquiryId
+                inquiryId: chatData?.inquiryId,
               }
             }}
             user={userData}
           />
         );
-
-
 
       case 'messages':
         return (
@@ -628,7 +618,6 @@ export default function App() {
           />
         );
 
-
       case 'favorites':
         return (
           <FavoritesScreen
@@ -637,6 +626,43 @@ export default function App() {
           />
         );
 
+      case 'ScheduleViewingScreen':
+        return (
+          <ScheduleViewingScreen
+            navigation={navigation}
+            onBack={goBack}
+            route={{
+              params: {
+                propertyId: scheduleViewingData?.propertyId,
+                propertyName: scheduleViewingData?.propertyName,
+                propertyAddress: scheduleViewingData?.propertyAddress,
+                propertyPrice: scheduleViewingData?.propertyPrice,
+                propertyImage: scheduleViewingData?.propertyImage,
+                property: scheduleViewingData?.property,
+              },
+            }}
+            user={userData}
+          />
+        );
+
+      case 'VirtualTourScreen':
+        return (
+          <VirtualTourScreen
+            navigation={navigation}
+            onBack={goBack}
+            route={{
+              params: {
+                propertyId: virtualTourData?.propertyId,
+                propertyName: virtualTourData?.propertyName,
+                propertyAddress: virtualTourData?.propertyAddress,
+                propertyPrice: virtualTourData?.propertyPrice,
+                propertyImages: virtualTourData?.propertyImages,
+                property: virtualTourData?.property,
+              },
+            }}
+            user={userData}
+          />
+        );
 
       default:
         console.warn('⚠️ Unknown screen:', currentScreen);
@@ -668,7 +694,6 @@ export default function App() {
               activeTab={currentScreen}
               onTabPress={(tab) => {
                 console.log('📱 Tab pressed on global navbar:', tab);
-
                 if (tab === 'home') navigation.navigate('home');
                 if (tab === 'search') navigation.navigate('searchResults');
                 if (tab === 'favorites') navigation.navigate('favorites');
