@@ -104,388 +104,204 @@ const checkAccountLockout = async (userId) => {
 };
 
 // GOOGLE OAUTH LOGIN
+// Supports two token types sent from the frontend:
+//   id_token  (JWT, signed by Google) — verified with verifyIdToken()     [preferred]
+//   access_token (opaque string)       — verified via tokeninfo endpoint   [fallback]
 module.exports.googleLogin = async (req, res) => {
-    console.log('\n' + '='.repeat(70));
+    console.log('\n' + '='.repeat(60));
     console.log('🔐 GOOGLE LOGIN REQUEST RECEIVED');
-    console.log('='.repeat(70));
-
+    console.log('='.repeat(60));
     const startTime = Date.now();
 
     try {
-        const { token } = req.body;
-        const { ipAddress, userAgent } = getRequestMetadata(req); // Uses existing function
+        // token    = id_token (JWT) OR access_token (opaque), sent by frontend
+        // isIdToken = hint from frontend: true  → id_token path
+        //                                 false → access_token path
+        const { token, isIdToken } = req.body;
+        const { ipAddress, userAgent } = getRequestMetadata(req);
 
-        console.log('📋 Request Details:');
-        console.log(`  IP Address: ${ipAddress}`);
-        console.log(`  User Agent: ${userAgent}`);
-        console.log(`  Has Token: ${!!token}`);
-        console.log('');
+        console.log(`📋 Token present: ${!!token}, type hint: ${isIdToken ? 'id_token' : 'access_token'}`);
 
-        // ==================== STEP 1: VALIDATE REQUEST ====================
-        console.log('STEP 1: Validating Request...');
-
+        // ── STEP 1: Basic validation ────────────────────────────────────
         if (!token) {
-            console.error('❌ No token provided in request body');
-            return res.status(400).json({
-                message: "Google token is required"
-            });
+            return res.status(400).json({ message: 'Google token is required' });
         }
-        console.log(`✅ Token present (length: ${token.length})`);
-        console.log(`   Preview: ${token.substring(0, 30)}...`);
-        console.log('');
-
-        // ==================== STEP 2: CHECK ENVIRONMENT ====================
-        console.log('STEP 2: Checking Environment Configuration...');
-
         if (!process.env.GOOGLE_CLIENT_ID) {
-            console.error('❌ GOOGLE_CLIENT_ID not configured in environment variables');
-            console.error('   Please add GOOGLE_CLIENT_ID to your .env file');
-            return res.status(500).json({
-                message: "Google authentication is not properly configured on the server"
-            });
+            console.error('❌ GOOGLE_CLIENT_ID missing from backend/.env');
+            return res.status(500).json({ message: 'Google authentication is not configured on the server.' });
         }
+        console.log('✅ GOOGLE_CLIENT_ID found:', process.env.GOOGLE_CLIENT_ID.substring(0, 20) + '...');
 
-        console.log('✅ GOOGLE_CLIENT_ID found');
-        console.log(`   Client ID: ${process.env.GOOGLE_CLIENT_ID.substring(0, 20)}...`);
+        // ── STEP 2: Verify with Google ──────────────────────────────────
+        let email, name, picture, googleId;
 
-        if (!process.env.JWT_SECRET) {
-            console.error('❌ JWT_SECRET not configured');
-            return res.status(500).json({
-                message: "Server authentication is not properly configured"
-            });
-        }
-
-        console.log('✅ JWT_SECRET found');
-        console.log('');
-
-        // ==================== STEP 3: VERIFY GOOGLE TOKEN ====================
-        console.log('STEP 3: Verifying Google Token...');
-
-        const { OAuth2Client } = require('google-auth-library');
-        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
-        let ticket;
-        let payload;
-
-        try {
-            console.log('   Calling Google token verification API...');
-            ticket = await client.verifyIdToken({
-                idToken: token,
-                audience: process.env.GOOGLE_CLIENT_ID,
-            });
-
-            payload = ticket.getPayload();
-
-            if (!payload) {
-                throw new Error('No payload in verified token');
+        if (isIdToken) {
+            // PATH A — id_token (JWT): verified cryptographically, fastest
+            console.log('STEP 2A: Verifying id_token via google-auth-library...');
+            try {
+                const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+                const ticket = await client.verifyIdToken({
+                    idToken: token,
+                    audience: process.env.GOOGLE_CLIENT_ID,
+                });
+                const p = ticket.getPayload();
+                if (!p) throw new Error('Empty payload from verifyIdToken');
+                ({ email, name, picture, sub: googleId } = { email: p.email, name: p.name, picture: p.picture, sub: p.sub });
+                googleId = p.sub;
+                console.log('✅ id_token verified, email:', email);
+            } catch (e) {
+                console.error('❌ id_token verification failed:', e.message);
+                if (e.message.includes('audience')) {
+                    console.error('   → Audience mismatch: frontend Client ID ≠ GOOGLE_CLIENT_ID in .env');
+                }
+                return res.status(401).json({
+                    message: 'Invalid or expired Google token. Please sign in again.',
+                    error: process.env.NODE_ENV === 'development' ? e.message : undefined,
+                });
             }
+        } else {
+            // PATH B — access_token: hit Google REST endpoints to get user info
+            console.log('STEP 2B: Verifying access_token via Google tokeninfo + userinfo...');
+            try {
+                const axios = require('axios');
 
-            console.log('✅ Token verified successfully');
-            console.log(`   Token issued for: ${payload.email}`);
-            console.log(`   Issued at: ${new Date(payload.iat * 1000).toISOString()}`);
-            console.log(`   Expires at: ${new Date(payload.exp * 1000).toISOString()}`);
-            console.log('');
+                // Validate token first
+                const { data: tokenInfo } = await axios.get(
+                    `https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${token}`
+                );
+                if (tokenInfo.error) {
+                    throw new Error(`tokeninfo error: ${tokenInfo.error_description || tokenInfo.error}`);
+                }
 
-        } catch (verifyError) {
-            console.error('❌ Token verification failed');
-            console.error(`   Error: ${verifyError.message}`);
-            console.error(`   Error code: ${verifyError.code || 'N/A'}`);
+                // Get full user profile
+                const { data: userInfo } = await axios.get(
+                    'https://www.googleapis.com/oauth2/v3/userinfo',
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
 
-            // Check for common issues
-            if (verifyError.message.includes('audience')) {
-                console.error('   → Client ID mismatch: Token audience does not match server client ID');
-                console.error('   → Ensure frontend and backend use the SAME Web Client ID');
-            } else if (verifyError.message.includes('expired')) {
-                console.error('   → Token has expired');
-            } else if (verifyError.message.includes('invalid')) {
-                console.error('   → Invalid token format or signature');
+                email = userInfo.email;
+                name = userInfo.name;
+                picture = userInfo.picture;
+                googleId = userInfo.sub;
+                console.log('✅ access_token verified via userinfo, email:', email);
+            } catch (e) {
+                console.error('❌ access_token verification failed:', e.message);
+                return res.status(401).json({
+                    message: 'Invalid or expired Google token. Please sign in again.',
+                    error: process.env.NODE_ENV === 'development' ? e.message : undefined,
+                });
             }
-
-            return res.status(401).json({
-                message: "Invalid or expired Google token. Please try signing in again.",
-                error: process.env.NODE_ENV === 'development' ? verifyError.message : undefined
-            });
         }
 
-        // ==================== STEP 4: EXTRACT USER INFO ====================
-        console.log('STEP 4: Extracting User Information...');
-
-        const { email, name, picture, sub: googleId } = payload;
-
-        console.log('   User data from Google:');
-        console.log(`     Email: ${email}`);
-        console.log(`     Name: ${name || 'Not provided'}`);
-        console.log(`     Google ID: ${googleId.substring(0, 15)}...`);
-        console.log(`     Picture: ${picture ? 'Yes' : 'No'}`);
-        console.log('');
-
+        // ── STEP 3: Validate extracted info ────────────────────────────
         if (!email || !googleId) {
-            console.error('❌ Missing required fields in Google payload');
-            return res.status(400).json({
-                message: "Invalid Google account information"
-            });
+            return res.status(400).json({ message: 'Invalid Google account: missing email or user ID.' });
         }
 
-        console.log('✅ Required fields validated');
-        console.log('');
-
-        // ==================== STEP 5: CHECK DATABASE FOR USER ====================
-        console.log('STEP 5: Checking Database for User...');
-
+        // ── STEP 4: Lookup / create user in DB ─────────────────────────
+        console.log('STEP 4: Checking database for user...');
         const [users] = await pool.query(
-            "SELECT * FROM users WHERE email = ?",
+            'SELECT * FROM users WHERE email = ?',
             [email.toLowerCase().trim()]
         );
-
-        console.log(`   Query returned ${users.length} user(s)`);
-        console.log('');
 
         let user;
         let isNewUser = false;
 
         if (users.length > 0) {
-            // ==================== EXISTING USER ====================
             user = users[0];
-            console.log('✅ Existing user found');
-            console.log(`   User ID: ${user.id}`);
-            console.log(`   Email: ${user.email}`);
-            console.log(`   Role: ${user.role}`);
-            console.log('');
-
+            console.log(`✅ Existing user found — ID: ${user.id}, Role: ${user.role}`);
         } else {
-            // ==================== NEW USER ====================
-            console.log('🆕 Creating new user account...');
+            console.log('🆕 Creating new user...');
             isNewUser = true;
-
             try {
                 const [result] = await pool.query(
-                    `INSERT INTO users (name, email, role, is_verified, created_at) 
+                    `INSERT INTO users (name, email, role, is_verified, created_at)
                      VALUES (?, ?, 'buyer', true, NOW())`,
-                    [name, email.toLowerCase().trim()]
+                    [name || email.split('@')[0], email.toLowerCase().trim()]
                 );
-
-                console.log('✅ New user created');
-                console.log(`   User ID: ${result.insertId}`);
-                console.log(`   Email: ${email}`);
-                console.log(`   Role: buyer (default)`);
-                console.log('');
-
                 user = {
                     id: result.insertId,
-                    name,
+                    name: name || email.split('@')[0],
                     email: email.toLowerCase().trim(),
                     role: 'buyer',
                     is_verified: true,
                     is_blocked: false,
-                    phone: null
+                    phone: null,
                 };
-
-            } catch (insertError) {
-                console.error('❌ Failed to create user');
-                console.error(`   Error: ${insertError.message}`);
-                console.error(`   Code: ${insertError.code}`);
-
-                if (insertError.code === 'ER_DUP_ENTRY') {
-                    console.error('   → Duplicate email detected');
-                    return res.status(409).json({
-                        message: "An account with this email already exists"
-                    });
+                console.log(`✅ New user created — ID: ${user.id}`);
+            } catch (insertErr) {
+                if (insertErr.code === 'ER_DUP_ENTRY') {
+                    return res.status(409).json({ message: 'An account with this email already exists.' });
                 }
-
-                throw insertError;
+                throw insertErr;
             }
         }
 
-        // ==================== STEP 6: SECURITY CHECKS ====================
-        console.log('STEP 6: Performing Security Checks...');
-
-        // Check if account is blocked
+        // ── STEP 5: Security checks ─────────────────────────────────────
         if (user.is_blocked) {
-            console.log('⛔ Blocked user attempted login');
-
-            // Use logUserActivity if it exists in your file
-            if (typeof logUserActivity === 'function') {
-                await logUserActivity(
-                    user.id,
-                    'blocked_login_attempt',
-                    ipAddress,
-                    userAgent,
-                    'Blocked user attempted Google login',
-                    'google'
-                );
-            }
-
-            return res.status(403).json({
-                message: "Your account has been blocked. Please contact support."
-            });
+            await logUserActivity(user.id, 'blocked_login_attempt', ipAddress, userAgent,
+                'Blocked user attempted Google login', 'google');
+            return res.status(403).json({ message: 'Your account has been blocked. Please contact support.' });
         }
-        console.log('✅ Account not blocked');
-        console.log('');
 
-        // Check for suspicious activity (non-blocking) - only if function exists
         try {
-            if (typeof checkSuspiciousActivity === 'function') {
-                const suspiciousCheck = await checkSuspiciousActivity(user.id, ipAddress);
-                if (suspiciousCheck.isSuspicious) {
-                    console.log('⚠️  Suspicious activity detected');
-
-                    if (typeof sendEmailNotification === 'function') {
-                        await sendEmailNotification(
-                            user.email,
-                            'Suspicious Login Activity Detected',
-                            `We detected unusual login activity on your account from IP: ${ipAddress}`
-                        );
-                    }
-                } else {
-                    console.log('✅ No suspicious activity detected');
-                }
+            const sc = await checkSuspiciousActivity(user.id, ipAddress);
+            if (sc.isSuspicious) {
+                await sendEmailNotification(user.email, 'Suspicious Login Activity',
+                    `Unusual login from IP: ${ipAddress}`);
             }
-        } catch (suspiciousError) {
-            console.warn('⚠️  Suspicious activity check failed:', suspiciousError.message);
-            console.warn('   Continuing with login...');
-        }
-        console.log('');
+        } catch (e) { console.warn('⚠️  Suspicious check skipped:', e.message); }
 
-        // ==================== STEP 7: GENERATE JWT TOKEN ====================
-        console.log('STEP 7: Generating JWT Token...');
-
-        const jwt = require('jsonwebtoken');
+        // ── STEP 6: Issue JWT ────────────────────────────────────────────
         const jwtToken = jwt.sign(
-            {
-                id: user.id,
-                role: user.role,
-                email: user.email
-            },
+            { id: user.id, role: user.role, email: user.email },
             process.env.JWT_SECRET,
-            { expiresIn: "7d" }
+            { expiresIn: '7d' }
         );
+        console.log('✅ JWT token issued (7d expiry)');
 
-        console.log('✅ JWT token generated');
-        console.log(`   Expires in: 7 days`);
-        console.log('');
-
-        // ==================== STEP 8: LOG ACTIVITY ====================
-        console.log('STEP 8: Logging User Activity...');
-
-        // Use logUserActivity if it exists in your file
-        if (typeof logUserActivity === 'function') {
-            await logUserActivity(
-                user.id,
-                isNewUser ? 'registration' : 'login',
-                ipAddress,
-                userAgent,
-                isNewUser ? 'New user registered via Google' : 'User logged in via Google',
-                'google'
-            );
-            console.log('✅ Activity logged');
-        } else {
-            console.log('⚠️  logUserActivity function not found - skipping');
-        }
-        console.log('');
-
-        // ==================== STEP 9: UPDATE LAST LOGIN ====================
-        console.log('STEP 9: Updating Last Login...');
-
-        await pool.query(
-            "UPDATE users SET updated_at = NOW() WHERE id = ?",
-            [user.id]
+        // ── STEP 7: Log activity + update last-login ────────────────────
+        await logUserActivity(
+            user.id,
+            isNewUser ? 'registration' : 'login',
+            ipAddress, userAgent,
+            isNewUser ? 'New user registered via Google' : 'User logged in via Google',
+            'google'
         );
+        await pool.query('UPDATE users SET updated_at = NOW() WHERE id = ?', [user.id]);
 
-        console.log('✅ Last login updated');
-        console.log('');
+        // ── STEP 8: Respond ─────────────────────────────────────────────
+        const duration = Date.now() - startTime;
+        console.log('='.repeat(60));
+        console.log(`✅ GOOGLE LOGIN SUCCESS (${duration}ms)`);
+        console.log('='.repeat(60) + '\n');
 
-        // ==================== STEP 10: NEW DEVICE NOTIFICATION ====================
-        if (!isNewUser) {
-            console.log('STEP 10: Checking for New Device...');
-
-            try {
-                const [recentLogins] = await pool.query(
-                    `SELECT COUNT(*) as count FROM user_login_logs 
-                     WHERE user_id = ? AND user_agent = ? AND login_time > DATE_SUB(NOW(), INTERVAL 30 DAY)`,
-                    [user.id, userAgent]
-                );
-
-                if (recentLogins[0].count === 0) {
-                    console.log('📧 New device detected');
-
-                    // Only send notification if function exists
-                    if (typeof sendEmailNotification === 'function') {
-                        const deviceType = /mobile/i.test(userAgent) ? 'Mobile Device' : 'Desktop';
-                        const browser = /chrome/i.test(userAgent) ? 'Chrome' :
-                            /firefox/i.test(userAgent) ? 'Firefox' :
-                                /safari/i.test(userAgent) ? 'Safari' : 'Unknown Browser';
-
-                        await sendEmailNotification(
-                            user.email,
-                            'New Device Login Detected',
-                            `A new login was detected from ${deviceType} using ${browser} at IP: ${ipAddress}`
-                        );
-                        console.log('✅ Notification sent');
-                    } else {
-                        console.log('⚠️  sendEmailNotification function not found - skipping');
-                    }
-                } else {
-                    console.log('✅ Known device - no notification needed');
-                }
-            } catch (notificationError) {
-                console.warn('⚠️  New device notification failed:', notificationError.message);
-            }
-            console.log('');
-        } else {
-            console.log('STEP 10: Skipping (new user)');
-            console.log('');
-        }
-
-        // ==================== STEP 11: SEND RESPONSE ====================
-        console.log('STEP 11: Sending Success Response...');
-
-        const responseData = {
-            message: isNewUser ? "Account created successfully via Google" : "Login successful via Google",
+        return res.json({
+            message: isNewUser ? 'Account created via Google' : 'Login successful via Google',
             token: jwtToken,
             user: {
                 id: user.id,
                 name: user.name,
                 email: user.email,
-                phone: user.phone,
+                phone: user.phone || null,
                 role: user.role,
-                isVerified: true
-            }
-        };
-
-        console.log('Response data:');
-        console.log(`  User ID: ${responseData.user.id}`);
-        console.log(`  Email: ${responseData.user.email}`);
-        console.log(`  Role: ${responseData.user.role}`);
-        console.log(`  Has Token: Yes`);
-        console.log('');
-
-        const duration = Date.now() - startTime;
-        console.log('='.repeat(70));
-        console.log(`✅ GOOGLE LOGIN SUCCESSFUL (${duration}ms)`);
-        console.log('='.repeat(70) + '\n');
-
-        res.json(responseData);
+                isVerified: true,
+            },
+        });
 
     } catch (err) {
-        const duration = Date.now() - startTime;
-
-        console.error('\n' + '='.repeat(70));
-        console.error('❌ GOOGLE LOGIN FAILED');
-        console.error('='.repeat(70));
-        console.error(`Error Type: ${err.name}`);
-        console.error(`Error Message: ${err.message}`);
-        console.error(`Error Code: ${err.code || 'N/A'}`);
-        console.error(`Duration: ${duration}ms`);
-        console.error('\nStack Trace:');
+        console.error('❌ GOOGLE LOGIN ERROR:', err.message);
         console.error(err.stack);
-        console.error('='.repeat(70) + '\n');
-
-        res.status(500).json({
-            message: "Server error during Google login. Please try again.",
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        return res.status(500).json({
+            message: 'Server error during Google login.',
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined,
         });
     }
 };
+
+
+
 
 // MICROSOFT OAUTH LOGIN
 module.exports.microsoftLogin = async (req, res) => {
@@ -531,7 +347,7 @@ module.exports.microsoftLogin = async (req, res) => {
             // Create new user
             isNewUser = true;
             const [result] = await pool.query(
-                `INSERT INTO users (name, email, role, is_verified, created_at) 
+                `INSERT INTO users (name, email, role, is_verified, created_at)
                  VALUES (?, ?, 'buyer', true, NOW())`,
                 [displayName, email.toLowerCase().trim()]
             );
@@ -609,7 +425,7 @@ module.exports.microsoftLogin = async (req, res) => {
     }
 };
 
-// REGULAR REGISTER 
+// REGULAR REGISTER
 module.exports.register = async (req, res) => {
     // Get a connection from the pool for transaction
     const connection = await pool.getConnection();

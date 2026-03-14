@@ -18,6 +18,7 @@ import { Home, Mail, Lock, Eye, EyeOff, AlertCircle, X, ArrowLeft } from 'lucide
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { getDebugInfo, printSetupInstructions } from '../context/GoogleLoginConfig';
+import GOOGLE_CONFIG from '../context/GoogleLoginConfig';
 import { API_BASE_URL } from '../../../utils/api';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -65,18 +66,36 @@ export default function LoginScreen({
   };
 
   // ==================== GOOGLE AUTH HOOK ====================
+  // Using responseType 'id_token' so Google returns a JWT that the backend
+  // can verify directly with verifyIdToken() — this eliminates the token type
+  // mismatch that caused the previous 401 invalid_client errors.
   const [request, response, promptAsync] = Google.useAuthRequest({
-    expoClientId: 'YOUR_EXPO_CLIENT_ID',
-    androidClientId: 'YOUR_ANDROID_CLIENT_ID',
-    webClientId: 'YOUR_WEB_CLIENT_ID',
+    webClientId: GOOGLE_CONFIG.WEB_CLIENT_ID,
+    responseType: 'id_token',
+    scopes: ['profile', 'email'],
+    // Android client ID (optional — only needed for native EAS builds)
+    ...(GOOGLE_CONFIG.ANDROID_CLIENT_ID ? { androidClientId: GOOGLE_CONFIG.ANDROID_CLIENT_ID } : {}),
   });
 
   useEffect(() => {
     if (response?.type === 'success') {
-      const { authentication } = response;
-      console.log('✅ Google Authentication Success:', authentication);
-      handleGoogleLoginSuccess(authentication.accessToken);
+      // id_token is a signed JWT — preferred. accessToken is a fallback.
+      const idToken = response.params?.id_token || response.authentication?.idToken;
+      const accessToken = response.authentication?.accessToken;
+      const tokenToSend = idToken || accessToken;
+      console.log('✅ Google Authentication Success');
+      console.log('   Token type:', idToken ? 'id_token (JWT) ✅' : 'access_token (fallback)');
+      if (tokenToSend) {
+        handleGoogleLoginSuccess(tokenToSend, !!idToken);
+      } else {
+        setApiError('Google sign-in did not return a token. Please try again.');
+        setIsGoogleLoading(false);
+      }
     } else if (response?.type === 'cancel' || response?.type === 'error') {
+      if (response?.type === 'error') {
+        console.error('Google auth error:', response.error);
+        setApiError('Google sign-in was denied or failed. Please try again.');
+      }
       setIsGoogleLoading(false);
     }
   }, [response]);
@@ -95,13 +114,15 @@ export default function LoginScreen({
     }
   };
 
-  const handleGoogleLoginSuccess = async (accessToken) => {
+  // isIdToken=true → backend verifyIdToken() path (best)
+  // isIdToken=false → backend will call Google tokeninfo endpoint (fallback)
+  const handleGoogleLoginSuccess = async (token, isIdToken = false) => {
     setIsGoogleLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/auth/google-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: accessToken }),
+        body: JSON.stringify({ token, isIdToken }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -113,6 +134,7 @@ export default function LoginScreen({
         ]);
         navigateByRole(data.user);
       } else {
+        console.error('Google login backend error:', data);
         setApiError(data.message || 'Google login failed on server');
       }
     } catch (error) {
