@@ -27,7 +27,6 @@ import {
   Bed,
   Bath,
   Maximize,
-  LogOut,
   AlertCircle,
 } from 'lucide-react-native';
 
@@ -48,11 +47,6 @@ export default function HomeScreen({ navigation }) {
 
   // Data State
   const [properties, setProperties] = useState([]);
-  const [stats, setStats] = useState({
-    saved: 0,
-    viewed: 0,
-    new: 0,
-  });
   const [notifications, setNotifications] = useState([]);
   const [messages, setMessages] = useState([]);
 
@@ -260,54 +254,10 @@ export default function HomeScreen({ navigation }) {
         )
       );
 
-      // Update stats
-      setStats(prev => ({
-        ...prev,
-        saved: data.isFavorited ? prev.saved + 1 : prev.saved - 1,
-      }));
-
     } catch (err) {
       console.error('❌ Error toggling favorite:', err);
       Alert.alert('Error', 'Failed to update favorite status');
     }
-  };
-
-  // Handle Logout
-  const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              // Call logout API
-              await fetch(`${API_BASE_URL}/auth/logout`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${authToken}`,
-                },
-              });
-
-              // Clear local storage
-              await AsyncStorage.removeItem('authToken');
-              await AsyncStorage.removeItem('user');
-
-              console.log('✅ Logged out successfully');
-
-              // Navigate to login
-              navigation.replace('Login');
-            } catch (err) {
-              console.error('❌ Logout error:', err);
-              Alert.alert('Error', 'Failed to logout');
-            }
-          },
-        },
-      ]
-    );
   };
 
   // Handle Tab Press
@@ -330,9 +280,6 @@ export default function HomeScreen({ navigation }) {
           'Content-Type': 'application/json',
         },
       });
-
-      // Update viewed count
-      setStats(prev => ({ ...prev, viewed: prev.viewed + 1 }));
     } catch (err) {
       console.error('Error tracking view:', err);
     }
@@ -439,12 +386,6 @@ export default function HomeScreen({ navigation }) {
               </View>
             )}
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={handleLogout}
-          >
-            <LogOut color="#EF4444" size={20} strokeWidth={2} />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -501,22 +442,6 @@ export default function HomeScreen({ navigation }) {
               onSubmitEditing={handleSearch}
               returnKeyType="search"
             />
-          </View>
-        </View>
-
-        {/* Quick Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Saved</Text>
-            <Text style={styles.statValue}>{stats.saved}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Viewed</Text>
-            <Text style={styles.statValue}>{stats.viewed}</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>New</Text>
-            <Text style={styles.statValue}>{stats.new}</Text>
           </View>
         </View>
 
@@ -859,9 +784,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  logoutButton: {
-    padding: 4,
-  },
   notificationButton: {
     position: 'relative',
   },
@@ -949,33 +871,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    marginBottom: 24,
-    gap: 12,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  statLabel: {
-    color: '#6B7280',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  statValue: {
-    color: '#111827',
-    fontSize: 20,
-    fontWeight: '700',
-  },
   quickActionsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 24,
@@ -993,11 +888,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
   },
   quickActionLabel: {
     color: '#374151',
