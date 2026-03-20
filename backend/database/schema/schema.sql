@@ -587,3 +587,9 @@ WHERE profile_image LIKE 'http%/images_rs%';
 
 
 ALTER TABLE builders DROP COLUMN profile_image;
+
+-- Migration to remove defaults for Bedrooms and Bathrooms
+UPDATE properties SET bedrooms = 1 WHERE bedrooms IS NULL;
+UPDATE properties SET bathrooms = 1 WHERE bathrooms IS NULL;
+ALTER TABLE properties MODIFY COLUMN bedrooms INT NOT NULL;
+ALTER TABLE properties MODIFY COLUMN bathrooms INT NOT NULL;

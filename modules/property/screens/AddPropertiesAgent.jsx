@@ -54,6 +54,8 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
         address: '',
         price: '',
         area: '',
+        bedrooms: '',
+        bathrooms: '',
         description: '',
         amenities: [],
         images: [],
@@ -443,12 +445,17 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
             // Use typed city text as fallback if user didn't pick from dropdown
             const effectiveCity = propertyData.city || cityQuery.trim();
 
+            const beds = parseInt(propertyData.bedrooms, 10);
+            const baths = parseInt(propertyData.bathrooms, 10);
+
             // Validate required fields and report which one is missing
             const missing = [];
             if (!propertyData.title.trim()) missing.push('Property Title');
             if (!propertyData.price.trim()) missing.push('Price');
             if (!effectiveCity) missing.push('City / Area');
             if (!propertyData.address.trim()) missing.push('Address');
+            if (!propertyData.bedrooms || isNaN(beds) || beds < 1 || beds > 50) missing.push('Valid Bedrooms (1-50)');
+            if (!propertyData.bathrooms || isNaN(baths) || baths < 1 || baths > 50) missing.push('Valid Bathrooms (1-50)');
 
             if (missing.length > 0) {
                 Alert.alert(
@@ -502,8 +509,8 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                 state: propertyData.state || "Maharashtra",
                 pincode: propertyData.pincode || "400001",
                 area_sqft: parseFloat(areaRaw) || 0,
-                bedrooms: 3, // Default or add input
-                bathrooms: 2, // Default or add input
+                bedrooms: beds,
+                bathrooms: baths,
                 features: propertyData.amenities.map(a => ({ name: a, value: 'true' })),
                 images: uploadedImages.map((url, index) => ({
                     image_url: url,
@@ -1151,6 +1158,38 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                                         keyboardType="numeric"
                                         value={propertyData.area}
                                         onChangeText={(value) => handleInputChange('area', value)}
+                                    />
+                                </View>
+                            </View>
+                        </View>
+
+                        <View style={[styles.rowInputs, { marginTop: 16 }]}>
+                            <View style={styles.halfInput}>
+                                <Text style={styles.label}>Bedrooms *</Text>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="e.g. 3"
+                                        placeholderTextColor="#9CA3AF"
+                                        keyboardType="numeric"
+                                        maxLength={2}
+                                        value={propertyData.bedrooms}
+                                        onChangeText={(value) => handleInputChange('bedrooms', value.replace(/[^0-9]/g, ''))}
+                                    />
+                                </View>
+                            </View>
+
+                            <View style={styles.halfInput}>
+                                <Text style={styles.label}>Bathrooms *</Text>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="e.g. 2"
+                                        placeholderTextColor="#9CA3AF"
+                                        keyboardType="numeric"
+                                        maxLength={2}
+                                        value={propertyData.bathrooms}
+                                        onChangeText={(value) => handleInputChange('bathrooms', value.replace(/[^0-9]/g, ''))}
                                     />
                                 </View>
                             </View>

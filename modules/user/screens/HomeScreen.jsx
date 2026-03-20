@@ -15,7 +15,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Home,
-  Search,
   Heart,
   MessageCircle,
   User,
@@ -37,7 +36,6 @@ import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../util
 
 export default function HomeScreen({ navigation }) {
   // State Management
-  const [searchQuery, setSearchQuery] = useState('');
   const [selectedProperty, setSelectedProperty] = useState(null);
 
 
@@ -290,39 +288,6 @@ export default function HomeScreen({ navigation }) {
   };
 
 
-  // Handle Search
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      Alert.alert('Search', 'Please enter a search term');
-      return;
-    }
-
-    try {
-      console.log('🔍 Searching for:', searchQuery);
-
-      const response = await fetch(
-        `${API_BASE_URL}/properties/search?q=${encodeURIComponent(searchQuery)}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${authToken}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Search failed');
-      }
-
-      const data = await response.json();
-      console.log('✅ Search results:', data.properties?.length || 0);
-
-      setProperties(data.properties || []);
-    } catch (err) {
-      console.error('❌ Search error:', err);
-      Alert.alert('Error', 'Search failed. Please try again.');
-    }
-  };
-
   // Quick Actions Data
   const quickActions = [
     { id: 'buy', label: 'Buy', icon: Home, color: '#2D6A4F' },
@@ -422,27 +387,6 @@ export default function HomeScreen({ navigation }) {
               </Text>
             </View>
           </ImageBackground>
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchWrapper}>
-            <Search
-              color="#9CA3AF"
-              size={20}
-              strokeWidth={2}
-              style={styles.searchIcon}
-            />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Search by location, price, or type..."
-              placeholderTextColor="#9CA3AF"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={handleSearch}
-              returnKeyType="search"
-            />
-          </View>
         </View>
 
         {/* Quick Actions */}
@@ -840,40 +784,10 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 14,
   },
-  searchContainer: {
-    paddingHorizontal: 24,
-    marginTop: -24,
-    marginBottom: 24,
-    zIndex: 10,
-  },
-  searchWrapper: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  searchIcon: {
-    position: 'absolute',
-    left: 16,
-    zIndex: 1,
-  },
-  searchInput: {
-    flex: 1,
-    height: 56,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingLeft: 48,
-    paddingRight: 16,
-    fontSize: 14,
-    color: '#111827',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-  },
   quickActionsContainer: {
     flexDirection: 'row',
     paddingHorizontal: 24,
+    marginTop: 32,
     marginBottom: 24,
     gap: 16,
   },

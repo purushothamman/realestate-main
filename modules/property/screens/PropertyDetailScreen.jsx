@@ -112,8 +112,20 @@ const SpecCard = ({ icon, label, value }) => {
                     {icon}
                 </View>
             </View>
-            <Text style={[styles.specValue, isTablet && styles.specValueTablet]}>{value}</Text>
-            <Text style={[styles.specLabel, isTablet && styles.specLabelTablet]}>{label}</Text>
+            <Text 
+                style={[styles.specValue, isTablet && styles.specValueTablet]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+            >
+                {String(value).replace(/sq\s*ft/gi, '').trim()}
+            </Text>
+            <Text 
+                style={[styles.specLabel, isTablet && styles.specLabelTablet]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+            >
+                {label === 'Area' ? 'Area (sq ft)' : label}
+            </Text>
         </Animated.View>
     );
 };
@@ -331,7 +343,16 @@ export default function PropertyDetailScreen({ navigation, onBack, route, user }
     const bedrooms = property.bedrooms ?? 4;
     const bathrooms = property.bathrooms ?? 3;
     const area = property.areaSqft ?? property.area ?? property.area_sqft ?? '3,400';
-    const builtYear = property.builtYear ?? property.built_year ?? 2021;
+    
+    // Parse uploaded date or default to current year
+    let builtYear = new Date().getFullYear();
+    if (property.created_at) {
+        const d = new Date(property.created_at);
+        builtYear = !isNaN(d) ? d.getFullYear() : String(property.created_at).substring(0, 4);
+    } else if (property.builtYear || property.built_year) {
+        builtYear = property.builtYear ?? property.built_year;
+    }
+
     const description =
         property.description ||
         'Step into luxury with this stunning modern villa. This architectural masterpiece features an open floor plan with floor-to-ceiling windows that flood the space with natural light.';
@@ -1400,12 +1421,13 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: '#F3F4F6',
     },
-    specsGrid: { flexDirection: 'row', gap: 10, flexWrap: 'nowrap' },
+    specsGrid: { flexDirection: 'row', gap: 6, flexWrap: 'nowrap' },
     specCard: {
         flex: 1,
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
-        padding: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 4,
         borderWidth: 1.5,
         borderColor: '#E5E7EB',
         alignItems: 'center',
