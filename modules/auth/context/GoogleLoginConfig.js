@@ -32,7 +32,7 @@ export const GOOGLE_CONFIG = {
   //
   // For Expo Go testing you can leave this empty (Web Client ID covers it)
   //
-  ANDROID_CLIENT_ID: '',
+  ANDROID_CLIENT_ID: '583846474336-po6jaqop0l6lfund0ekakjpf2jtk6m3u.apps.googleusercontent.com',
 
   // iOS Client ID - leave empty, Web Client ID is used for iOS too
   IOS_CLIENT_ID: '',

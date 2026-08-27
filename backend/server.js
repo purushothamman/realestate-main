@@ -108,8 +108,10 @@
 
 // module.exports = app;
 
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, ".env") });
+
 const app = require("./src/app");
-require("dotenv").config();
 
 const PORT = process.env.PORT || 5000;
 

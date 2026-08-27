@@ -1,7 +1,9 @@
+const path = require("path");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const path = require("path");
 const authRoutes = require("./routes/authRoutes");
 const propertyRoutes = require("./routes/propertyRoutes")
 const bookingRoutes = require("./routes/bookingRoutes")
@@ -13,8 +15,6 @@ const inquiryRoutes = require("./routes/inquiryRoutes");
 const propertyRequestRoutes = require("./routes/propertyRequestRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
-
-require("dotenv").config();
 
 const app = express();
 

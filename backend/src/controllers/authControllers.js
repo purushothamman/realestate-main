@@ -1,10 +1,11 @@
 // backend/src/controllers/authControllers.js
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
 const pool = require("../config/db");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const fs = require("fs");
-const path = require("path");
 const { OAuth2Client } = require('google-auth-library');
 const { getRequestMetadata, getDeviceType, getBrowser, getOS } = require("../utils/requestUtils");
 
@@ -127,10 +128,18 @@ module.exports.googleLogin = async (req, res) => {
             return res.status(400).json({ message: 'Google token is required' });
         }
         if (!process.env.GOOGLE_CLIENT_ID) {
+            require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+        }
+        if (!process.env.GOOGLE_CLIENT_ID) {
             console.error('❌ GOOGLE_CLIENT_ID missing from backend/.env');
             return res.status(500).json({ message: 'Google authentication is not configured on the server.' });
         }
         console.log('✅ GOOGLE_CLIENT_ID found:', process.env.GOOGLE_CLIENT_ID.substring(0, 20) + '...');
+
+        const allowedAudiences = [
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_ANDROID_CLIENT_ID,
+        ].filter(Boolean);
 
         // ── STEP 2: Verify with Google ──────────────────────────────────
         let email, name, picture, googleId;
@@ -142,7 +151,7 @@ module.exports.googleLogin = async (req, res) => {
                 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
                 const ticket = await client.verifyIdToken({
                     idToken: token,
-                    audience: process.env.GOOGLE_CLIENT_ID,
+                    audience: allowedAudiences.length === 1 ? allowedAudiences[0] : allowedAudiences,
                 });
                 const p = ticket.getPayload();
                 if (!p) throw new Error('Empty payload from verifyIdToken');
