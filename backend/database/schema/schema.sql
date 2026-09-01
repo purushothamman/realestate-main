@@ -3,6 +3,7 @@
 -- Host: localhost    Database: realestate
 -- ------------------------------------------------------
 -- Server version	8.0.44
+Use realestate;
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -520,7 +521,7 @@ CREATE TABLE `users` (
   `name` varchar(255) NOT NULL,
   `email` varchar(255) NOT NULL,
   `phone` varchar(20) DEFAULT NULL,
-  `password` varchar(255) NOT NULL,
+  `password` varchar(255) DEFAULT NULL,
   `role` enum('buyer','builder','agent','admin') NOT NULL,
   `is_blocked` tinyint(1) DEFAULT '0',
   `is_verified` tinyint(1) DEFAULT '0',
@@ -546,9 +547,9 @@ CREATE TABLE `users` (
 
 -- Dump completed on 2026-02-23 16:08:47
 
-edits: 
+-- edits: 
 
-SQL:
+-- SQL:
 
 ALTER TABLE builders
 ADD COLUMN total_projects INT default 0;

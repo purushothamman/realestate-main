@@ -225,9 +225,9 @@ module.exports.googleLogin = async (req, res) => {
             isNewUser = true;
             try {
                 const [result] = await pool.query(
-                    `INSERT INTO users (name, email, role, is_verified, created_at)
-                     VALUES (?, ?, 'buyer', true, NOW())`,
-                    [name || email.split('@')[0], email.toLowerCase().trim()]
+                    `INSERT INTO users (name, email, role, profile_image, is_verified, created_at)
+                     VALUES (?, ?, 'buyer', ?, true, NOW())`,
+                    [name || email.split('@')[0], email.toLowerCase().trim(), picture || null]
                 );
                 user = {
                     id: result.insertId,
@@ -237,6 +237,7 @@ module.exports.googleLogin = async (req, res) => {
                     is_verified: true,
                     is_blocked: false,
                     phone: null,
+                    profile_image: picture || null,
                 };
                 console.log(`✅ New user created — ID: ${user.id}`);
             } catch (insertErr) {
@@ -296,6 +297,7 @@ module.exports.googleLogin = async (req, res) => {
                 phone: user.phone || null,
                 role: user.role,
                 isVerified: true,
+                profileImage: user.profile_image || null,
             },
         });
 
@@ -928,6 +930,13 @@ module.exports.login = async (req, res) => {
 
             return res.status(403).json({
                 message: "Your account has been blocked. Please contact support."
+            });
+        }
+
+        // Check if account was created via social login (no password set)
+        if (!user.password) {
+            return res.status(400).json({
+                message: "This account was registered using Google / Social Sign-In. Please sign in with Google."
             });
         }
 

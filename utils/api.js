@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+// import { EXPO_PUBLIC_API_URL } from '../backend/.env'
 
 // API URL comes from .env file (EXPO_PUBLIC_ prefix makes it available in Expo)
 // To change the API URL, edit the .env file at the project root
