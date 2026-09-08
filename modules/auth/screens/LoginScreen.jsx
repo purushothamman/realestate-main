@@ -16,7 +16,9 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Home, Mail, Lock, Eye, EyeOff, AlertCircle, X, ArrowLeft } from 'lucide-react-native';
 import * as Google from 'expo-auth-session/providers/google';
+import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import Constants from 'expo-constants';
 import { getDebugInfo, printSetupInstructions } from '../context/GoogleLoginConfig';
 import GOOGLE_CONFIG from '../context/GoogleLoginConfig';
 import { API_BASE_URL } from '../../../utils/api';
@@ -32,9 +34,9 @@ const CARD_OVERLAP = 32;
 // black border/outline that React Native & web can produce on TextInput.
 const INPUT_NO_OUTLINE = Platform.select({
   web: {
-    outline: 'none',
     outlineWidth: 0,
     outlineStyle: 'none',
+    outlineColor: 'transparent',
     boxShadow: 'none',
     WebkitAppearance: 'none',
     MozAppearance: 'none',
@@ -66,15 +68,12 @@ export default function LoginScreen({
   };
 
   // ==================== GOOGLE AUTH HOOK ====================
-  // Using responseType 'id_token' so Google returns a JWT that the backend
-  // can verify directly with verifyIdToken() — this eliminates the token type
-  // mismatch that caused the previous 401 invalid_client errors.
   const [request, response, promptAsync] = Google.useAuthRequest({
+    expoClientId: GOOGLE_CONFIG.WEB_CLIENT_ID,
     webClientId: GOOGLE_CONFIG.WEB_CLIENT_ID,
+    androidClientId: GOOGLE_CONFIG.ANDROID_CLIENT_ID,
     responseType: 'id_token',
     scopes: ['profile', 'email'],
-    // Android client ID (optional — only needed for native EAS builds)
-    ...(GOOGLE_CONFIG.ANDROID_CLIENT_ID ? { androidClientId: GOOGLE_CONFIG.ANDROID_CLIENT_ID } : {}),
   });
 
   useEffect(() => {
@@ -103,7 +102,20 @@ export default function LoginScreen({
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
     try {
+      console.log('🔍 [DIAGNOSTIC] Google Auth Triggered');
+      console.log('   Platform:', Platform.OS);
+      console.log('   isExpoGo:', Constants.appOwnership === 'expo' || Constants.executionEnvironment === 'storeClient');
+      console.log('   expoClientId:', GOOGLE_CONFIG.WEB_CLIENT_ID ? 'CONFIGURED' : 'MISSING');
+      console.log('   androidClientId:', GOOGLE_CONFIG.ANDROID_CLIENT_ID ? 'CONFIGURED' : 'MISSING');
+      console.log('   webClientId:', GOOGLE_CONFIG.WEB_CLIENT_ID ? 'CONFIGURED' : 'MISSING');
+      console.log('   request.url:', request?.url);
+      console.log('   request.redirectUri:', request?.redirectUri);
+      console.log('   AuthSession.makeRedirectUri():', AuthSession.makeRedirectUri({ scheme: 'estatehub-app' }));
+      console.log('   AuthSession.makeRedirectUri({ useProxy: true }):', AuthSession.makeRedirectUri({ useProxy: true }));
+
       const result = await promptAsync();
+      console.log('   promptAsync result type:', result?.type);
+      console.log('   promptAsync full result:', JSON.stringify(result));
       if (result.type !== 'success') {
         setIsGoogleLoading(false);
       }

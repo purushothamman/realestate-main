@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  Animated,
   ImageBackground,
   Image,
   Alert,
@@ -37,6 +37,37 @@ import { API_BASE_URL, getImageUrl, DEFAULT_PROPERTY_IMAGE } from '../../../util
 
 
 export default function HomeScreen({ navigation }) {
+  // Scroll-driven header animation
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Header compression interpolations (animate over first 100px of scroll)
+  const COLLAPSE_RANGE = 100;
+  const headerPaddingV = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE],
+    outputRange: [12, 4],
+    extrapolate: 'clamp',
+  });
+  const headerPaddingH = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE],
+    outputRange: [20, 14],
+    extrapolate: 'clamp',
+  });
+  const logoScale = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE],
+    outputRange: [1, 0.75],
+    extrapolate: 'clamp',
+  });
+  const appNameOpacity = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE * 0.5],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+  const appNameWidth = scrollY.interpolate({
+    inputRange: [0, COLLAPSE_RANGE * 0.5],
+    outputRange: [80, 0],
+    extrapolate: 'clamp',
+  });
+
   // State Management
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProperty, setSelectedProperty] = useState(null);
@@ -398,7 +429,7 @@ export default function HomeScreen({ navigation }) {
   if (error && !user) {
     return (
       <View style={styles.errorContainer}>
-        <AlertCircle color="#EF4444" size={48} />
+        <AlertCircle color="#EF4444" size={36} />
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={initializeData}>
           <Text style={styles.retryButtonText}>Retry</Text>
@@ -411,13 +442,21 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Fixed Header */}
-      <View style={styles.header}>
+      {/* Fixed Header — compresses on scroll */}
+      <Animated.View style={[
+        styles.header,
+        {
+          paddingVertical: headerPaddingV,
+          paddingHorizontal: headerPaddingH,
+        }
+      ]}>
         <View style={styles.headerLeft}>
-          <View style={styles.logoBox}>
-            <Home color="#FFFFFF" size={20} strokeWidth={2} />
-          </View>
-          <Text style={styles.appName}>EstateHub</Text>
+          <Animated.View style={[styles.logoBox, { transform: [{ scale: logoScale }] }]}>
+            <Home color="#FFFFFF" size={16} strokeWidth={2} />
+          </Animated.View>
+          <Animated.View style={{ opacity: appNameOpacity, width: appNameWidth, overflow: 'hidden' }}>
+            <Text style={styles.appName} numberOfLines={1}>EstateHub</Text>
+          </Animated.View>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity
@@ -429,7 +468,7 @@ export default function HomeScreen({ navigation }) {
               else navigation.navigate('buyerNotifications');
             }}
           >
-            <Bell color="#374151" size={24} strokeWidth={2} />
+            <Bell color="#374151" size={20} strokeWidth={2} />
 
             {notifications.length > 0 && (
               <View style={styles.notificationBadge}>
@@ -443,16 +482,22 @@ export default function HomeScreen({ navigation }) {
             style={styles.logoutButton}
             onPress={handleLogout}
           >
-            <LogOut color="#EF4444" size={20} strokeWidth={2} />
+            <LogOut color="#EF4444" size={18} strokeWidth={2} />
           </TouchableOpacity>
         </View>
-      </View>
+      </Animated.View>
 
-      {/* Scrollable Content */}
-      <ScrollView
+      {/* Scrollable Content — search bar sticks on scroll */}
+      <Animated.ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[1]}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -551,7 +596,7 @@ export default function HomeScreen({ navigation }) {
                       { backgroundColor: `${action.color}15` },
                     ]}
                   >
-                    <IconComponent color={action.color} size={24} strokeWidth={2} />
+                    <IconComponent color={action.color} size={20} strokeWidth={2} />
                   </View>
                   <Text style={styles.quickActionLabel}>{action.label}</Text>
                 </TouchableOpacity>
@@ -571,7 +616,7 @@ export default function HomeScreen({ navigation }) {
 
           {properties.length === 0 ? (
             <View style={styles.emptyState}>
-              <Home color="#9CA3AF" size={48} />
+              <Home color="#9CA3AF" size={36} />
               <Text style={styles.emptyStateText}>No properties available</Text>
             </View>
           ) : (
@@ -747,7 +792,7 @@ export default function HomeScreen({ navigation }) {
             </TouchableOpacity>
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
 
 
@@ -828,8 +873,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
@@ -847,16 +892,16 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   logoBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     backgroundColor: '#2D6A4F',
     justifyContent: 'center',
     alignItems: 'center',
   },
   appName: {
     color: '#2D6A4F',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
   },
   logoutButton: {
@@ -888,7 +933,7 @@ const styles = StyleSheet.create({
     paddingBottom: 90,
   },
   heroSection: {
-    height: 192,
+    height: 160,
     overflow: 'hidden',
   },
   heroImage: {
@@ -910,13 +955,13 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     color: '#FFFFFF',
-    fontSize: 30,
+    fontSize: 22,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   heroSubtitle: {
     color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 14,
+    fontSize: 13,
   },
   searchContainer: {
     paddingHorizontal: 24,
@@ -936,18 +981,18 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    height: 56,
+    height: 46,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingLeft: 48,
+    borderRadius: 13,
+    paddingLeft: 44,
     paddingRight: 16,
-    fontSize: 14,
+    fontSize: 13.5,
     color: '#111827',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 6,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -973,7 +1018,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     color: '#111827',
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
   },
   quickActionsContainer: {
@@ -988,16 +1033,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   quickActionIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 3,
   },
   quickActionLabel: {
     color: '#374151',
@@ -1015,7 +1060,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: '#111827',
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
   },
   seeAllButton: {
@@ -1038,19 +1083,19 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   propertyCard: {
-    width: 256,
+    width: 220,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
   propertyImageContainer: {
     position: 'relative',
-    height: 160,
+    height: 130,
   },
   propertyImage: {
     width: '100%',
@@ -1132,7 +1177,7 @@ const styles = StyleSheet.create({
   },
   propertyPrice: {
     color: '#2D6A4F',
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
   },
   recommendedSection: {
@@ -1155,8 +1200,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   recommendedImageContainer: {
-    width: 112,
-    height: 112,
+    width: 90,
+    height: 90,
     position: 'relative',
   },
   recommendedImage: {
@@ -1209,7 +1254,7 @@ const styles = StyleSheet.create({
   },
   recommendedPrice: {
     color: '#2D6A4F',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
   recommendedStats: {

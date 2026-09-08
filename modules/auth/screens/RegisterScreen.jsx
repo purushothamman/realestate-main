@@ -99,7 +99,7 @@ const inputBaseStyle = StyleSheet.create({
     // @ts-ignore – React Native Web specific
     outlineStyle: 'none',
     outlineWidth: 0,
-    outline: 'none',
+    outlineColor: 'transparent',
     boxShadow: 'none',
     WebkitAppearance: 'none',
   },

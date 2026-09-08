@@ -42,7 +42,7 @@ export default function UserNavigator({
       >
         <Home
           color={['home', 'builderDashboard', 'agentDashboard'].includes(activeTab) ? '#2D6A4F' : '#9CA3AF'}
-          size={24}
+          size={22}
           strokeWidth={2}
         />
         <Text
@@ -62,7 +62,7 @@ export default function UserNavigator({
       >
         <Search
           color={activeTab === 'searchResults' ? '#2D6A4F' : '#9CA3AF'}
-          size={24}
+          size={22}
           strokeWidth={2}
         />
         <Text
@@ -81,7 +81,7 @@ export default function UserNavigator({
       >
         <Heart
           color={activeTab === 'favorites' ? '#2D6A4F' : '#9CA3AF'}
-          size={24}
+          size={22}
           strokeWidth={2}
         />
         <Text
@@ -101,7 +101,7 @@ export default function UserNavigator({
         <View>
           <MessageCircle
             color={['messages', 'chat'].includes(activeTab) ? '#2D6A4F' : '#9CA3AF'}
-            size={24}
+            size={22}
             strokeWidth={2}
           />
           {messageCount > 0 && (
@@ -127,7 +127,7 @@ export default function UserNavigator({
       >
         <User
           color={activeTab === 'profile' ? '#2D6A4F' : '#9CA3AF'}
-          size={24}
+          size={22}
           strokeWidth={2}
         />
         <Text
@@ -154,13 +154,13 @@ const styles = StyleSheet.create({
     borderTopColor: '#E5E7EB',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 6,
     zIndex: 9999,
   },
 
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   navLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#9CA3AF',
   },
   navLabelActive: {

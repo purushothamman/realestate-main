@@ -1126,7 +1126,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: '50%',
-    background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.3))',
+    backgroundColor: 'transparent',
   },
   shimmerOverlay: {
     position: 'absolute',

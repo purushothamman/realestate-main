@@ -325,19 +325,19 @@ const ProfileScreen = ({
           <View style={styles.topBar}>
             <View style={styles.logoContainer}>
               <TouchableOpacity onPress={onBack} style={styles.backButton} activeOpacity={0.8}>
-                <ArrowLeft size={20} color="#FFF" strokeWidth={2.5} />
+                <ArrowLeft size={18} color="#FFF" strokeWidth={2.5} />
               </TouchableOpacity>
               <View style={styles.logoBox}>
-                <House size={isSmallDevice ? 14 : 16} color="#2D6A4F" strokeWidth={2.5} />
+                <House size={isSmallDevice ? 12 : 13} color="#2D6A4F" strokeWidth={2.5} />
               </View>
               <Text style={styles.logoText}>EstateHub</Text>
             </View>
             <View style={styles.topBarRight}>
               <TouchableOpacity style={styles.settingsButton} activeOpacity={0.8}>
-                <Settings size={18} color="#FFF" strokeWidth={2.5} />
+                <Settings size={16} color="#FFF" strokeWidth={2.5} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.editButton} onPress={onEditProfile} activeOpacity={0.8}>
-                <Edit3 size={isSmallDevice ? 14 : 16} color="#FFF" strokeWidth={2.5} />
+                <Edit3 size={isSmallDevice ? 12 : 14} color="#FFF" strokeWidth={2.5} />
                 <Text style={styles.editButtonText}>Edit</Text>
               </TouchableOpacity>
             </View>
@@ -354,7 +354,7 @@ const ProfileScreen = ({
                 <View style={styles.onlineIndicator} />
               </View>
               <TouchableOpacity style={styles.cameraButton} activeOpacity={0.8}>
-                <Camera size={isSmallDevice ? 14 : 16} color="#2D6A4F" strokeWidth={2.5} />
+                <Camera size={isSmallDevice ? 11 : 13} color="#2D6A4F" strokeWidth={2.5} />
               </TouchableOpacity>
             </View>
 
@@ -448,7 +448,7 @@ const ProfileScreen = ({
                 end={{ x: 1, y: 1 }}
               >
                 <View style={styles.dashboardIconContainer}>
-                  <LayoutDashboard size={24} color="#FFFFFF" strokeWidth={2.5} />
+                  <LayoutDashboard size={20} color="#FFFFFF" strokeWidth={2.5} />
                 </View>
                 <View style={styles.dashboardTextContainer}>
                   <Text style={styles.dashboardTitle}>
@@ -459,10 +459,10 @@ const ProfileScreen = ({
                   </Text>
                 </View>
                 <View style={styles.dashboardArrow}>
-                  <ChevronRight size={24} color="#FFFFFF" strokeWidth={2.5} />
+                  <ChevronRight size={20} color="#FFFFFF" strokeWidth={2.5} />
                 </View>
                 <View style={styles.sparkleIcon}>
-                  <Sparkles size={20} color="rgba(255,255,255,0.5)" />
+                  <Sparkles size={16} color="rgba(255,255,255,0.5)" />
                 </View>
               </LinearGradient>
             </TouchableOpacity>
@@ -499,7 +499,7 @@ const ProfileScreen = ({
                         <Text style={styles.actionValue}>{action.value}</Text>
                       </View>
                     )}
-                    <ChevronRight size={18} color="#9CA3AF" strokeWidth={2.5} />
+                    <ChevronRight size={16} color="#9CA3AF" strokeWidth={2.5} />
                   </View>
                 </TouchableOpacity>
               ))}
@@ -521,7 +521,7 @@ const ProfileScreen = ({
                   >
                     <View style={styles.detailLeft}>
                       <View style={styles.detailIconCircle}>
-                        <item.icon size={16} color="#2D6A4F" strokeWidth={2.5} />
+                        <item.icon size={14} color="#2D6A4F" strokeWidth={2.5} />
                       </View>
                       <View style={styles.detailTextContainer}>
                         <Text style={styles.detailLabel}>{item.label}</Text>
@@ -538,7 +538,7 @@ const ProfileScreen = ({
                     </View>
                     {item.action && (
                       <TouchableOpacity onPress={item.action}>
-                        <ChevronRight size={18} color="#9CA3AF" strokeWidth={2.5} />
+                        <ChevronRight size={16} color="#9CA3AF" strokeWidth={2.5} />
                       </TouchableOpacity>
                     )}
                   </View>
@@ -563,11 +563,11 @@ const ProfileScreen = ({
                 >
                   <View style={styles.legalLeft}>
                     <View style={styles.legalIconCircle}>
-                      <link.icon size={16} color="#6B7280" strokeWidth={2.5} />
+                      <link.icon size={14} color="#6B7280" strokeWidth={2.5} />
                     </View>
                     <Text style={styles.legalLabel}>{link.label}</Text>
                   </View>
-                  <ChevronRight size={18} color="#9CA3AF" strokeWidth={2.5} />
+                  <ChevronRight size={16} color="#9CA3AF" strokeWidth={2.5} />
                 </TouchableOpacity>
               ))}
             </View>
@@ -577,7 +577,7 @@ const ProfileScreen = ({
           <View style={styles.actionsContainer}>
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.8}>
               <View style={styles.logoutIconCircle}>
-                <LogOut size={20} color="#374151" strokeWidth={2.5} />
+                <LogOut size={16} color="#374151" strokeWidth={2.5} />
               </View>
               <Text style={styles.logoutButtonText}>Logout</Text>
             </TouchableOpacity>
@@ -637,9 +637,9 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   headerGradient: {
-    paddingHorizontal: isSmallDevice ? 16 : 24,
-    paddingTop: Platform.OS === 'ios' ? 60 : 24,
-    paddingBottom: isSmallDevice ? 24 : 28,
+    paddingHorizontal: isSmallDevice ? 14 : 20,
+    paddingTop: Platform.OS === 'ios' ? 52 : 20,
+    paddingBottom: isSmallDevice ? 18 : 22,
   },
   topBar: {
     flexDirection: 'row',
@@ -661,9 +661,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoBox: {
-    width: isSmallDevice ? 32 : 36,
-    height: isSmallDevice ? 32 : 36,
-    borderRadius: 10,
+    width: isSmallDevice ? 28 : 32,
+    height: isSmallDevice ? 28 : 32,
+    borderRadius: 9,
     backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
   },
   logoText: {
     color: '#FFF',
-    fontSize: isSmallDevice ? 17 : 19,
+    fontSize: isSmallDevice ? 15 : 17,
     fontWeight: '700',
     letterSpacing: -0.3,
   },
@@ -718,17 +718,17 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   profileImageWrapper: {
-    width: isSmallDevice ? 80 : 90,
-    height: isSmallDevice ? 80 : 90,
-    borderRadius: isSmallDevice ? 40 : 45,
+    width: isSmallDevice ? 68 : 76,
+    height: isSmallDevice ? 68 : 76,
+    borderRadius: isSmallDevice ? 34 : 38,
     overflow: 'hidden',
-    borderWidth: 4,
+    borderWidth: 3,
     borderColor: 'rgba(255,255,255,0.4)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 5,
   },
   profileImage: {
     width: '100%',
@@ -749,17 +749,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: isSmallDevice ? 28 : 32,
-    height: isSmallDevice ? 28 : 32,
+    width: isSmallDevice ? 24 : 28,
+    height: isSmallDevice ? 24 : 28,
     backgroundColor: '#FFF',
-    borderRadius: isSmallDevice ? 14 : 16,
+    borderRadius: isSmallDevice ? 12 : 14,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 3,
     borderWidth: 2,
     borderColor: 'rgba(45, 106, 79, 0.1)',
   },
@@ -775,7 +775,7 @@ const styles = StyleSheet.create({
   },
   name: {
     color: '#FFF',
-    fontSize: isSmallDevice ? 19 : 22,
+    fontSize: isSmallDevice ? 16 : 18,
     fontWeight: '800',
     flex: 1,
     letterSpacing: -0.5,
@@ -859,26 +859,26 @@ const styles = StyleSheet.create({
   statBox: {
     flex: 1,
     backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: isSmallDevice ? 16 : 20,
+    borderRadius: 14,
+    padding: isSmallDevice ? 12 : 14,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 4,
     borderWidth: 1,
     borderColor: '#f3f4f6',
   },
   statNumber: {
-    fontSize: isSmallDevice ? 24 : 28,
+    fontSize: isSmallDevice ? 20 : 22,
     fontWeight: '800',
     color: '#111827',
-    marginBottom: 6,
-    letterSpacing: -1,
+    marginBottom: 4,
+    letterSpacing: -0.5,
   },
   statLabel: {
-    fontSize: isSmallDevice ? 11 : 12,
+    fontSize: isSmallDevice ? 10 : 11,
     color: '#6B7280',
     textAlign: 'center',
     fontWeight: '600',
@@ -902,26 +902,26 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   dashboardIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   dashboardTextContainer: {
     flex: 1,
   },
   dashboardTitle: {
-    fontSize: isSmallDevice ? 16 : 17,
+    fontSize: isSmallDevice ? 14 : 15,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 3,
     letterSpacing: -0.3,
   },
   dashboardSubtitle: {
-    fontSize: isSmallDevice ? 12 : 13,
+    fontSize: isSmallDevice ? 11 : 12,
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '500',
   },
@@ -988,14 +988,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   actionIconBox: {
-    width: isSmallDevice ? 42 : 46,
-    height: isSmallDevice ? 42 : 46,
-    borderRadius: 14,
+    width: isSmallDevice ? 36 : 40,
+    height: isSmallDevice ? 36 : 40,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionLabel: {
-    fontSize: isSmallDevice ? 14 : 15,
+    fontSize: isSmallDevice ? 13 : 14,
     color: '#111827',
     flex: 1,
     fontWeight: '600',
@@ -1094,17 +1094,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    height: isSmallDevice ? 50 : 54,
+    gap: 10,
+    height: isSmallDevice ? 44 : 48,
     backgroundColor: '#FFF',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#E5E7EB',
-    borderRadius: 16,
+    borderRadius: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowRadius: 4,
+    elevation: 2,
   },
   logoutIconCircle: {
     width: 32,
@@ -1115,7 +1115,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logoutButtonText: {
-    fontSize: isSmallDevice ? 15 : 16,
+    fontSize: isSmallDevice ? 14 : 15,
     color: '#374151',
     fontWeight: '700',
     letterSpacing: 0.2,

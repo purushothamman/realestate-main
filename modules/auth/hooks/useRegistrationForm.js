@@ -58,7 +58,12 @@ export const useRegistrationForm = (navigation, onNavigateToLogin, onRegisterSuc
     };
 
     const validatePassword = (password) => {
-        return password.length >= 8 && /[a-zA-Z]/.test(password) && /[0-9]/.test(password);
+        return (
+            password.length >= 8 &&
+            /[a-zA-Z]/.test(password) &&
+            /[0-9]/.test(password) &&
+            /[!@#$%^&*(),.?":{}|<>]/.test(password)
+        );
     };
 
     const validateForm = () => {
@@ -85,7 +90,7 @@ export const useRegistrationForm = (navigation, onNavigateToLogin, onRegisterSuc
         if (!formData.password) {
             newErrors.password = 'Password is required';
         } else if (!validatePassword(formData.password)) {
-            newErrors.password = 'Password must be 8+ characters with letters and numbers';
+            newErrors.password = 'Password must be 8+ characters with letters, numbers & a special character (e.g. !@#$)';
         }
 
         if (!formData.role) {

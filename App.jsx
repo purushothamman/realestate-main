@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform, BackHandler, useColorScheme } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import * as NavigationBar from 'expo-navigation-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SplashScreen } from './modules/user/screens/SplashScreen';
 import { WelcomeScreen } from './modules/user/screens/WelcomeScreen';
@@ -64,82 +66,8 @@ export default function App() {
   const [scheduleViewingData, setScheduleViewingData] = useState(null);
   const [virtualTourData, setVirtualTourData] = useState(null);
 
-  // 🔹 Fetch Unread Messages Count
-  const fetchUnreadCount = async () => {
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      if (!token) return;
-
-      const response = await fetch(`${API_BASE_URL}/chats`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const totalUnread = data.reduce((sum, chat) => sum + (chat.unread || 0), 0);
-        setMessageCount(totalUnread);
-      }
-    } catch (err) {
-      console.error('Error fetching unread count:', err);
-    }
-  };
-
-  useEffect(() => {
-    if (userData) {
-      fetchUnreadCount();
-      const interval = setInterval(fetchUnreadCount, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [userData]);
-
-  // 🔹 Load User Data on mount — does NOT auto-navigate to home.
-  // userData is only used to inform goBack() whether the user is authenticated.
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const savedUser = await AsyncStorage.getItem('user');
-        if (savedUser) {
-          setUserData(JSON.parse(savedUser));
-        }
-      } catch (e) {
-        console.error('Failed to load user session:', e);
-      }
-    };
-    loadUser();
-  }, []);
-
-  const refreshUserData = async () => {
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      if (!token) return;
-
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const fullProfile = await response.json();
-        setUserData(fullProfile);
-        await AsyncStorage.setItem('user', JSON.stringify(fullProfile));
-      }
-    } catch (err) {
-      console.error('Error refreshing user data:', err);
-    }
-  };
-
-  // 🔹 Splash Screen Timeout (fallback)
-  useEffect(() => {
-    if (currentScreen === 'splash') {
-      const splashTimer = setTimeout(() => {
-        console.log('⏱️ Splash timeout - auto-navigate to welcome');
-        setCurrentScreen('welcome');
-      }, 5000);
-      return () => clearTimeout(splashTimer);
-    }
-  }, [currentScreen]);
-
   // 🔹 Navigation handler (Stack based)
-  const navigateTo = (screen, params = {}) => {
+  const navigateTo = useCallback((screen, params = {}) => {
     const normalizedScreen =
       screen === 'PropertyDetailScreen' ? 'propertyDetail' : screen;
 
@@ -224,14 +152,9 @@ export default function App() {
         property: params.property,
       });
     }
-  };
+  }, [currentScreen]);
 
-  // ✅ FIX: goBack now checks userData before deciding whether to redirect to
-  // 'home' when the stack bottoms out at a pre-auth screen.
-  // Previously, hitting a pre-auth screen in the stack ALWAYS redirected to
-  // 'home', which caused the ghost redirect when a cached userData was present
-  // but the user was intentionally in the forgot-password flow.
-  const goBack = () => {
+  const goBack = useCallback(() => {
     if (SCREENS_BACK_TO_HOME.includes(currentScreen)) {
       setScreenStack([]);
       setCurrentScreen('home');
@@ -240,7 +163,6 @@ export default function App() {
 
     setScreenStack(prev => {
       if (prev.length === 0) {
-        // Only return home if truly authenticated; otherwise stay on welcome
         if (userData) {
           setCurrentScreen('home');
         } else {
@@ -253,15 +175,10 @@ export default function App() {
       const preAuthScreens = ['splash', 'welcome', 'login', 'register', 'otp', 'forgotPassword'];
 
       if (preAuthScreens.includes(last)) {
-        // ✅ KEY FIX: Only jump to 'home' if the user is actually logged in.
-        // If userData exists from a previous session but the user is currently
-        // in an unauthenticated flow (e.g. forgot password), navigate normally
-        // back through the pre-auth stack instead of hijacking to home.
         if (userData && !preAuthScreens.includes(currentScreen)) {
           setCurrentScreen('home');
           return [];
         } else {
-          // Navigate normally back to the pre-auth screen
           setCurrentScreen(last);
           return prev.slice(0, -1);
         }
@@ -270,7 +187,7 @@ export default function App() {
       setCurrentScreen(last);
       return prev.slice(0, -1);
     });
-  };
+  }, [currentScreen, userData]);
 
   const resetApp = async () => {
     try {
@@ -301,6 +218,179 @@ export default function App() {
   }, [navigateTo]);
 
   const handleNavigateToLogin = useCallback(() => navigateTo('login'), [navigateTo]);
+
+  const handleTabPress = useCallback((tab) => {
+    console.log('📱 Tab pressed on global navbar:', tab);
+
+    if (tab === 'home') {
+      setScreenStack([]);
+      setCurrentScreen('home');
+      return;
+    }
+
+    const targetScreen =
+      tab === 'search' ? 'searchResults' :
+      tab === 'favorites' ? 'favorites' :
+      tab === 'messages' ? 'messages' :
+      tab === 'profile' ? 'profile' : tab;
+
+    if (currentScreen === targetScreen) return;
+
+    setScreenStack(prev => {
+      if (prev.length === 0 || prev[0] !== 'home') {
+        return ['home'];
+      }
+      return [prev[0]];
+    });
+    setCurrentScreen(targetScreen);
+  }, [currentScreen]);
+
+  const systemColorScheme = useColorScheme();
+
+  // 🔹 Android Status Bar & Navigation Bar Dynamic Sync
+  useEffect(() => {
+    const applySystemUI = async () => {
+      if (Platform.OS !== 'android') return;
+
+      const isDark = systemColorScheme === 'dark';
+
+      const greenHeaderScreens = [
+        'splash',
+        'builderDashboard',
+        'agentDashboard',
+        'addProperty',
+        'addPropertyAgent',
+        'editProfile',
+        'myListings',
+        'builderNotifications',
+        'agentNotifications',
+        'buyerNotifications',
+        'assignAgent',
+        'PropertyEditScreen',
+      ];
+
+      const isGreenHeader = greenHeaderScreens.includes(currentScreen);
+
+      const statusBarColor = isGreenHeader
+        ? '#2D6A4F'
+        : isDark ? '#111827' : '#FFFFFF';
+
+      const navBarButtonStyle = (currentScreen === 'splash')
+        ? 'light'
+        : isDark ? 'light' : 'dark';
+
+      try {
+        NavigationBar.setStyle(navBarButtonStyle);
+      } catch (err) {
+        console.warn('⚠️ NavigationBar update error:', err);
+      }
+    };
+
+    applySystemUI();
+  }, [currentScreen, systemColorScheme]);
+
+  // 🔹 Android Hardware Back Button Handler
+  useEffect(() => {
+    const onBackPress = () => {
+      console.log('📱 Physical Back button pressed. currentScreen:', currentScreen, 'stack:', screenStack);
+
+      if (screenStack.length > 0) {
+        goBack();
+        return true;
+      }
+
+      const rootScreens = ['home', 'welcome', 'splash'];
+      if (!rootScreens.includes(currentScreen)) {
+        if (userData) {
+          setCurrentScreen('home');
+          setScreenStack([]);
+        } else {
+          setCurrentScreen('welcome');
+          setScreenStack([]);
+        }
+        return true;
+      }
+
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [screenStack, currentScreen, userData, goBack]);
+
+  // 🔹 Fetch Unread Messages Count
+  const fetchUnreadCount = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/chats`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const totalUnread = data.reduce((sum, chat) => sum + (chat.unread || 0), 0);
+        setMessageCount(totalUnread);
+      }
+    } catch (err) {
+      console.error('Error fetching unread count:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (userData) {
+      fetchUnreadCount();
+      const interval = setInterval(fetchUnreadCount, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [userData]);
+
+  // 🔹 Load User Data on mount — does NOT auto-navigate to home.
+  // userData is only used to inform goBack() whether the user is authenticated.
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const savedUser = await AsyncStorage.getItem('user');
+        if (savedUser) {
+          setUserData(JSON.parse(savedUser));
+        }
+      } catch (e) {
+        console.error('Failed to load user session:', e);
+      }
+    };
+    loadUser();
+  }, []);
+
+  const refreshUserData = async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) return;
+
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const fullProfile = await response.json();
+        setUserData(fullProfile);
+        await AsyncStorage.setItem('user', JSON.stringify(fullProfile));
+      }
+    } catch (err) {
+      console.error('Error refreshing user data:', err);
+    }
+  };
+
+  // 🔹 Splash Screen Timeout (fallback)
+  useEffect(() => {
+    if (currentScreen === 'splash') {
+      const splashTimer = setTimeout(() => {
+        console.log('⏱️ Splash timeout - auto-navigate to welcome');
+        setCurrentScreen('welcome');
+      }, 5000);
+      return () => clearTimeout(splashTimer);
+    }
+  }, [currentScreen]);
 
   const showNavbarScreens = ['home', 'messages', 'profile', 'searchResults', 'favorites', 'builderDashboard', 'agentDashboard'];
 
@@ -683,23 +773,36 @@ export default function App() {
     },
   });
 
+  const isDarkTheme = systemColorScheme === 'dark';
+  const greenHeaderScreens = [
+    'splash',
+    'builderDashboard',
+    'agentDashboard',
+    'addProperty',
+    'addPropertyAgent',
+    'editProfile',
+    'myListings',
+    'builderNotifications',
+    'agentNotifications',
+    'buyerNotifications',
+    'assignAgent',
+    'PropertyEditScreen',
+  ];
+  const isGreenHeader = greenHeaderScreens.includes(currentScreen);
+  const statusBgColor = isGreenHeader ? '#2D6A4F' : (isDarkTheme ? '#111827' : '#FFFFFF');
+  const statusStyle = isGreenHeader ? 'light' : (isDarkTheme ? 'light' : 'dark');
+
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+      <StatusBar style={statusStyle} backgroundColor={statusBgColor} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: statusBgColor }} edges={['top', 'left', 'right']}>
         <View style={styles.container}>
           {renderScreen()}
 
           {showNavbarScreens.includes(currentScreen) && (
             <UserNavigator
               activeTab={currentScreen}
-              onTabPress={(tab) => {
-                console.log('📱 Tab pressed on global navbar:', tab);
-                if (tab === 'home') navigation.navigate('home');
-                if (tab === 'search') navigation.navigate('searchResults');
-                if (tab === 'favorites') navigation.navigate('favorites');
-                if (tab === 'messages') navigation.navigate('messages');
-                if (tab === 'profile') navigation.navigate('profile');
-              }}
+              onTabPress={handleTabPress}
               messageCount={messageCount}
               userRole={userData?.role}
             />
