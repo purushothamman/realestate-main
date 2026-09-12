@@ -207,10 +207,94 @@ export default function App() {
     }
   };
 
+  const replaceScreen = useCallback((screen, params = {}) => {
+    const normalizedScreen =
+      screen === 'PropertyDetailScreen' ? 'propertyDetail' :
+      screen === 'Login' ? 'login' :
+      screen === 'Home' ? 'home' :
+      screen;
+
+    if (normalizedScreen === 'propertyDetail' && !params.property) {
+      console.warn('⚠️ Tried to replace propertyDetail without property.');
+      return;
+    }
+
+    setScreenStack([]);
+    setCurrentScreen(normalizedScreen);
+
+    if (normalizedScreen === 'propertyDetail') {
+      setSelectedProperty(params.property);
+    }
+
+    if (params.requestId !== undefined) setSelectedRequestId(params.requestId);
+    if (params.query !== undefined) setSearchQuery(params.query);
+
+    if (
+      params.propertyId ||
+      params.propertyName ||
+      params.propertyAddress ||
+      params.propertyPrice ||
+      params.propertyImage
+    ) {
+      setReportPropertyData({
+        propertyId: params.propertyId,
+        propertyName: params.propertyName,
+        propertyAddress: params.propertyAddress,
+        propertyPrice: params.propertyPrice,
+        propertyImage: params.propertyImage,
+      });
+    }
+
+    if (params.propertyPrice) {
+      setPaymentData({
+        propertyId: params.propertyId,
+        propertyName: params.propertyName,
+        propertyPrice: params.propertyPrice,
+      });
+    }
+
+    if (normalizedScreen === 'chat') {
+      setChatData({
+        chatId: params.chatId,
+        inquiryId: params.inquiryId,
+      });
+    }
+
+    if (normalizedScreen === 'PropertyEditScreen') {
+      setEditPropertyData({
+        property: params.property,
+        userRole: params.userRole,
+      });
+    }
+
+    if (normalizedScreen === 'ScheduleViewingScreen') {
+      setScheduleViewingData({
+        propertyId: params.propertyId,
+        propertyName: params.propertyName,
+        propertyAddress: params.propertyAddress,
+        propertyPrice: params.propertyPrice,
+        propertyImage: params.propertyImage,
+        property: params.property,
+      });
+    }
+
+    if (normalizedScreen === 'VirtualTourScreen') {
+      setVirtualTourData({
+        propertyId: params.propertyId,
+        propertyName: params.propertyName,
+        propertyAddress: params.propertyAddress,
+        propertyPrice: params.propertyPrice,
+        propertyImages: params.propertyImages,
+        property: params.property,
+      });
+    }
+  }, []);
+
   const navigation = useMemo(() => ({
     navigate: navigateTo,
     goBack,
-  }), [navigateTo, goBack]);
+    replace: replaceScreen,
+  }), [navigateTo, goBack, replaceScreen]);
 
   const handleRegisterSuccess = useCallback((user) => {
     if (user) setUserData(user);
@@ -271,18 +355,14 @@ export default function App() {
 
       const isGreenHeader = greenHeaderScreens.includes(currentScreen);
 
-      const statusBarColor = isGreenHeader
-        ? '#2D6A4F'
-        : isDark ? '#111827' : '#FFFFFF';
+      const statusBarColor = '#FFFFFF';
 
-      const navBarButtonStyle = (currentScreen === 'splash')
-        ? 'light'
-        : isDark ? 'light' : 'dark';
+      const navBarButtonStyle = 'dark';
 
       try {
         NavigationBar.setStyle(navBarButtonStyle);
       } catch (err) {
-        console.warn('⚠️ NavigationBar update error:', err);
+        console.warn('⚠️ NavigationBar style update error:', err);
       }
     };
 
@@ -322,19 +402,33 @@ export default function App() {
   const fetchUnreadCount = async () => {
     try {
       const token = await AsyncStorage.getItem('authToken');
-      if (!token) return;
+      if (!token) {
+        setMessageCount(0);
+        return;
+      }
 
       const response = await fetch(`${API_BASE_URL}/chats`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        const totalUnread = data.reduce((sum, chat) => sum + (chat.unread || 0), 0);
-        setMessageCount(totalUnread);
+      if (!response.ok) {
+        if (response.status === 401) {
+          setMessageCount(0);
+          return;
+        }
+
+        console.warn('Unread count request failed:', response.status, response.statusText);
+        setMessageCount(0);
+        return;
       }
+
+      const data = await response.json();
+      const chats = Array.isArray(data) ? data : [];
+      const totalUnread = chats.reduce((sum, chat) => sum + (Number(chat.unread) || 0), 0);
+      setMessageCount(totalUnread);
     } catch (err) {
-      console.error('Error fetching unread count:', err);
+      console.warn('Unread count unavailable; backend is unreachable:', err?.message || err);
+      setMessageCount(0);
     }
   };
 
@@ -789,8 +883,11 @@ export default function App() {
     'PropertyEditScreen',
   ];
   const isGreenHeader = greenHeaderScreens.includes(currentScreen);
-  const statusBgColor = isGreenHeader ? '#2D6A4F' : (isDarkTheme ? '#111827' : '#FFFFFF');
-  const statusStyle = isGreenHeader ? 'light' : (isDarkTheme ? 'light' : 'dark');
+
+  // const statusBgColor = isGreenHeader ? '#2D6A4F' : (isDarkTheme ? '#111827' : '#FFFFFF');
+  // const statusStyle = isGreenHeader ? 'light' : (isDarkTheme ? 'light' : 'dark');
+  const statusBgColor = isGreenHeader ? '#2D6A4F' : '#FFFFFF';
+  const statusStyle = isGreenHeader ? 'light' : 'dark';
 
   return (
     <SafeAreaProvider>

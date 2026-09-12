@@ -11,6 +11,7 @@ import {
   StatusBar,
   Dimensions,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import {
   Home,
@@ -216,7 +217,11 @@ export default function ChatListScreen({ navigation, onBack, route }) {
   const totalUnread = chats.reduce((sum, chat) => sum + chat.unreadCount, 0);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
 
       {/* Background Image with Overlay */}
@@ -318,7 +323,8 @@ export default function ChatListScreen({ navigation, onBack, route }) {
       >
         <Plus color="#FFFFFF" size={28} strokeWidth={2.5} />
       </TouchableOpacity>
-    </SafeAreaView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 

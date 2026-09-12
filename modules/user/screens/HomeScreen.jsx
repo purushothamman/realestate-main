@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -84,6 +85,8 @@ export default function HomeScreen({ navigation }) {
     viewed: 0,
     new: 0,
   });
+
+  const safeStats = stats || { saved: 0, viewed: 0, new: 0 };
   const [notifications, setNotifications] = useState([]);
   const [messages, setMessages] = useState([]);
 
@@ -553,15 +556,15 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.statsContainer}>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Saved</Text>
-            <Text style={styles.statValue}>{stats.saved}</Text>
+            <Text style={styles.statValue}>{stats?.saved ?? 0}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>Viewed</Text>
-            <Text style={styles.statValue}>{stats.viewed}</Text>
+            <Text style={styles.statValue}>{stats?.viewed ?? 0}</Text>
           </View>
           <View style={styles.statBox}>
             <Text style={styles.statLabel}>New</Text>
-            <Text style={styles.statValue}>{stats.new}</Text>
+            <Text style={styles.statValue}>{stats?.new ?? 0}</Text>
           </View>
         </View>
 

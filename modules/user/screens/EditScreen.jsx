@@ -16,6 +16,7 @@ import {
     Platform,
     StatusBar,
     KeyboardAvoidingView,
+    Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -54,6 +55,9 @@ const { width } = Dimensions.get('window');
  */
 export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
     const role = userData?.role || 'user';
+    const scrollRef = useRef(null);
+    const inputRefs = useRef({});
+    const [keyboardVisible, setKeyboardVisible] = useState(false);
 
     const [logoImage, setLogoImage] = useState(
         getImageUrl(userData?.profileImage) || DEFAULT_PROFILE_IMAGE
@@ -91,6 +95,16 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
         reraId: userData?.reraId || '',
         about: userData?.about || '',
     });
+
+    useEffect(() => {
+        const didShow = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+        const didHide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+
+        return () => {
+            didShow.remove();
+            didHide.remove();
+        };
+    }, []);
 
     useEffect(() => {
         const fetchCurrentProfile = async () => {
@@ -296,6 +310,20 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
         }
     };
 
+    const scrollToFocusedInput = (key) => {
+        const target = inputRefs.current[key];
+        if (!target || !scrollRef.current) return;
+
+        target.measureInWindow((x, y, width, height) => {
+            const finalY = Math.max(0, y - 150);
+            scrollRef.current.scrollTo({
+                x: 0,
+                y: finalY,
+                animated: true,
+            });
+        });
+    };
+
     const renderInput = (label, value, key, icon, props = {}) => {
         const isTextArea = props.multiline;
         return (
@@ -308,12 +336,18 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
                         style: isTextArea ? [styles.inputIcon, { marginTop: 15, alignSelf: 'flex-start' }] : styles.inputIcon
                     })}
                     <TextInput
+                        ref={(node) => {
+                            if (node) inputRefs.current[key] = node;
+                        }}
                         style={[styles.input, icon && styles.inputWithPadding, isTextArea && styles.textArea]}
                         value={value}
                         onChangeText={(text) => setFormData(prev => ({ ...prev, [key]: text }))}
                         placeholder={`Enter ${label.toLowerCase()}`}
                         placeholderTextColor="#9CA3AF"
                         textAlignVertical={isTextArea ? "top" : "center"}
+                        onFocus={() => {
+                            setTimeout(() => scrollToFocusedInput(key), 80);
+                        }}
                         {...props}
                     />
                 </View>
@@ -458,64 +492,86 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
     );
 
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={0}
+        >
             <StatusBar barStyle="light-content" />
 
             {/* Header */}
             <LinearGradient
                 colors={['#1b4332', '#2d6a4f']}
-                style={styles.header}
+                style={[styles.header, keyboardVisible && styles.headerCompact]}
             >
                 <SafeAreaView>
                     <View style={styles.headerTop}>
                         <TouchableOpacity onPress={onBack} style={styles.headerBtn}>
                             <ArrowLeft color="#FFF" size={24} />
                         </TouchableOpacity>
-                        <Text style={styles.headerTitle}>Edit Profile</Text>
+                        <Text style={styles.headerTitle}>Edit Profile1</Text>
                         <View style={{ width: 40 }} />
                     </View>
 
-                    <View style={styles.profileSection}>
-                        <View style={styles.imageContainer}>
-                            <Image
-                                source={typeof logoImage === 'string' ? { uri: logoImage } : logoImage}
-                                style={styles.profileImage}
-                            />
-                            <TouchableOpacity style={styles.camBtn} onPress={handlePickImage}>
-                                <Camera color="#FFF" size={16} />
-                            </TouchableOpacity>
+                    {keyboardVisible ? (
+                        <View style={styles.profileSectionCompact}>
+                            <View style={styles.imageContainerCompact}>
+                                <Image
+                                    source={typeof logoImage === 'string' ? { uri: logoImage } : logoImage}
+                                    style={styles.profileImage}
+                                />
+                                <TouchableOpacity style={styles.camBtn} onPress={handlePickImage}>
+                                    <Camera color="#FFF" size={16} />
+                                </TouchableOpacity>
+                            </View>
+                            <Text style={styles.profileRoleCompact}>{role.toUpperCase()}</Text>
                         </View>
-                        <Text style={styles.profileRole}>{role.toUpperCase()}</Text>
-                    </View>
+                    ) : (
+                        <View style={styles.profileSection}>
+                            <View style={styles.imageContainer}>
+                                <Image
+                                    source={typeof logoImage === 'string' ? { uri: logoImage } : logoImage}
+                                    style={styles.profileImage}
+                                />
+                                <TouchableOpacity style={styles.camBtn} onPress={handlePickImage}>
+                                    <Camera color="#FFF" size={16} />
+                                </TouchableOpacity>
+                            </View>
+                            <Text style={styles.profileRole}>{role.toUpperCase()}</Text>
+                        </View>
+                    )}
                 </SafeAreaView>
             </LinearGradient>
 
-            <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ flex: 1 }}
+            <View style={styles.tabContainer}>
+                {renderTabs()}
+            </View>
+
+            <ScrollView
+                ref={scrollRef}
+                style={styles.formContainer}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="interactive"
+                contentContainerStyle={{ paddingBottom: keyboardVisible ? 190 : 140 }}
+                alwaysBounceVertical={false}
             >
-                <View style={styles.tabContainer}>
-                    {renderTabs()}
-                </View>
+                {isLoadingProfile ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color="#2D6A4F" />
+                        <Text style={styles.loadingText}>Loading your profile...</Text>
+                    </View>
+                ) : (
+                    <>
+                        {activeTab === 'personal' && renderPersonalTab()}
+                        {activeTab === 'business' && renderBusinessTab()}
+                        {activeTab === 'address' && renderLocationTab()}
+                        {activeTab === 'professional' && renderProfessionalTab()}
+                    </>
+                )}
 
-                <ScrollView style={styles.formContainer} showsVerticalScrollIndicator={false}>
-                    {isLoadingProfile ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color="#2D6A4F" />
-                            <Text style={styles.loadingText}>Loading your profile...</Text>
-                        </View>
-                    ) : (
-                        <>
-                            {activeTab === 'personal' && renderPersonalTab()}
-                            {activeTab === 'business' && renderBusinessTab()}
-                            {activeTab === 'address' && renderLocationTab()}
-                            {activeTab === 'professional' && renderProfessionalTab()}
-                        </>
-                    )}
-
-                    <View style={{ height: 100 }} />
-                </ScrollView>
-            </KeyboardAvoidingView>
+                <View style={{ height: 100 }} />
+            </ScrollView>
 
             {/* Bottom Actions */}
             <View style={styles.footer}>
@@ -549,7 +605,7 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
                     </LinearGradient>
                 </View>
             )}
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 
@@ -563,6 +619,10 @@ const styles = StyleSheet.create({
         paddingBottom: 30,
         borderBottomLeftRadius: 30,
         borderBottomRightRadius: 30,
+    },
+    headerCompact: {
+        paddingBottom: 10,
+        minHeight: 130,
     },
     headerTop: {
         flexDirection: 'row',
@@ -583,11 +643,24 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 10,
     },
+    profileSectionCompact: {
+        alignItems: 'center',
+        marginTop: 4,
+        minHeight: 60,
+    },
     imageContainer: {
         width: 100,
         height: 100,
         borderRadius: 50,
         borderWidth: 4,
+        borderColor: 'rgba(255,255,255,0.3)',
+        position: 'relative',
+    },
+    imageContainerCompact: {
+        width: 58,
+        height: 58,
+        borderRadius: 50,
+        borderWidth: 3,
         borderColor: 'rgba(255,255,255,0.3)',
         position: 'relative',
     },
@@ -619,6 +692,10 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         marginTop: 10,
         letterSpacing: 1,
+    },
+    profileRoleCompact: {
+        marginTop: 4,
+        fontSize: 11,
     },
     tabContainer: {
         backgroundColor: '#FFF',

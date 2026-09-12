@@ -13,6 +13,7 @@ import {
   Animated,
   Platform,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { API_BASE_URL, getImageUrl } from '../../../utils/api';
 import {
@@ -590,7 +591,10 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
   });
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* Animated Header */}
@@ -837,7 +841,7 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
         </TouchableOpacity>
       </Animated.View>
 
-    </View>
+    </KeyboardAvoidingView>
 
   );
 }

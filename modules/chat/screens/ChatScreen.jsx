@@ -220,9 +220,8 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
     >
 
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />
@@ -268,6 +267,7 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
         style={styles.messagesArea}
         contentContainerStyle={styles.messagesContent}
         onContentSizeChange={scrollToBottom}
+        keyboardShouldPersistTaps="handled"
       >
         {messages.map((msg, index) => {
           // Identify current user ID from state or prop

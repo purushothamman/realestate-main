@@ -9,6 +9,8 @@ import {
   Image,
   Dimensions,
   Switch,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -152,8 +154,10 @@ export default function MakeOfferScreen({ onBack, onSubmit }) {
   const validation = getOfferValidation();
 
   return (
-    <View style={styles.container}>
-      {/* Fixed Header */}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -177,6 +181,7 @@ export default function MakeOfferScreen({ onBack, onSubmit }) {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Property Summary Card */}
         <View style={styles.propertyCard}>
@@ -725,7 +730,7 @@ export default function MakeOfferScreen({ onBack, onSubmit }) {
           <Text style={styles.navLabel}>Profile</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

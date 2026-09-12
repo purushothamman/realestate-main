@@ -1,9 +1,20 @@
 import { Platform } from 'react-native';
 // import { EXPO_PUBLIC_API_URL } from '../backend/.env'
 
-// API URL comes from .env file (EXPO_PUBLIC_ prefix makes it available in Expo)
-// To change the API URL, edit the .env file at the project root
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://realestate.careeradvancement.in/api';
+// Prefer the production API for web/browser requests because private LAN IPs are often
+// unreachable from the browser session. Fall back to the public URL when the local env value
+// is a private network address or unavailable.
+const DEFAULT_API_URL = 'https://realestate.careeradvancement.in/api';
+const envUrl = process.env.EXPO_PUBLIC_API_URL || DEFAULT_API_URL;
+
+const isPrivateNetworkUrl = (url) => {
+    if (!url) return false;
+    return /^(https?:\/\/)(localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/i.test(url);
+};
+
+export const API_BASE_URL = Platform.OS === 'web' && isPrivateNetworkUrl(envUrl)
+    ? DEFAULT_API_URL
+    : envUrl;
 
 /**
  * Resolves a profile/property image URL from the database value.
