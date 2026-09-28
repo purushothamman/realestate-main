@@ -10,6 +10,8 @@ import {
   SafeAreaView,
   StatusBar,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import {
   ArrowLeft,
@@ -133,6 +135,11 @@ const ReportPropertyScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
+      >
       
       {/* Header */}
       <View style={styles.header}>
@@ -163,7 +170,7 @@ const ReportPropertyScreen = () => {
       </View>
 
       {/* Scrollable Content */}
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Property Type */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Property Type</Text>
@@ -395,6 +402,7 @@ const ReportPropertyScreen = () => {
           <Text style={styles.submitButtonText}>Submit Report</Text>
         </TouchableOpacity>
       </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

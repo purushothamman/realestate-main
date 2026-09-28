@@ -8,6 +8,8 @@ import {
   ScrollView,
   ImageBackground,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { ArrowLeft, Shield } from 'lucide-react-native';
 
@@ -87,7 +89,11 @@ export default function OTPVerificationScreen({
   const isOtpComplete = otp.every((digit) => digit !== '');
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
+    >
       {/* Subtle Background */}
       <View style={styles.backgroundContainer}>
         <ImageBackground
@@ -104,6 +110,7 @@ export default function OTPVerificationScreen({
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Back Button */}
         {onBack && (
@@ -218,7 +225,7 @@ export default function OTPVerificationScreen({
           </Text>
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

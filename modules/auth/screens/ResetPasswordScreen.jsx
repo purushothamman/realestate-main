@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import {
   Eye,
@@ -72,7 +74,11 @@ export default function App() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
+    >
       {/* Background Pattern */}
       <View style={styles.backgroundPattern} />
 
@@ -80,6 +86,7 @@ export default function App() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Header with Logo */}
         <View style={styles.header}>
@@ -292,7 +299,7 @@ export default function App() {
           </Text>
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

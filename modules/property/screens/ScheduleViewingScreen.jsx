@@ -11,6 +11,8 @@ import {
   StatusBar,
   Animated,
   Switch,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
@@ -121,6 +123,11 @@ const ScheduleViewingScreen = ({ onBack, onConfirm }) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
+      >
 
       {/* Header */}
       <Animated.View
@@ -142,12 +149,13 @@ const ScheduleViewingScreen = ({ onBack, onConfirm }) => {
         </View>
       </Animated.View>
 
-      {/* Scrollable Content */}
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+        {/* Scrollable Content */}
+        <ScrollView
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* Property Card */}
         <View style={styles.propertyCard}>
           <Image
@@ -507,6 +515,7 @@ const ScheduleViewingScreen = ({ onBack, onConfirm }) => {
           </TouchableOpacity>
         ))}
       </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

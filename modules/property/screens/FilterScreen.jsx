@@ -7,7 +7,9 @@ import {
   TextInput,
   StyleSheet,
   SafeAreaView,
-  StatusBar
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import {
@@ -140,6 +142,11 @@ const FilterScreen = ({ onBack, onApplyFilters }) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
+      >
       
       {/* Header */}
       <View style={styles.header}>
@@ -169,11 +176,12 @@ const FilterScreen = ({ onBack, onApplyFilters }) => {
       </View>
 
       {/* Scrollable Filter Options */}
-      <ScrollView 
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+        <ScrollView 
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* Location Filter */}
         <View style={styles.filterCard}>
           <Text style={styles.filterTitle}>Location</Text>
@@ -408,6 +416,7 @@ const FilterScreen = ({ onBack, onApplyFilters }) => {
           </View>
         )}
       </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };

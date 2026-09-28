@@ -314,14 +314,19 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
         const target = inputRefs.current[key];
         if (!target || !scrollRef.current) return;
 
-        target.measureInWindow((x, y, width, height) => {
-            const finalY = Math.max(0, y - 150);
-            scrollRef.current.scrollTo({
-                x: 0,
-                y: finalY,
-                animated: true,
-            });
-        });
+        // Use the ScrollView's built-in keyboard scroll — no hard-coded offsets needed
+        setTimeout(() => {
+            target.measureLayout(
+                scrollRef.current.getScrollableNode?.() || scrollRef.current,
+                (x, y, width, height) => {
+                    scrollRef.current?.scrollTo({ x: 0, y: Math.max(0, y - 120), animated: true });
+                },
+                () => {
+                    // Fallback: just scroll to end if measurement fails
+                    scrollRef.current?.scrollToEnd({ animated: true });
+                }
+            );
+        }, 80);
     };
 
     const renderInput = (label, value, key, icon, props = {}) => {
@@ -494,8 +499,8 @@ export default function EditScreen({ navigation, onBack, userData, onUpdate }) {
     return (
         <KeyboardAvoidingView
             style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={0}
+            behavior="padding"
+            keyboardVerticalOffset={Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0}
         >
             <StatusBar barStyle="light-content" />
 

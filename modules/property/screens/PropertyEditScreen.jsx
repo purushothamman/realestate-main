@@ -10,6 +10,7 @@ import {
   StatusBar,
   Platform,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -346,7 +347,11 @@ export default function PropertyEditScreen({ navigation, route, property, onSave
   };
 
   return (
-    <View style={s.container}>
+    <KeyboardAvoidingView
+      style={s.container}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0}
+    >
       <StatusBar barStyle="light-content" backgroundColor={G} />
 
       {/* Header */}
@@ -639,7 +644,7 @@ export default function PropertyEditScreen({ navigation, route, property, onSave
           <Text style={s.saveTxt}>{saving ? 'Saving…' : 'Save Changes'}</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

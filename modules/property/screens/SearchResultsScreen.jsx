@@ -593,7 +593,8 @@ export default function SearchResultsScreen({ navigation, onPropertyClick, onBac
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
     >
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 

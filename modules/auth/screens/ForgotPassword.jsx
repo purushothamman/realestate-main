@@ -99,9 +99,9 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
     >
-      <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
@@ -316,7 +316,6 @@ export default function ForgetPassword({ onBack, onSendResetLink, onBackToLogin 
         {/* Decorative Elements */}
         <View style={styles.decorativeCircle1} />
         <View style={styles.decorativeCircle2} />
-      </View>
     </KeyboardAvoidingView>
   );
 }

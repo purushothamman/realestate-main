@@ -219,7 +219,8 @@ export default function ChatListScreen({ navigation, onBack, route }) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
     >
       <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1F2937" />
@@ -295,6 +296,7 @@ export default function ChatListScreen({ navigation, onBack, route }) {
         style={styles.chatList}
         contentContainerStyle={styles.chatListContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {filteredChats.length > 0 ? (
           filteredChats.map((chat) => (

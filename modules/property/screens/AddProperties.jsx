@@ -12,6 +12,7 @@ import {
     StatusBar,
     Platform,
     Alert,
+    KeyboardAvoidingView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -477,7 +478,11 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
     });
 
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior="padding"
+            keyboardVerticalOffset={Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0}
+        >
             <StatusBar barStyle="light-content" backgroundColor="#2D6A4F" />
 
             {/* Animated Header */}
@@ -1097,7 +1102,7 @@ const AddProperty = ({ onBack, onShowEditProperty, onPropertyAdded }) => {
                     </TouchableOpacity>
                 </View>
             </Animated.View>
-        </View>
+        </KeyboardAvoidingView>
     );
 };
 

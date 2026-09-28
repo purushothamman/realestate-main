@@ -12,9 +12,12 @@ const isPrivateNetworkUrl = (url) => {
     return /^(https?:\/\/)(localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(1[6-9]|2\d|3[0-1])\.)/i.test(url);
 };
 
-export const API_BASE_URL = Platform.OS === 'web' && isPrivateNetworkUrl(envUrl)
-    ? DEFAULT_API_URL
-    : envUrl;
+// its taking default server i.e commented it 
+// 
+// export const API_BASE_URL = Platform.OS === 'web' && isPrivateNetworkUrl(envUrl)
+//     ? DEFAULT_API_URL
+//     : envUrl;
+export const API_BASE_URL = envUrl;
 
 /**
  * Resolves a profile/property image URL from the database value.

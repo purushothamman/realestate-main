@@ -252,7 +252,8 @@ const EditProfileScreen = ({ onBack, userData, onUpdate }) => {
 
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior="padding"
+                keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
             >
                 <ScrollView
                     style={{ flex: 1 }}

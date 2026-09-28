@@ -12,6 +12,7 @@ import {
   Platform,
   Dimensions,
   StatusBar,
+  KeyboardAvoidingView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Home, Mail, Lock, Eye, EyeOff, AlertCircle, X, ArrowLeft } from 'lucide-react-native';
@@ -250,6 +251,11 @@ export default function LoginScreen({
       </ImageBackground>
 
       {/* ── Scrollable card overlapping the image ── */}
+      <KeyboardAvoidingView
+        behavior="padding"
+        style={styles.kavWrapper}
+        keyboardVerticalOffset={Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0}
+      >
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -421,6 +427,7 @@ export default function LoginScreen({
 
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -429,6 +436,9 @@ const styles = StyleSheet.create({
   rootContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  kavWrapper: {
+    flex: 1,
   },
 
   // ── Background image ─────────────────────────────────────

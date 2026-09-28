@@ -200,7 +200,8 @@ const RegisterScreen = React.memo(({
     <View style={styles.container}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
       >
         <ScrollView
           style={styles.scrollView}

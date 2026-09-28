@@ -220,8 +220,9 @@ export default function ChatScreen({ navigation, onBack, route, user: propUser }
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior="padding"
       style={styles.container}
+      keyboardVerticalOffset={Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0}
     >
 
       <StatusBar barStyle="light-content" backgroundColor="#2563EB" />

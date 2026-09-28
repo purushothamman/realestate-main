@@ -12,6 +12,8 @@ import {
     Dimensions,
     Alert,
     ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL, getImageUrl, DEFAULT_PROFILE_IMAGE, DEFAULT_PROPERTY_IMAGE } from '../../../utils/api';
@@ -901,10 +903,16 @@ export default function EditProfile({ navigation, onBack, userData, onUpdate }) 
             </View>
 
             {/* Content */}
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior="padding"
+                keyboardVerticalOffset={Platform.OS === 'android' ? 0 : 0}
+            >
             <ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={styles.scrollContent}
                 showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
             >
                 {activeTab === 'company' && renderCompanyTab()}
                 {activeTab === 'settings' && renderSettingsTab()}
@@ -934,6 +942,7 @@ export default function EditProfile({ navigation, onBack, userData, onUpdate }) 
                     </TouchableOpacity>
                 </View>
             </ScrollView>
+            </KeyboardAvoidingView>
 
             {/* Bottom Navigation */}
             <View style={styles.bottomNav}>
