@@ -603,19 +603,36 @@ module.exports.register = async (req, res) => {
                 message: "This phone number is already registered.",
             });
         }
-
+        console.log("BUILDER REGISTRATION VALUES:", {
+            gstNo,
+            panNo,
+            role
+        });
         // For builders, check if GST or PAN already exists
         if (role === "builder") {
-            const [existingGst] = await connection.query(
-                "SELECT user_id FROM builders WHERE gst_no = ?",
-                [gstNo.trim()]
-            );
+            // GST is optional
+            if (gstNo && gstNo.trim()) {
+                const [existingGst] = await connection.query(
+                    "SELECT user_id FROM builders WHERE gst_no = ?",
+                    [gstNo.trim()]
+                );
 
-            if (existingGst.length > 0) {
+                if (existingGst.length > 0) {
+                    await connection.rollback();
+                    connection.release();
+                    return res.status(409).json({
+                        message: "This GST number is already registered."
+                    });
+                }
+            }
+
+
+            // PAN is mandatory
+            if (!panNo || !panNo.trim()) {
                 await connection.rollback();
                 connection.release();
-                return res.status(409).json({
-                    message: "This GST number is already registered."
+                return res.status(400).json({
+                    message: "PAN number is required for builders."
                 });
             }
 
